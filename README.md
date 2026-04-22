@@ -17,11 +17,12 @@ alphapilot/
 ├── main.py
 └── requirements.txt
 
-
 # Log
-1. 模型逻辑没问题, 但是执行 `main.py`出现卡住无输出问题. 
-    解决方案: 
-        1. 首先测试API KEY是否正常: 结果: 正常
-        2. 测试 `langchain_google_genai`最小调用也是正常的.
-        3. 然后怀疑是 `LangGraph supervisor`调用链问题, 此时因为只写了一个agent, 所以现在单独测试`market_agent`, `python -m debug.test_agent_market`查看输出, 得到报错信息: `unsupported format string passed to Series.__format__`
-        4. 
+
+1. 模型逻辑没问题, 但是执行 `main.py`出现卡住无输出问题.
+  解决方案:
+  1. 首先测试API KEY是否正常: 结果: 正常
+  2. 测试 `langchain_google_genai`最小调用也是正常的.
+  3. 然后怀疑是 `LangGraph supervisor`调用链问题, 此时因为只写了一个agent, 所以现在单独测试`market_agent`, `python -m debug.test_agent_market`查看输出, 得到报错信息: `unsupported format string passed to Series.__format_`_
+
+

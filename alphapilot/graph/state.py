@@ -1,6 +1,7 @@
-from typing import TypedDict, Annotated, Any
+from typing import TypedDict, Annotated, Any, NotRequired
 from langgraph.graph import add_messages
 from langchain_core.messages import BaseMessage
+
 
 class GraphState(TypedDict):
     """AlphaPilot 全局共享状态（所有 Agent 都能读写）"""
@@ -14,6 +15,9 @@ class GraphState(TypedDict):
     news_sentiment: Annotated[str, "news_sentiment_expert output"]
     strategy_recommendation: Annotated[str, "strategy_expert output"]
     risk_assessment: Annotated[str, "risk_expert output"]
+
+    next: NotRequired[str]
+    errors: NotRequired[list[str]]
     
     # LangGraph 内置的消息列表（Supervisor 主要依赖这个）
     messages: Annotated[list[BaseMessage], add_messages]
