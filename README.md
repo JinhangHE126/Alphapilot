@@ -1,21 +1,78 @@
+**已完成:**
+* LangGraph Docs 掌握主要
+* 项目规范结构搭建()
+* GraphState定义: /graph
+* Market Data Agent (yfinance + RSI + MACD + 波动率)
+* Supervisor + StateGraph 跑通(单 Agent 模式)
+* 按照逻辑: Supervisor 进行决策, 同时agent 通过对tools调用进行执行. 不过单个agent后直接就end了(开发阶段),没有后一步传回给Supervisor.
+* Market Data Agent的输出已经根据GraphState定义传回给特定的Agent Data. 保证了每个agent的输出隔离化.
+
+
+
+**TODO:**
+
+  **Week2:**
+    * 添加 Fundamental Agent + News Agent
+    * 引入 Chroma RAG
+    * 支持并行执行. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Project Structure
+
+
+
+```text
 alphapilot/
 ├── agents/
-│   ├── market_agent.py
-│   ├── fundamental_agent.py
-│   ├── news_agent.py
-│   ├── strategy_agent.py
-│   ├── risk_agent.py
-│   └── supervisor.py
-├── tools/                  # yfinance, pdf_parser, news_api 等
+│   ├── market_agent.py          # implemented
+│   ├── fundamental_agent.py     # planned (Week 2+)
+│   ├── news_agent.py            # planned (Week 2+)
+│   ├── strategy_agent.py        # planned (Week 3+)
+│   ├── risk_agent.py            # planned (Week 3+)
+│   └── supervisor.py            # planned
+├── tools/
+│   ├── market_tools.py          # implemented
+│   ├── pdf_parser.py            # planned
+│   └── news_api.py              # planned
 ├── graph/
-│   ├── state.py            # 定义 GraphState
-│   ├── workflow.py         # 组装整个 Graph
-│   └── checkpointer.py
-├── rag/                    # Chroma / FAISS
-├── ui/                     # Streamlit 主页面
-├── prompts/                # 每个 Agent 的 prompt 模板
+│   ├── state.py                 # implemented
+│   ├── workflow.py              # implemented
+│   └── checkpointer.py          # planned
+├── rag/                         # planned: Chroma / FAISS
+├── ui/                          # planned: Streamlit app
+├── prompts/
+│   ├── supervisor_prompt.py     # implemented
+│   └── supervisor_prompt.txt    # implemented
+├── debug/
+│   ├── test_agent_market.py     # implemented
+│   ├── test_tool_market.py      # implemented
+│   └── test_workflow.py         # implemented
+├── Docs/
+│   ├── architecture.md          # implemented
+│   └── Week_summary.md          # implemented
 ├── main.py
 └── requirements.txt
+
+```
+
+
 
 # Log
 
