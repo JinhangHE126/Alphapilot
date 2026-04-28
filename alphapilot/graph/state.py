@@ -10,11 +10,12 @@ class GraphState(TypedDict):
     stock_symbol: str                      # 股票代码，例如 "TSLA" 或 "0700.HK"
     
     # 各 Agent 的输出结果（便于后续 Strategy Agent 汇总）
-    market_data: Annotated[str, "market_data_expert output"]
-    fundamental_data: Annotated[str, "fundamental_expert output"]
-    news_sentiment: Annotated[str, "news_sentiment_expert output"]
-    strategy_recommendation: Annotated[str, "strategy_expert output"]
-    risk_assessment: Annotated[str, "risk_expert output"]
+    market_data: Annotated[str, "market_data_expert output"] = ""
+    fundamental_data: Annotated[str, "fundamental_expert output"]= ""
+    news_sentiment: Annotated[str, "news_sentiment_expert output"]= ""
+    strategy_recommendation: Annotated[str, "strategy_expert output"]= ""
+    risk_assessment: Annotated[str, "risk_expert output"]= ""
+
 
     next: NotRequired[str]
     errors: NotRequired[list[str]]
