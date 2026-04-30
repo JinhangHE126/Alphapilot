@@ -8,7 +8,7 @@ from config.llm import get_llm
 
 
 
-model = get_llm()
+model = get_llm("market")
 market_agent = create_react_agent(
     model=model,
     tools=[fetch_market_data],

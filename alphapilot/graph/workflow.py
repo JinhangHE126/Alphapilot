@@ -4,13 +4,16 @@ load_dotenv()
 
 from langgraph_supervisor import create_supervisor
 from agents.market_agent import market_agent
+from agents.fundamental_agent import fundamental_agent
+from agents.news_agent import news_agent
 from graph.state import GraphState
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import START, END, StateGraph
 from config.llm import get_llm
+from langchain_core.messages import AIMessage
 
 
-model = get_llm()
+# model = get_llm()
 
 
 # Extract text content from message
@@ -29,75 +32,123 @@ def extract_text_content(message) -> str:
     return str(content)
 
 
+checkpointer = InMemorySaver()
 
 
 
 # Supervisor Node
 def supervisor_node(state: GraphState) -> dict:
-    '''Supervisor 简单路由(后续升级为LLM)'''
+    """Decide which agents to run based on user input."""
     messages = state.get("messages", [])
     # last_content = messages[-1].content if messages else ""
     last_content = extract_text_content(messages[-1]).lower() if messages else ""
 
-    # 当前阶段只支持 market_data_expert
-    # if any(k in last_content.lower() for k in ["market", "stock", "price", "volume", "technical", "analysis"]):
-    if any(k in last_content for k in ["technical analysis", "market data", "rsi", "macd", "price", "tsla"]):
-        # technical analysis
-        return {'next': 'market_node'}
-    else:
-        return {'next': END}
-
-
-
-# Market Agent Node(use react agent)
-def market_node(state: GraphState) -> dict:
-    result = market_agent.invoke({
-        "messages": state["messages"]
-    })
-
-    final_message = result["messages"][-1]
-    content = final_message.content
-
-    if isinstance(content, str):
-        market_text = content
-    elif isinstance(content, list):
-        parts = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict) and item.get("type") == "text":
-                parts.append(item.get("text", ""))
-        market_text = "\n".join(parts)
-    else:
-        market_text = str(content)
-
-    return {
-        "messages": [final_message],
-        "market_data": market_text,
+    needs = {
+        "market_data_expert": any(
+            k in last_content
+            for k in ["technical", "price", "rsi", "macd", "volatility"]
+        ),
+        "fundamental_expert": any(
+            k in last_content
+            for k in ["earnings", "fundamental", "revenue", "eps"]
+        ),
+        "news_sentiment_expert": any(
+            k in last_content for k in ["news", "sentiment"]
+        ),
     }
+
+    # 如果用户要全面分析，默认调用全部三个
+    if not any(needs.values()):
+        return {
+            "next": [
+                "market_data_expert",
+                "fundamental_expert",
+                "news_sentiment_expert",
+            ]
+        }
+
+    # 返回需要并行执行的 Agent 列表
+    next_agents = [k for k, v in needs.items() if v]
+    return {"next": next_agents if next_agents else ["market_data_expert"]}
+
+
+def synthesis_node(state: GraphState) -> dict:
+    """Merge all expert outputs into one final response."""
+    ai_messages = [m for m in state.get("messages", []) if isinstance(m, AIMessage)]
+
+    market_text = ""
+    fundamental_text = ""
+    news_text = ""
+    for msg in ai_messages:
+        text = extract_text_content(msg).strip()
+        if not text:
+            continue
+        name = getattr(msg, "name", "") or ""
+        if name == "market_data_expert":
+            market_text = text
+        elif name == "fundamental_expert":
+            fundamental_text = text
+        elif name == "news_sentiment_expert":
+            news_text = text
+
+    def _trim_capability_disclaimer(text: str) -> str:
+        markers = [
+            "\n\nI cannot provide technical analysis",
+            "\n\nI cannot provide technical or fundamental analysis",
+            "\n\nI can only provide a fundamental analysis",
+        ]
+        cleaned = text
+        for marker in markers:
+            idx = cleaned.find(marker)
+            if idx != -1:
+                cleaned = cleaned[:idx].strip()
+        return cleaned
+
+    market_text = _trim_capability_disclaimer(market_text)
+    fundamental_text = _trim_capability_disclaimer(fundamental_text)
+    news_text = _trim_capability_disclaimer(news_text)
+
+    sections = []
+    if market_text:
+        sections.append(f"## Market Analysis\n{market_text}")
+    if fundamental_text:
+        sections.append(f"## Fundamental Analysis\n{fundamental_text}")
+    if news_text:
+        sections.append(f"## News & Sentiment Analysis\n{news_text}")
+
+    final_text = "\n\n".join(sections) if sections else "No expert output generated."
+    return {"messages": [{"role": "assistant", "content": final_text}]}
+
 
 workflow = StateGraph(GraphState)
 
-workflow.add_node('supervisor', supervisor_node)
-workflow.add_node('market_node', market_node)
+workflow.add_node("market_data_expert", market_agent)
+workflow.add_node("fundamental_expert", fundamental_agent)
+workflow.add_node("news_sentiment_expert", news_agent)
+workflow.add_node("supervisor", supervisor_node)
+workflow.add_node("synthesis", synthesis_node)
 
-#Add adge
-workflow.add_edge(START, 'supervisor')
-# automatically decide where to go 
+workflow.add_edge(START, "supervisor")
+
+# 并行路由
 workflow.add_conditional_edges(
-    'supervisor', # From supervisor node
-    lambda state: state['next'], # decide where to go
+    "supervisor",
+    lambda state: state.get("next", []),
     {
-        'market_node': 'market_node',
+        "market_data_expert": "market_data_expert",
+        "fundamental_expert": "fundamental_expert",
+        "news_sentiment_expert": "news_sentiment_expert",
         END: END,
     }
 )
 
-# workflow.add_edge('market_node', 'supervisor') # go back to supervisor node to get next instruction
-# 调试阶段先直接end节点. 后面有其他的agent时, 再添加edge.
-workflow.add_edge('market_node', END)
+# Wait for all expert branches, then synthesize once.
+workflow.add_edge(
+    ["market_data_expert", "fundamental_expert", "news_sentiment_expert"],
+    "synthesis",
+)
+workflow.add_edge("synthesis", END)
 
-app = workflow.compile(checkpointer=checkpoint)
-
+app = workflow.compile(checkpointer=checkpointer)
 
 __all__ = ["app"]

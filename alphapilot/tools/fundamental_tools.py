@@ -1,7 +1,7 @@
 import os
 import json
 import re
-
+from config.proxy import get_requests_proxies
 import fitz  # PyMuPDF
 import requests
 from pydantic import BaseModel, Field
@@ -10,7 +10,7 @@ from rag.vectorstore import rag
 from config.llm import get_llm
 
 
-model = get_llm()
+model = get_llm("fundamental")
 
 class FundamentalData(BaseModel):
     """Structured financial report data (Revenue, EPS, Margin, etc. required in the proposal)"""
@@ -38,7 +38,11 @@ def _extract_json_text(text: str) -> str:
 
 def _open_pdf(pdf_path: str):
     if pdf_path.startswith(("http://", "https://")):
-        response = requests.get(pdf_path, timeout=30)
+        response = requests.get(
+            pdf_path,
+            proxies=get_requests_proxies("fundamental"),
+            timeout=30,
+        )
         response.raise_for_status()
         return fitz.open(stream=response.content, filetype="pdf")
 

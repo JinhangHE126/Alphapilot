@@ -97,8 +97,48 @@ Number of Messages: 2
 
     return fitz.open(pdf_path)
     ```
+- 三个 Agent 并行执行时候出现错误：
+  - 完成多 Agent 并行调用的网络与模型路由架构：基于 `sing-box` 增加 `market-agent`、`news-agent`、`llm-agent` 三个本地 mixed inbound 端口，并结合多模型路由配置，将市场数据、新闻数据和 LLM 请求进行入口隔离与模型分工，为后续扩展更多 Agent 提供稳定基础。
+  ```text
+  httpx.RemoteProtocolError: Server disconnected without sending a response.
+  During task with name 'generate_structured_response'
+  During task with name 'fundamental_expert'
+  ```
+
+  - 原因：多 Agent 并行执行时，market/news/fundamental 会同时访问 Yahoo Finance、新闻源、PDF、LLM API。原先所有流量都挤在 SakuraCat 单一本地端口 `7897` 上，并发时容易出现连接超时或 `Server disconnected without sending a response`。
+  - 解决方案：基于 `sing-box` 增加多个本地 mixed inbound 端口，用于按 Agent 类型拆分入口流量；再通过统一 selector 出口转发到 SakuraCat 的 `7897` 或直连。
+
+    配置文件：`alphapilot/config/sing-box.agent.example.json`
+
+    | 项目 | 状态 | 说明 |
+    | --- | --- | --- |
+    | `market-agent` inbound | 已完成 | `127.0.0.1:7896`，用于 Yahoo Finance、股票价格、技术指标等市场数据请求 |
+    | `news-agent` inbound | 已完成 | `127.0.0.1:7898`，用于新闻、资讯、情绪数据请求 |
+    | `llm-agent` inbound | 已完成 | `127.0.0.1:7899`，用于 Google Gemini、Grok、DeepSeek/OpenAI-compatible 等 LLM 请求 |
+    | `agent-proxy` selector | 已完成 | 当前包含 `sakuracat-http` 和 `direct` 两个出口，默认走 `sakuracat-http` |
+    | `sakuracat-http` outbound | 已完成 | 将 sing-box 流量转发到 SakuraCat 本地端口 `127.0.0.1:7897` |
+    | route rules | 已完成 | 根据 inbound tag 将 `market-agent`、`news-agent`、`llm-agent` 分别路由到 `agent-proxy` |
+
+  - 当前设计实现了本地入口隔离：代码层可以分别使用 `7896`、`7898`、`7899`，避免所有工具和 LLM 请求直接共用同一个本地入口。
+  - 当前出口层仍然统一经过 `agent-proxy`，默认转发到 SakuraCat 的 `7897`。如果后续需要真正的多出口节点隔离，可以继续把 `agent-proxy` 拆成 `market-proxy`、`news-proxy`、`llm-proxy` 三个 selector，并分别绑定不同远程节点。
+  - 使用多模型并行配置，不再只依赖单一 Gemini 模型。LLM 路由配置位于：`alphapilot/config/llm.py`
+
+
+
+
 ## 测试结果:
 
 ```text
 qqqqqqqqqqqqqqqqqqq
 ```
+
+
+# 项目亮点:
+
+- 多 Agent 并行架构：market、news、fundamental 可以并行运行，提高整体分析效率。
+- 网络流量隔离：通过 sing-box mixed inbound，把不同 agent 类型的请求拆到不同本地入口，便于调试、限流和后续扩展。
+- 多模型路由：不同 agent 可以使用不同模型供应商，不再依赖单一 Gemini。
+- 工程稳定性增强：缓解并行请求时单一代理端口拥塞、连接断开、API 不稳定等问题。
+- 可扩展性：后续新增 risk agent、strategy agent、portfolio agent 时，可以继续分配独立模型、代理入口和出口策略。
+- RAG thchology.
+- 

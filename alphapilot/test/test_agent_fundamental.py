@@ -10,6 +10,22 @@ from agents.fundamental_agent import fundamental_agent
 
 load_dotenv()
 
+
+def extract_text_content(message_content):
+    """Normalize model output blocks into plain text for terminal display."""
+    if isinstance(message_content, str):
+        return message_content
+    if isinstance(message_content, list):
+        texts = []
+        for block in message_content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                texts.append(block.get("text", ""))
+            else:
+                texts.append(str(block))
+        return "\n".join(t for t in texts if t).strip()
+    return str(message_content)
+
+
 if __name__ == "__main__":
     symbol = "TSLA"
     pdf_path = Path("data/reports/TSLA-Q4-2024-Update.pdf")
@@ -32,4 +48,4 @@ if __name__ == "__main__":
     })
     
     print("=== Fundamental Agent Test Result ===")
-    print(result["messages"][-1].content)
+    print(extract_text_content(result["messages"][-1].content))

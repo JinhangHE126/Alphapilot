@@ -1,11 +1,37 @@
 import yfinance as yf
-import pandas as pd 
+import pandas as pd
+from config.proxy import get_proxy_for_agent
+
+def _download_price_frame(symbol: str):
+    """Try proxied download first, then fallback to direct."""
+    proxy = get_proxy_for_agent("market")
+    proxied_error = ""
+    direct_error = ""
+    try:
+        df = yf.download(symbol, period="60d", progress=False, proxy=proxy)
+        if df is not None and not df.empty:
+            return df, ""
+    except Exception as exc:
+        proxied_error = str(exc)
+
+    try:
+        df = yf.download(symbol, period="60d", progress=False)
+        if df is not None and not df.empty:
+            return df, ""
+    except Exception as exc:
+        direct_error = str(exc)
+
+    details = f"proxied={proxied_error or 'empty response'}; direct={direct_error or 'empty response'}"
+    return None, details
+
 
 def fetch_market_data(symbol: str) -> str:
     """获取完整技术面数据：价格 + RSI + MACD + 波动率"""
     try:
-        df = yf.download(symbol, period="60d", progress=False)
-        if df.empty:
+        df, fetch_error = _download_price_frame(symbol)
+        if df is None or df.empty:
+            if fetch_error:
+                return f"Failed to fetch data for {symbol}. Details: {fetch_error}"
             return f"Failed to fetch data for {symbol}"
 
         close = df["Close"]
