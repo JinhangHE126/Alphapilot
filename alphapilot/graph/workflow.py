@@ -3,19 +3,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from langgraph_supervisor import create_supervisor
-from langchain_google_genai import ChatGoogleGenerativeAI
 from agents.market_agent import market_agent
 from graph.state import GraphState
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import START, END, StateGraph
+from config.llm import get_llm
 
 
-model = ChatGoogleGenerativeAI(
-    model=os.getenv("GOOGLE_MODEL", "gemini-3.1-flash-lite-preview"),
-    api_key=os.getenv("GOOGLE_API_KEY"),
-    temperature=0.1,
-)
-checkpoint = InMemorySaver()
+model = get_llm()
+
 
 # Extract text content from message
 def extract_text_content(message) -> str:

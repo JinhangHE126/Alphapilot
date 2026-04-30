@@ -3,9 +3,14 @@ import json
 import re
 
 import fitz  # PyMuPDF
+import requests
 from pydantic import BaseModel, Field
 from typing import List
-from langchain_google_genai import ChatGoogleGenerativeAI
+from rag.vectorstore import rag
+from config.llm import get_llm
+
+
+model = get_llm()
 
 class FundamentalData(BaseModel):
     """Structured financial report data (Revenue, EPS, Margin, etc. required in the proposal)"""
@@ -31,6 +36,15 @@ def _extract_json_text(text: str) -> str:
     raise ValueError("LLM response does not contain valid JSON content.")
 
 
+def _open_pdf(pdf_path: str):
+    if pdf_path.startswith(("http://", "https://")):
+        response = requests.get(pdf_path, timeout=30)
+        response.raise_for_status()
+        return fitz.open(stream=response.content, filetype="pdf")
+
+    return fitz.open(pdf_path)
+
+
 def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
     """
     Parse a financial report PDF and return structured data.「解析财务报告 PDF 文件并返回结构化数据。」
@@ -38,19 +52,15 @@ def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
     """
     try:
         # 读取 PDF 文本
-        doc = fitz.open(pdf_path)
+        doc = _open_pdf(pdf_path)
         full_text = ""
         for page in doc:
             full_text += page.get_text()
         doc.close()
 
         # 使用 LLM 提取结构化数据（推荐方式）
-        llm = ChatGoogleGenerativeAI(
-            model=os.getenv("GOOGLE_MODEL", "gemini-3.1-flash-lite-preview"),
-            api_key=os.getenv("GOOGLE_API_KEY"),
-            temperature=0.1,
-        )
-        # llm = ChatOpenAI(model="gpt-4o", temperature=0)
+        llm = model
+        
         prompt = f"""
         Extract structured information from the following financial report text. The stock ticker is {symbol}.
         Return JSON only, strictly following this Pydantic schema:
@@ -74,3 +84,12 @@ def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
         return FundamentalData.model_validate(payload)
     except Exception as e:
         raise ValueError(f"Failed to parse PDF: {str(e)}")
+
+
+
+def retrieve_financial_context(symbol: str, query: str) -> str:
+    """Retrieve relevant financial information from RAG"""
+    context = rag.query(f"{symbol} {query}")
+    if context:
+        return "\n\n".join(context)
+    return "No relevant historical financial reports found."

@@ -46,3 +46,59 @@ Market Data Exists: True
 Number of Messages: 2
 ```
 
+# Week 2 Summary
+
+## 完成情况:
+
+- Market
+- 
+
+## 收获:
+
+- 熟悉 LangGraph supervisor + 自定义 StateGraph 的两种方式
+- 
+
+## 遇到的问题 & 解决:
+
+- `yfinance` 请求 Yahoo Finance 超时/代理问题.
+  - 原因: 在中国内地网络环境下访问 `Yahoo Finance` 不稳定.
+  - 解决方法: 在终端给 Python 进程设置 HTTP/HTTPS 代理:
+
+    ```bash
+    unset ALL_PROXY
+    unset all_proxy
+    export HTTP_PROXY=http://127.0.0.1:7897
+    export HTTPS_PROXY=http://127.0.0.1:7897
+    export http_proxy=http://127.0.0.1:7897
+    export https_proxy=http://127.0.0.1:7897
+    ```
+- ChromaDB embedding 接口不兼容
+  - 运行```test_rag.py```时候报错: ```AttributeError: 'GoogleGenerativeAIEmbeddings' object has no attribute 'name'```
+  - 原因: ```rag/vectorstore.py```里直接把LangChain的```GoogleGeneraetiveAIEmbeddings```传给了 CharmaDB:```embedding_function=self.embedding_function```, 但是ChromaDB原声 client 需要的是带 ```name()```和```_call()_```的embedding function. 
+  - 解决方法:在```rag/vectorstore.py```里面加了一层适配器:
+    ```python
+    class ChromaGoogleEmbeddingFunction:
+    def name(self) -> str:
+        return "google_generative_ai_embeddings"
+
+    def __call__(self, input: List[str]) -> List[List[float]]:
+        return self.embedding_model.embed_documents(input)
+    ```
+- PDF URL 被当成本地路径打开
+  - RAG 文档成功添加后, 报错: ```no such file: 'https://digitalassets.tesla.com/...pdf'```
+  - 原因: ```parse_financial_pdf```只支持本地pdf路径: ```fits.open(pdf_path)```, 但agent传进来一个PDF URL. ```fitz.open()```是不能打开URL PDF
+  - 解决方法: 在```fundamental_tool.py```里新增功能可以打开URL. 现在同时支持本地PDF和远程PDF URL.
+    ```python
+    def _open_pdf(pdf_path: str):
+    if pdf_path.startswith(("http://", "https://")):
+        response = requests.get(pdf_path, timeout=30)
+        response.raise_for_status()
+        return fitz.open(stream=response.content, filetype="pdf")
+
+    return fitz.open(pdf_path)
+    ```
+## 测试结果:
+
+```text
+qqqqqqqqqqqqqqqqqqq
+```

@@ -5,14 +5,10 @@ load_dotenv()
 from langgraph.prebuilt import create_react_agent
 from tools.fundamental_tools import parse_financial_pdf, FundamentalData
 from pydantic import BaseModel
-from langchain_google_genai import ChatGoogleGenerativeAI
+from config.llm import get_llm
 
-# model = ChatOpenAI(model="gpt-4o", temperature=0)
-model = ChatGoogleGenerativeAI(
-    model=os.getenv("GOOGLE_MODEL", "gemini-3.1-flash-lite-preview"),
-    api_key=os.getenv("GOOGLE_API_KEY"),
-    temperature=0.1,
-)
+model = get_llm()
+
 
 class FundamentalOutput(BaseModel):
     """Agent output schema."""

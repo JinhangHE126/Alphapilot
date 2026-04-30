@@ -3,16 +3,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from langgraph.prebuilt import create_react_agent
-from langchain_google_genai import ChatGoogleGenerativeAI
 from tools.market_tools import fetch_market_data
+from config.llm import get_llm
 
 
-model = ChatGoogleGenerativeAI(
-    model=os.getenv("GOOGLE_MODEL", "gemini-3.1-flash-lite-preview"),
-    api_key=os.getenv("GOOGLE_API_KEY"),
-    temperature=0.1,
-)
 
+model = get_llm()
 market_agent = create_react_agent(
     model=model,
     tools=[fetch_market_data],
