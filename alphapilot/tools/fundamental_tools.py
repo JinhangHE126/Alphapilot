@@ -1,6 +1,7 @@
 import os
 import json
 import re
+from pathlib import Path
 from config.proxy import get_requests_proxies
 import fitz  # PyMuPDF
 import requests
@@ -49,6 +50,62 @@ def _open_pdf(pdf_path: str):
     return fitz.open(pdf_path)
 
 
+def _extract_pdf_reference(text: str) -> str:
+    """Extract a PDF URL or local PDF path from free-form text."""
+    if not text:
+        return ""
+
+    # Prefer HTTP(S) PDF URL when present.
+    url_match = re.search(r"https?://[^\s'\"<>]+\.pdf(?:\?[^\s'\"<>]*)?", text, re.IGNORECASE)
+    if url_match:
+        return url_match.group(0)
+
+    # Fallback to local paths ending with .pdf (absolute/relative, with possible spaces).
+    path_match = re.search(
+        r"(?:\.{1,2}/|/)?[^\n\r\t\"']*?\.pdf",
+        text,
+        re.IGNORECASE,
+    )
+    if path_match:
+        return path_match.group(0).strip()
+
+    return ""
+
+
+def _resolve_pdf_path(symbol: str, user_query: str = "") -> str:
+    """Resolve PDF path from query first, then from local reports by symbol."""
+    candidate = _extract_pdf_reference(user_query)
+    if candidate:
+        if candidate.startswith(("http://", "https://")):
+            return candidate
+        path_obj = Path(candidate).expanduser()
+        if path_obj.exists():
+            return str(path_obj)
+
+    reports_dir = Path(__file__).resolve().parents[1] / "data" / "reports"
+    if not reports_dir.exists():
+        raise ValueError(
+            "No PDF found in query, and local reports directory does not exist: "
+            f"{reports_dir}"
+        )
+
+    patterns = [
+        f"{symbol}*.pdf",
+        f"{symbol.upper()}*.pdf",
+        f"*{symbol}*.pdf",
+        f"*{symbol.upper()}*.pdf",
+    ]
+    for pattern in patterns:
+        matches = sorted(reports_dir.glob(pattern))
+        if matches:
+            return str(matches[0])
+
+    raise ValueError(
+        f"Unable to locate a PDF for symbol '{symbol}'. "
+        "Provide a PDF URL/local path in your request, or add a report under data/reports/."
+    )
+
+
 def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
     """
     Parse a financial report PDF and return structured data.「解析财务报告 PDF 文件并返回结构化数据。」
@@ -88,6 +145,17 @@ def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
         return FundamentalData.model_validate(payload)
     except Exception as e:
         raise ValueError(f"Failed to parse PDF: {str(e)}")
+
+
+def analyze_fundamental_request(symbol: str, user_query: str = "") -> FundamentalData:
+    """
+    Smart entrypoint for agents:
+    1) parse URL/local PDF path from user query
+    2) fallback to data/reports/{symbol}*.pdf
+    3) run structured PDF parsing
+    """
+    resolved_pdf = _resolve_pdf_path(symbol=symbol, user_query=user_query)
+    return parse_financial_pdf(pdf_path=resolved_pdf, symbol=symbol)
 
 
 

@@ -1,34 +1,51 @@
 import json
+import os
 import re
+from contextlib import contextmanager
+from typing import List
+
 import yfinance as yf
 from pydantic import BaseModel, Field
-from typing import List
+
 from config.llm import get_llm
 from config.proxy import get_proxy_for_agent
 from rag.vectorstore import rag
-try:
-    from curl_cffi import requests as curl_requests
-except Exception:
-    curl_requests = None
 
 model = get_llm("news")
 
-def _build_yf_session(agent: str):
-    """Create yfinance-compatible session (curl_cffi) with per-request proxy."""
-    if curl_requests is None:
-        return None
+
+@contextmanager
+def proxy_env(agent: str):
     proxy = get_proxy_for_agent(agent)
-    session = curl_requests.Session(impersonate="chrome")
-    session.proxies = {"http": proxy, "https": proxy}
-    return session
+
+    old_values = {
+        "HTTP_PROXY": os.environ.get("HTTP_PROXY"),
+        "HTTPS_PROXY": os.environ.get("HTTPS_PROXY"),
+        "http_proxy": os.environ.get("http_proxy"),
+        "https_proxy": os.environ.get("https_proxy"),
+        "ALL_PROXY": os.environ.get("ALL_PROXY"),
+        "all_proxy": os.environ.get("all_proxy"),
+    }
+
+    os.environ["HTTP_PROXY"] = proxy
+    os.environ["HTTPS_PROXY"] = proxy
+    os.environ["http_proxy"] = proxy
+    os.environ["https_proxy"] = proxy
+    os.environ.pop("ALL_PROXY", None)
+    os.environ.pop("all_proxy", None)
+
+    try:
+        yield
+    finally:
+        for key, value in old_values.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def _fetch_news_list(symbol: str):
-    """Try proxied session first, then fallback to default yfinance session."""
-    session = _build_yf_session("news")
-    ticker = yf.Ticker(symbol, session=session) if session is not None else yf.Ticker(symbol)
-    news_list = ticker.news[:5]
-    if not news_list:
+    with proxy_env("news"):
         ticker = yf.Ticker(symbol)
         news_list = ticker.news[:5]
     return news_list
@@ -36,6 +53,7 @@ def _fetch_news_list(symbol: str):
 
 class NewsSentimentData(BaseModel):
     """Structured sentiment data."""
+
     symbol: str
     overall_sentiment: str = Field(description="Overall sentiment: Positive / Neutral / Negative")
     sentiment_score: float = Field(description="Sentiment score (-1.0 to 1.0)")
@@ -49,21 +67,9 @@ def _extract_news_item(item: dict) -> dict:
     if not isinstance(content, dict):
         content = {}
 
-    title = (
-        item.get("title")
-        or content.get("title")
-        or ""
-    )
-    publisher = (
-        item.get("publisher")
-        or content.get("provider", {}).get("displayName", "")
-        or ""
-    )
-    summary = (
-        item.get("summary")
-        or content.get("summary")
-        or ""
-    )
+    title = item.get("title") or content.get("title") or ""
+    publisher = item.get("publisher") or content.get("provider", {}).get("displayName", "") or ""
+    summary = item.get("summary") or content.get("summary") or ""
 
     link = item.get("link", "")
     if not link:
@@ -85,28 +91,28 @@ def fetch_recent_news_and_sentiment(symbol: str) -> str:
         news_list = _fetch_news_list(symbol)
         if not news_list:
             raise ValueError(f"No recent news found for {symbol}")
-        
+
         normalized_news = [_extract_news_item(item) for item in news_list]
         normalized_news = [
-            item for item in normalized_news
-            if item["title"] or item["summary"] or item["link"]
+            item for item in normalized_news if item["title"] or item["summary"] or item["link"]
         ]
         if not normalized_news:
             raise ValueError(f"News payload is empty or unrecognized for {symbol}")
 
-        news_text = "\n\n".join([
-            (
-                f"Title: {item['title']}\n"
-                f"Publisher: {item['publisher']}\n"
-                f"Summary: {item['summary']}\n"
-                f"Link: {item['link']}"
-            )
-            for item in normalized_news
-        ])
+        news_text = "\n\n".join(
+            [
+                (
+                    f"Title: {item['title']}\n"
+                    f"Publisher: {item['publisher']}\n"
+                    f"Summary: {item['summary']}\n"
+                    f"Link: {item['link']}"
+                )
+                for item in normalized_news
+            ]
+        )
 
-        # 使用 LLM 做情绪分析
         llm = model
-        
+
         prompt = f"""
         Please analyze the latest news below about {symbol} for sentiment.
         Return strict JSON format that matches the following Pydantic schema:
@@ -119,7 +125,6 @@ def fetch_recent_news_and_sentiment(symbol: str) -> str:
         response = llm.invoke(prompt)
         raw_content = response.content if hasattr(response, "content") else str(response)
         if isinstance(raw_content, list):
-            # Some providers return rich content blocks; keep only text chunks.
             raw_content = "\n".join(
                 block.get("text", "") if isinstance(block, dict) else str(block)
                 for block in raw_content
@@ -135,6 +140,7 @@ def fetch_recent_news_and_sentiment(symbol: str) -> str:
         return validated.model_dump_json()
     except Exception as e:
         raise ValueError(f"Failed to fetch news: {str(e)}")
+
 
 def retrieve_news_context(symbol: str, query: str) -> str:
     """Retrieve relevant news context from RAG"""

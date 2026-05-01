@@ -75,9 +75,7 @@ AGENT_LLM_ROUTES = {
         "timeout": 60,
     },
     "news": {
-        # Default away from xAI to avoid team/model entitlement issues.
-        # Can be overridden via NEWS_LLM_PROFILE in .env.
-        "profile": os.getenv("NEWS_LLM_PROFILE", "gemini_fast"),
+        "profile": os.getenv("NEWS_LLM_PROFILE", "grok-4-1-fast-reasoning"),
         "temperature": 0.1,
         "max_retries": 5,
         "timeout": 60,

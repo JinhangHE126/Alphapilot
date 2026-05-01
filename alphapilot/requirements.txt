@@ -1,4 +1,5 @@
 langgraph
+langgraph-checkpoint-sqlite
 langgraph-supervisor
 langchain-openai
 langchain-google-genai

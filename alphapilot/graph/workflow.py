@@ -11,9 +11,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import START, END, StateGraph
 from config.llm import get_llm
 from langchain_core.messages import AIMessage
+from graph.checkpointer import get_checkpointer
 
-
-# model = get_llm()
 
 
 # Extract text content from message
@@ -32,7 +31,9 @@ def extract_text_content(message) -> str:
     return str(content)
 
 
-checkpointer = InMemorySaver()
+# checkpointer = InMemorySaver()
+# 使用SQLite作为持久化存储
+checkpointer = get_checkpointer()
 
 
 
@@ -149,6 +150,7 @@ workflow.add_edge(
 )
 workflow.add_edge("synthesis", END)
 
+# 编译workflow, 使用SQLite作为持久化存储
 app = workflow.compile(checkpointer=checkpointer)
 
 __all__ = ["app"]
