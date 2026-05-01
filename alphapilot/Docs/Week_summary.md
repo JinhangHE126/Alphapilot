@@ -63,7 +63,6 @@ Number of Messages: 2
 - `yfinance` 请求 Yahoo Finance 超时/代理问题.
   - 原因: 在中国内地网络环境下访问 `Yahoo Finance` 不稳定.
   - 解决方法: 在终端给 Python 进程设置 HTTP/HTTPS 代理:
-
     ```bash
     unset ALL_PROXY
     unset all_proxy
@@ -73,9 +72,9 @@ Number of Messages: 2
     export https_proxy=http://127.0.0.1:7897
     ```
 - ChromaDB embedding 接口不兼容
-  - 运行```test_rag.py```时候报错: ```AttributeError: 'GoogleGenerativeAIEmbeddings' object has no attribute 'name'```
-  - 原因: ```rag/vectorstore.py```里直接把LangChain的```GoogleGeneraetiveAIEmbeddings```传给了 CharmaDB:```embedding_function=self.embedding_function```, 但是ChromaDB原声 client 需要的是带 ```name()```和```_call()_```的embedding function. 
-  - 解决方法:在```rag/vectorstore.py```里面加了一层适配器:
+  - 运行`test_rag.py`时候报错: `AttributeError: 'GoogleGenerativeAIEmbeddings' object has no attribute 'name'`
+  - 原因: `rag/vectorstore.py`里直接把LangChain的`GoogleGeneraetiveAIEmbeddings`传给了 CharmaDB:`embedding_function=self.embedding_function`, 但是ChromaDB原声 client 需要的是带 `name()`和`_call()_`的embedding function. 
+  - 解决方法:在`rag/vectorstore.py`里面加了一层适配器:
     ```python
     class ChromaGoogleEmbeddingFunction:
     def name(self) -> str:
@@ -85,9 +84,9 @@ Number of Messages: 2
         return self.embedding_model.embed_documents(input)
     ```
 - PDF URL 被当成本地路径打开
-  - RAG 文档成功添加后, 报错: ```no such file: 'https://digitalassets.tesla.com/...pdf'```
-  - 原因: ```parse_financial_pdf```只支持本地pdf路径: ```fits.open(pdf_path)```, 但agent传进来一个PDF URL. ```fitz.open()```是不能打开URL PDF
-  - 解决方法: 在```fundamental_tool.py```里新增功能可以打开URL. 现在同时支持本地PDF和远程PDF URL.
+  - RAG 文档成功添加后, 报错: `no such file: 'https://digitalassets.tesla.com/...pdf'`
+  - 原因: `parse_financial_pdf`只支持本地pdf路径: `fits.open(pdf_path)`, 但agent传进来一个PDF URL. `fitz.open()`是不能打开URL PDF
+  - 解决方法: 在`fundamental_tool.py`里新增功能可以打开URL. 现在同时支持本地PDF和远程PDF URL.
     ```python
     def _open_pdf(pdf_path: str):
     if pdf_path.startswith(("http://", "https://")):
@@ -104,34 +103,80 @@ Number of Messages: 2
   During task with name 'generate_structured_response'
   During task with name 'fundamental_expert'
   ```
-
   - 原因：多 Agent 并行执行时，market/news/fundamental 会同时访问 Yahoo Finance、新闻源、PDF、LLM API。原先所有流量都挤在 SakuraCat 单一本地端口 `7897` 上，并发时容易出现连接超时或 `Server disconnected without sending a response`。
   - 解决方案：基于 `sing-box` 增加多个本地 mixed inbound 端口，用于按 Agent 类型拆分入口流量；再通过统一 selector 出口转发到 SakuraCat 的 `7897` 或直连。
-
     配置文件：`alphapilot/config/sing-box.agent.example.json`
 
-    | 项目 | 状态 | 说明 |
-    | --- | --- | --- |
-    | `market-agent` inbound | 已完成 | `127.0.0.1:7896`，用于 Yahoo Finance、股票价格、技术指标等市场数据请求 |
-    | `news-agent` inbound | 已完成 | `127.0.0.1:7898`，用于新闻、资讯、情绪数据请求 |
-    | `llm-agent` inbound | 已完成 | `127.0.0.1:7899`，用于 Google Gemini、Grok、DeepSeek/OpenAI-compatible 等 LLM 请求 |
-    | `agent-proxy` selector | 已完成 | 当前包含 `sakuracat-http` 和 `direct` 两个出口，默认走 `sakuracat-http` |
-    | `sakuracat-http` outbound | 已完成 | 将 sing-box 流量转发到 SakuraCat 本地端口 `127.0.0.1:7897` |
-    | route rules | 已完成 | 根据 inbound tag 将 `market-agent`、`news-agent`、`llm-agent` 分别路由到 `agent-proxy` |
+    | 项目                        | 状态  | 说明                                                                           |
+    | ------------------------- | --- | ---------------------------------------------------------------------------- |
+    | `market-agent` inbound    | 已完成 | `127.0.0.1:7896`，用于 Yahoo Finance、股票价格、技术指标等市场数据请求                           |
+    | `news-agent` inbound      | 已完成 | `127.0.0.1:7898`，用于新闻、资讯、情绪数据请求                                              |
+    | `llm-agent` inbound       | 已完成 | `127.0.0.1:7899`，用于 Google Gemini、Grok、DeepSeek/OpenAI-compatible 等 LLM 请求   |
+    | `agent-proxy` selector    | 已完成 | 当前包含 `sakuracat-http` 和 `direct` 两个出口，默认走 `sakuracat-http`                   |
+    | `sakuracat-http` outbound | 已完成 | 将 sing-box 流量转发到 SakuraCat 本地端口 `127.0.0.1:7897`                             |
+    | route rules               | 已完成 | 根据 inbound tag 将 `market-agent`、`news-agent`、`llm-agent` 分别路由到 `agent-proxy` |
 
   - 当前设计实现了本地入口隔离：代码层可以分别使用 `7896`、`7898`、`7899`，避免所有工具和 LLM 请求直接共用同一个本地入口。
   - 当前出口层仍然统一经过 `agent-proxy`，默认转发到 SakuraCat 的 `7897`。如果后续需要真正的多出口节点隔离，可以继续把 `agent-proxy` 拆成 `market-proxy`、`news-proxy`、`llm-proxy` 三个 selector，并分别绑定不同远程节点。
   - 使用多模型并行配置，不再只依赖单一 Gemini 模型。LLM 路由配置位于：`alphapilot/config/llm.py`
 
-
-
-
 ## 测试结果:
 
 ```text
-qqqqqqqqqqqqqqqqqqq
-```
+(AIAgent) yuchuan@yvchuandeMacBook-Pro alphapilot % python test/test_parallel.py           
+🚀 Starting 3-agent parallel test...
 
+=== ✅ 3-agent parallel test result ===
+## Market Analysis
+Based on the provided technical data for TSLA:
+
+**Current Price:** $381.63 (up 2.37%)
+**RSI(14):** 65.3 (Neutral)
+**MACD:** 0.0063 (Signal: -1.1309, Histogram: +1.1372)
+**20-Day Volatility:** 2.77%
+
+**Momentum:** The RSI of 65.3 is in the neutral zone, approaching overbought territory, suggesting increasing buying interest. The MACD shows a bullish crossover with a positive histogram, indicating upward momentum.
+
+**Trend:** The MACD's bullish crossover and the summary indicating an "upward trend" suggest a positive short-term price direction. The 5-day change of +2.12% further supports this upward movement.
+
+**Risk:** The 20-day volatility is 2.77%, which is a moderate level of price fluctuation.
+
+**Risk Note:** Technical indicators can change rapidly and do not guarantee future performance.
+
+## Fundamental Analysis
+Here's a fundamental analysis of TSLA based on the latest financial report:
+
+**TSLA Fundamental Analysis**
+
+*   **Revenue Growth:** 1.0%
+*   **EPS Growth:** -53.0%
+*   **Gross Margin:** 17.9%
+*   **Net Profit Margin:** 7.26%
+
+**Key Highlights:**
+*   Q4 was a record quarter for both vehicle deliveries and energy storage deployments.
+*   Model Y is expected to be the best-selling vehicle globally for the full year 2024.
+*   Significant investments were made in infrastructure for new models, AI training compute, and energy storage manufacturing capacity.
+*   COGS per vehicle reached its lowest level ever in Q4 at <$35,000.
+*   The Energy business achieved a record Q4 with its highest-ever gross profit generation, and Megafactory Shanghai construction was completed.
+*   FSD (Supervised) continues to rapidly improve, with the Robotaxi business expected to begin launching later in 2025.
+*   Full year 2024 GAAP EPS decreased by 53% and GAAP operating income decreased by 20% YoY.
+*   Profitability was impacted by reduced S3XY vehicle average selling prices and increased operating expenses driven by AI and R&D projects.
+
+**Summary:**
+Tesla's 2024 saw a 1% revenue increase to $97.69 billion, but GAAP EPS declined 53% to $2.04 due to lower vehicle average selling prices and higher operating expenses, even as the company achieved record Q4 deliveries and made significant investments in AI and energy storage.
+
+## News & Sentiment Analysis
+**TSLA News and Sentiment Analysis**
+
+- **Overall Sentiment**: Positive
+- **Sentiment Score**: 0.6
+- **Key Events**:
+  - Tesla generated $573 million in revenue from sales to SpaceX and xAI last year.
+  - Elon Musk reportedly labels most cryptocurrencies as 'scams', potentially impacting crypto-related perceptions.
+  - Broader tech sector strength with Nasdaq up nearly 20% in April amid Magnificent 7 gains.
+- **One-Sentence Summary**: Tesla benefits from substantial affiliate revenue and a surging tech market, tempered slightly by Elon Musk's critical comments on cryptocurrencies.
+```
 
 # 项目亮点:
 
@@ -142,3 +187,4 @@ qqqqqqqqqqqqqqqqqqq
 - 可扩展性：后续新增 risk agent、strategy agent、portfolio agent 时，可以继续分配独立模型、代理入口和出口策略。
 - RAG thchology.
 - 
+

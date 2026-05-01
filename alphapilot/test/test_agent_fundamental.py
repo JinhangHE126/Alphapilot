@@ -42,7 +42,7 @@ if __name__ == "__main__":
             "content": (
                 f"Please analyze the fundamental data for {symbol}. "
                 f"Use this PDF file path: {pdf_path}. "
-                "Call the parse_financial_pdf tool with the provided pdf_path and symbol."
+                "Call the analyze_fundamental_request tool first."
             )
         }]
     })

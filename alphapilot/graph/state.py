@@ -25,9 +25,17 @@ class GraphState(TypedDict):
     
     # 未来会用到的扩展字段（现在先定义好）
     rag_context: Annotated[str, "RAG retrieved context"] = ""
-    memory_summary: Annotated[str, "Memory summary"] = ""
+    # memory_summary: Annotated[str, "Memory summary"] = ""
     final_score: Annotated[float, "Final score 0-100"] = 0.0
     final_recommendation: Annotated[str, "Final Buy/Hold/Sell"] = ""
     
+    #  Memory 相关
+    memory_summary: Annotated[str, "history analysis memory"] = ""
+    conversation_history: Annotated[list, 'history messages'] = []
+    
     # 可选：错误记录
     errors: list[str] = []
+
+    #  Memory 相关
+    memory_summary: Annotated[str, "history analysis memory"] = ""
+    conversation_history: Annotated[list, 'history messages'] = []
