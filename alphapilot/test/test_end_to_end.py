@@ -12,7 +12,6 @@ from graph.workflow import app
 
 load_dotenv()
 
-
 def _preview_message(msg, max_len: int = 500) -> str:
     if hasattr(msg, "content"):
         c = msg.content
@@ -33,7 +32,6 @@ def _preview_message(msg, max_len: int = 500) -> str:
         return c[:max_len] + "..."
     return c
 
-
 def _register_supervisor_next(track: dict, update) -> None:
     """根据 supervisor 的 next 字段记录尚未返回的并行节点。"""
     if not isinstance(update, dict):
@@ -49,42 +47,38 @@ def _register_supervisor_next(track: dict, update) -> None:
         pending.clear()
         pending.add(nxt)
 
-
 def _print_node_update(node_name: str, update) -> None:
     print(f"\n>>> 节点完成: {node_name}", flush=True)
     if update is None:
-        print("    (no update)", flush=True)
+        print(" (no update)", flush=True)
         return
     if not isinstance(update, dict):
-        print(f"    类型: {repr(type(update).__name__)}", flush=True)
+        print(f" 类型: {repr(type(update).__name__)}", flush=True)
         return
     for key, val in update.items():
         if key == "messages" and isinstance(val, list):
-            print(f"    messages: 新增/合并 {len(val)} 条", flush=True)
+            print(f" messages: 新增/合并 {len(val)} 条", flush=True)
             for m in val[-3:]:
                 role = getattr(m, "type", None) or (m.get("role") if isinstance(m, dict) else None)
                 name = getattr(m, "name", None) or (m.get("name") if isinstance(m, dict) else "")
-                prefix = f"      [{role or 'msg'}{(':' + name) if name else ''}] "
+                prefix = f" [{role or 'msg'}{(':' + name) if name else ''}] "
                 print(prefix + _preview_message(m), flush=True)
         elif key == "next":
-            print(f"    next: {val!r}", flush=True)
+            print(f" next: {val!r}", flush=True)
         else:
             s = str(val)
             if len(s) > 400:
                 s = s[:400] + "..."
-            print(f"    {key}: {s}", flush=True)
-
+            print(f" {key}: {s}", flush=True)
 
 if __name__ == "__main__":
     symbol = "TSLA"
     user_input = f"请全面分析 {symbol} 的投资机会，给出 Buy/Hold/Sell 建议和风险控制措施。"
-
     initial_state = {
         "stock_symbol": symbol,
         "messages": [{"role": "user", "content": user_input}],
     }
-
-    config = {"configurable": {"thread_id": "full_test_5agents","max_concurrency": 1}}
+    config = {"configurable": {"thread_id": "full_test_5agents", "max_concurrency": 1}}
 
     print("🚀 开始 5 Agent 完整协作测试（流式：app.stream，stream_mode=updates）...", flush=True)
     print(f"thread_id = {config['configurable']['thread_id']}", flush=True)
@@ -106,7 +100,6 @@ if __name__ == "__main__":
             hint = ""
             if pre_first:
                 hint = "（尚无第 1 个流式 chunk：多为 Supervisor `model.invoke` 卡在 DeepSeek/代理，可查 LLM_PROXY 与网络）"
-
             if pending:
                 print(
                     f"\n… [{ts}] 仍在等待并行分支返回: {', '.join(sorted(pending))} {hint}",
@@ -124,17 +117,16 @@ if __name__ == "__main__":
     try:
         for chunk in app.stream(
             initial_state,
-            config=config, 
+            config=config,
             stream_mode="updates"
-            
-            ):
+        ):
             step += 1
             track["stream_chunks"] = step
             ts = datetime.now().strftime("%H:%M:%S")
             print(f"\n{'=' * 60}", flush=True)
             print(f"⏱ [{ts}] 第 {step} 步", flush=True)
             if not chunk:
-                print("  (空 chunk)", flush=True)
+                print(" (空 chunk)", flush=True)
                 continue
             for node_name, node_update in chunk.items():
                 if node_name == "supervisor":
@@ -162,13 +154,21 @@ if __name__ == "__main__":
         print(f"messages 共 {len(msgs)} 条", flush=True)
         for m in msgs[-5:]:
             role = getattr(m, "type", None) or (m.get("role") if isinstance(m, dict) else "?")
-            print(f"  [{role}] {_preview_message(m, max_len=800)}", flush=True)
+            print(f" [{role}] {_preview_message(m, max_len=800)}", flush=True)
         rest = {k: v for k, v in result.items() if k != "messages"}
         print("其它字段:", flush=True)
         for k, v in rest.items():
             s = str(v)
             if len(s) > 500:
                 s = s[:500] + "..."
-            print(f"  {k}: {s}", flush=True)
+            print(f" {k}: {s}", flush=True)
     else:
         print(result, flush=True)
+
+    # ====================== 5.8 Step 2 新增：最终可解释性报告 ======================
+    print("\n" + "="*80)
+    print("🎯 AlphaPilot 最终可解释性报告")
+    print("="*80)
+    print(result.get("final_report") or result["messages"][-1].content)
+    print("\n📊 执行路径：", result.get("executed_agents", []))
+    print("✅ 5 Agent 完整协作测试通过！")
