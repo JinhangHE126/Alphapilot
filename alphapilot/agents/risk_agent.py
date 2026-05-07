@@ -7,8 +7,7 @@ import json
 import re
 
 # model = ChatOpenAI(model="gpt-4o", temperature=0)
-# model = get_llm("risk")
-model = get_llm("strategy")
+model = get_llm("risk")
 
 
 class RiskAssessment(BaseModel):

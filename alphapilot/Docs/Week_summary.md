@@ -239,9 +239,691 @@ Tesla (TSLA) 2024年全年基本面分析：
 (AIAgent) yuchuan@yvchuandeMacBook-Pro alphapilot % 
 ```
 
+# Week 3 Summary
+
+## 完成情况:
+
+- Risk Agent + Strategy Agent
+- 5个Agent 并行执行
+- 
+- 
+-  
+
+## 收获:
+
+- 完成多 Agent 并行调用的网络与模型路由架构,基于 `sing-box` 增加多个本地 mixed inbound 端口，用于按 Agent 类型拆分入口流量
+- 
+
+## 遇到的问题 & 解决:
+
+- `ConnectTimeout` 问题
+  - 原因:  `Gemini` 对本地代理(7896,7901)不稳定, 新加坡地区网络+代理容易导致连接超时.
+  - 解决方法: 
+    - 把`market` 改为`deepseek_fast` 直连
+    - 把`fundamental` 改成`deepseek_reasoner` 直连
 
 
 
+
+
+## 测试结果:
+
+```python
+(AIAgent) ➜  alphapilot git:(dev) ✗ python test/test_end_to_end.py
+🚀 [LLM] MARKET       → deepseek-chat             | proxy: 直连 | temp=0.1 | timeout=180s
+🚀 [LLM] FUNDAMENTAL  → deepseek-reasoner         | proxy: 直连 | temp=0.1 | timeout=300s
+🚀 [LLM] NEWS         → grok-4-1-fast-reasoning   | proxy: http://127.0.0.1:7898 | temp=0.1 | timeout=60s
+🚀 [LLM] STRATEGY     → deepseek-reasoner         | proxy: http://127.0.0.1:7900 | temp=0.2 | timeout=120s
+🚀 [LLM] RISK         → deepseek-reasoner         | proxy: http://127.0.0.1:7900 | temp=0.15 | timeout=120s
+🚀 [LLM] STRATEGY     → deepseek-reasoner         | proxy: http://127.0.0.1:7900 | temp=0.2 | timeout=120s
+🚀 开始 5 Agent 完整协作测试（流式：app.stream，stream_mode=updates）...
+thread_id = full_test_5agents
+
+说明：Supervisor 若一次派发多个 agent，会并行跑。「第 N 步」= 某个节点刚结束；长时间无新步骤时，多半在等尚未返回的并行分支（常见最慢：market_data_expert、fundamental_expert）。
+
+
+============================================================
+⏱ [16:57:21] 第 1 步
+
+>>> 节点完成: supervisor
+    next: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
+
+⏳ 尚未结束的节点: fundamental_expert, market_data_expert, news_sentiment_expert
+📥 [Attempt 1/4] Downloading TSLA (proxy: 直连)...
+🚀 [LLM] FUNDAMENTAL  → deepseek-reasoner         | proxy: 直连 | temp=0.1 | timeout=300s
+
+1 Failed download:
+['TSLA']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+📥 [Attempt 2/4] Downloading TSLA (proxy: 直连)...
+
+1 Failed download:
+['TSLA']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+📥 [Attempt 3/4] Downloading TSLA (proxy: 直连)...
+
+… [16:57:33] 仍在等待并行分支返回: fundamental_expert, market_data_expert, news_sentiment_expert 
+🚀 [LLM] NEWS         → grok-4-1-fast-reasoning   | proxy: http://127.0.0.1:7898 | temp=0.1 | timeout=60s
+✅ 下载成功！共 60 条记录
+
+… [16:57:53] 仍在等待并行分支返回: fundamental_expert, market_data_expert, news_sentiment_expert 
+
+============================================================
+⏱ [16:57:58] 第 2 步
+
+>>> 节点完成: market_data_expert
+    messages: 新增/合并 4 条
+      [ai:market_data_expert] 我来获取 TSLA 的市场数据进行分析。
+      [tool:fetch_market_data] [TSLA Technical Analysis Report]
+        Current Price: 398.73 (Change: +2.40%)
+        Latest Volume: 53,304,000
+        RSI(14): 55.9 (Neutral)
+        MACD: 3.3546 (Signal: 0.7325, Histogram: +2.6220)
+        20-Day Volatility: 2.39%
+        5-Day Change: +6.96%
+
+        Summary: MACD bullish crossover, upward trend
+      [ai:market_data_expert] ## 📊 TSLA 技术面分析报告
+
+### 一、核心数据一览
+
+| 指标 | 数值 | 解读 |
+|------|------|------|
+| **当前价格** | **$398.73** | 日内涨幅 +2.40% |
+| **RSI(14)** | **55.9** | 中性偏强，未进入超买区 |
+| **MACD** | **3.3546** | 信号线 0.7325，柱状图 +2.6220 |
+| **20日波动率** | **2.39%** | 中等偏高波动 |
+| **5日涨幅** | **+6.96%** | 短期强势上攻 |
+
+---
+
+### 二、技术指标解读
+
+#### 🔹 动量指标 — RSI = 55.9
+- 处于 **中性区间（30–70）**，既未超买也未超卖。
+- 数值略高于50，表明 **短期多头动能占优**，但尚未过热。
+- 若后续RSI突破60，则确认动量进一步走强。
+
+#### 🔹 趋势指标 — MACD
+- **MACD主线（3.35）> 信号线（0.73）**，形成 **看涨金叉**。
+- 柱状图 **+2.62** 且为正值，显示 **...
+
+⏳ 尚未结束的节点: fundamental_expert, news_sentiment_expert
+
+============================================================
+⏱ [16:57:58] 第 3 步
+
+>>> 节点完成: news_sentiment_expert
+    messages: 新增/合并 4 条
+      [ai:news_sentiment_expert] 
+      [tool:fetch_recent_news_and_sentiment] {"symbol":"TSLA","overall_sentiment":"Negative","sentiment_score":-0.4,"key_events":["Tesla stock has surged 40% over the past year but is down 9% YTD, raising questions about whether its current valuation is justified.","Tesla is recalling 218,868 U.S. vehicles due to a rare software mistake confirmed by NHTSA."],"summary":"Tesla news features a major vehicle recall for a software issue alongside debates on stock valuation after a 40% one-year gain, tilting sentiment negative."}
+      [ai:news_sentiment_expert] **Overall Sentiment:** Negative  
+**Sentiment Score:** -0.4  
+**Key Events:**  
+- Tesla stock has surged 40% over the past year but is down 9% YTD, raising questions about whether its current valuation is justified.  
+- Tesla is recalling 218,868 U.S. vehicles due to a rare software mistake confirmed by NHTSA.  
+
+**One-Sentence Summary:** Tesla news features a major vehicle recall for a software issue alongside debates on stock valuation after a 40% one-year gain, tilting sentiment negative.
+
+⏳ 尚未结束的节点: fundamental_expert
+
+============================================================
+⏱ [16:58:00] 第 4 步
+
+>>> 节点完成: fundamental_expert
+    messages: 新增/合并 4 条
+      [ai:fundamental_expert] 好的，我来为 TSLA 进行基本面分析。请注意，根据我的职责，我仅能对最新的财务报告进行专业的结构化基本面分析，**不提供买入/持有/卖出建议或投资建议**。
+
+让我先解析 Tesla 的最新财务报告。
+      [tool:analyze_fundamental_request_tool] symbol='TSLA' revenue_growth=2.0 eps_growth=-71.0 gross_margin=16.3 net_margin=9.0 key_points=['Q4 was a record quarter for both vehicle deliveries and energy storage deployments.', 'COGS per vehicle reached its lowest level ever at <$35,000.', 'Energy business achieved another record in Q4 with highest-ever gross profit.', 'Construction of Megafactory Shanghai completed in December, ramping in Q1 2025.', 'FSD (Supervised) continues to improve, aiming to exceed human safety levels and launch uns...
+      [ai:fundamental_expert] ## 📊 Tesla (TSLA) — 基本面分析报告
+
+> **数据来源：** 最新财报（Q4 2024）
+
+---
+
+### 📈 核心财务指标
+
+| 指标 | 数值 | 同比变化 |
+|------|:----:|:--------:|
+| **营收增长** | **+2%** | $257亿 → 小幅增长 |
+| **EPS（每股收益）增长** | **-71%** | 大幅下滑 |
+| **毛利率** | **16.3%** | 承压 |
+| **净利润率** | **9.0%** | 盈利空间收窄 |
+
+---
+
+### 🔑 关键亮点
+
+1. ✅ **Q4 创纪录** — 车辆交付量和储能部署量均创历史新高
+2. ✅ **单车成本新低** — 每辆车 COGS 降至 **<$35,000**（历史最低）
+3. ✅ **储能业务爆发** — Q4 储能业务实现创纪录的毛利润
+4. ✅ **上海 Megafactory** — 2024年12月建设完成，2025年Q1开始爬坡
+5. 🚗 **FSD 持续迭代** — 目标2025年推出无监督 FSD 和 Robotaxi
+
+---...
+
+============================================================
+⏱ [16:58:07] 第 5 步
+
+>>> 节点完成: supervisor
+    next: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
+
+⏳ 尚未结束的节点: fundamental_expert, market_data_expert, news_sentiment_expert
+
+… [16:58:13] 仍在等待并行分支返回: fundamental_expert, market_data_expert, news_sentiment_expert 
+
+============================================================
+⏱ [16:58:15] 第 6 步
+
+>>> 节点完成: news_sentiment_expert
+    messages: 新增/合并 11 条
+      [tool:fetch_recent_news_and_sentiment] {"symbol":"TSLA","overall_sentiment":"Negative","sentiment_score":-0.4,"key_events":["Tesla stock has surged 40% over the past year but is down 9% YTD, raising questions about whether its current valuation is justified.","Tesla is recalling 218,868 U.S. vehicles due to a rare software mistake confirmed by NHTSA."],"summary":"Tesla news features a major vehicle recall for a software issue alongside debates on stock valuation after a 40% one-year gain, tilting sentiment negative."}
+      [ai:news_sentiment_expert] **Overall Sentiment:** Negative  
+**Sentiment Score:** -0.4  
+**Key Events:**  
+- Tesla stock has surged 40% over the past year but is down 9% YTD, raising questions about whether its current valuation is justified.  
+- Tesla is recalling 218,868 U.S. vehicles due to a rare software mistake confirmed by NHTSA.  
+
+**One-Sentence Summary:** Tesla news features a major vehicle recall for a software issue alongside debates on stock valuation after a 40% one-year gain, tilting sentiment negative.
+      [ai:news_sentiment_expert] **Overall Sentiment:** Negative  
+**Sentiment Score:** -0.4  
+**Key Events:**  
+- Tesla stock has surged 40% over the past year but is down 9% YTD, raising
+
+⏳ 尚未结束的节点: fundamental_expert, market_data_expert
+
+============================================================
+⏱ [16:58:15] 第 7 步
+
+>>> 节点完成: market_data_expert
+    messages: 新增/合并 11 条
+      [tool:fetch_recent_news_and_sentiment] {"symbol":"TSLA","overall_sentiment":"Negative","sentiment_score":-0.4,"key_events":["Tesla stock has surged 40% over the past year but is down 9% YTD, raising questions about whether its current valuation is justified.","Tesla is recalling 218,868 U.S. vehicles due to a rare software mistake confirmed by NHTSA."],"summary":"Tesla news features a major vehicle recall for a software issue alongside debates on stock valuation after a 40% one-year gain, tilting sentiment negative."}
+      [ai:news_sentiment_expert] **Overall Sentiment:** Negative  
+**Sentiment Score:** -0.4  
+**Key Events:**  
+- Tesla stock has surged 40% over the past year but is down 9% YTD, raising questions about whether its current valuation is justified.  
+- Tesla is recalling 218,868 U.S. vehicles due to a rare software mistake confirmed by NHTSA.  
+
+**One-Sentence Summary:** Tesla news features a major vehicle recall for a software issue alongside debates on stock valuation after a 40% one-year gain, tilting sentiment negative.
+      [ai:market_data_expert] ## 📰 TSLA 新闻情绪分析报告
+
+### 一、整体情绪：🔴 偏负面
+
+| 维度 | 结果 |
+|------|------|
+| **整体情绪** | **负面（Negative）** |
+| **情绪评分** | **-0.4** |
+| **关键事件数** | 2 条 |
+
+---
+
+### 二、关键事件解读
+
+#### 事件 1：大规模召回
+> **Tesla 因软件问题召回 218,868 辆美国车辆**（NHTSA 确认）
+
+- **影响评估：** 大规模召回对品牌声誉和短期运营构成压力
+- 虽然 OTA 软件修复成本相对较低，但 **监管审查力度加大** 值得关注
+
+#### 事件 2：估值争议
+> **TSLA 过去一年上涨 40%，但年初至今下跌 9%**
+
+- 市场对当前估值是否合理存在 **明显分歧**
+- 年初至今的回调表明 **获利了结压力** 和 **估值修正预期**
+
+---
+
+### 三、情绪面综合判断
+
+```
+负面情绪 (-0.4)
+     │
+     ├── 召回事件 → 短期负面冲击
+     │
+     └── 估值争议 → 中长期不...
+
+⏳ 尚未结束的节点: fundamental_expert
+
+============================================================
+⏱ [16:58:26] 第 8 步
+
+>>> 节点完成: fundamental_expert
+    messages: 新增/合并 11 条
+      [tool:fetch_recent_news_and_sentiment] {"symbol":"TSLA","overall_sentiment":"Negative","sentiment_score":-0.4,"key_events":["Tesla stock has surged 40% over the past year but is down 9% YTD, raising questions about whether its current valuation is justified.","Tesla is recalling 218,868 U.S. vehicles due to a rare software mistake confirmed by NHTSA."],"summary":"Tesla news features a major vehicle recall for a software issue alongside debates on stock valuation after a 40% one-year gain, tilting sentiment negative."}
+      [ai:news_sentiment_expert] **Overall Sentiment:** Negative  
+**Sentiment Score:** -0.4  
+**Key Events:**  
+- Tesla stock has surged 40% over the past year but is down 9% YTD, raising questions about whether its current valuation is justified.  
+- Tesla is recalling 218,868 U.S. vehicles due to a rare software mistake confirmed by NHTSA.  
+
+**One-Sentence Summary:** Tesla news features a major vehicle recall for a software issue alongside debates on stock valuation after a 40% one-year gain, tilting sentiment negative.
+      [ai:fundamental_expert] ## 🚗 Tesla (TSLA) 综合投资分析报告
+
+> 📅 **报告日期：** 2025年  
+> **分析维度：** 基本面 + 技术面 + 新闻情绪
+
+---
+
+## 一、📊 基本面分析（核心财报数据）
+
+| 关键指标 | 数据 | 同比变化 |
+|---------|:---:|:--------:|
+| **营收** | **$257亿** | **+2%** 📈 |
+| **EPS（每股收益）** | — | **-71%** 📉 大幅下滑 |
+| **毛利率** | **16.3%** | 承压 |
+| **净利润率** | **9.0%** | 盈利收窄 |
+
+### ✅ 基本面亮点
+1. **Q4交付量 & 储能部署双创历史纪录**
+2. **单车成本（COGS）降至历史新低** < $35,000
+3. **储能业务毛利润创历史新高**
+4. **上海Megafactory已完工**，2025 Q1爬坡
+5. **FSD持续推进**，目标2025年推出**无监督FSD + Robotaxi**
+
+### ⚠️ 基本面风险
+- **净利润同比暴跌71%**，盈利能力...
+
+… [16:58:33] 仍在等待（图内部调度 / 下一轮 supervisor）… 
+
+============================================================
+⏱ [16:58:34] 第 9 步
+
+>>> 节点完成: supervisor
+    next: ['market_data_expert', 'fundamental_expert']
+
+⏳ 尚未结束的节点: fundamental_expert, market_data_expert
+
+… [16:58:53] 仍在等待并行分支返回: fundamental_expert, market_data_expert 
+
+============================================================
+⏱ [16:58:57] 第 10 步
+
+>>> 节点完成: market_data_expert
+    messages: 新增/合并 14 条
+      [ai:market_data_expert] ## 📰 TSLA 新闻情绪分析报告
+
+### 一、整体情绪：🔴 偏负面
+
+| 维度 | 结果 |
+|------|------|
+| **整体情绪** | **负面（Negative）** |
+| **情绪评分** | **-0.4** |
+| **关键事件数** | 2 条 |
+
+---
+
+### 二、关键事件解读
+
+#### 事件 1：大规模召回
+> **Tesla 因软件问题召回 218,868 辆美国车辆**（NHTSA 确认）
+
+- **影响评估：** 大规模召回对品牌声誉和短期运营构成压力
+- 虽然 OTA 软件修复成本相对较低，但 **监管审查力度加大** 值得关注
+
+#### 事件 2：估值争议
+> **TSLA 过去一年上涨 40%，但年初至今下跌 9%**
+
+- 市场对当前估值是否合理存在 **明显分歧**
+- 年初至今的回调表明 **获利了结压力** 和 **估值修正预期**
+
+---
+
+### 三、情绪面综合判断
+
+```
+负面情绪 (-0.4)
+     │
+     ├── 召回事件 → 短期负面冲击
+     │
+     └── 估值争议 → 中长期不...
+      [ai:news_sentiment_expert] **Overall Sentiment:** Negative  
+**Sentiment Score:** -0.4  
+**Key Events:**  
+- Tesla stock has surged 40% over the past year but is down 9% YTD, raising
+      [ai:market_data_expert] ## 📊 TSLA 技术面分析报告
+
+### 一、核心数据一览
+
+| 指标 | 数值 | 解读 |
+|------|:----:|:----:|
+| **当前价格** | **$398.73** | 日内涨幅 **+2.40%** |
+| **RSI(14)** | **55.9** | 🟢 **中性偏强**，未进入超买区 |
+| **MACD** | **3.3546** | 信号线 0.7325 |
+| **MACD柱状图** | **+2.6220** | 🔵 正值，多头动能加速 |
+| **20日波动率** | **2.39%** | 🟡 中等偏高 |
+| **5日涨幅** | **+6.96%** | 🔵 短期强势上攻 |
+
+---
+
+### 二、技术指标详细解读
+
+#### 🔹 动量指标 — RSI = 55.9
+- 处于 **中性区间（30–70）**，既未超买（>70）也未超卖（<30）
+- 数值略高于50中轴线，表明 **短期多头动能占优**
+- 若后续RSI突破60，则确认动量进一步走强；若跌破50，则转弱
+
+#### 🔹 趋势指标 — MACD
+| 项目 | 数值...
+
+⏳ 尚未结束的节点: fundamental_expert
+
+============================================================
+⏱ [16:58:57] 第 11 步
+
+>>> 节点完成: fundamental_expert
+    messages: 新增/合并 14 条
+      [ai:market_data_expert] ## 📰 TSLA 新闻情绪分析报告
+
+### 一、整体情绪：🔴 偏负面
+
+| 维度 | 结果 |
+|------|------|
+| **整体情绪** | **负面（Negative）** |
+| **情绪评分** | **-0.4** |
+| **关键事件数** | 2 条 |
+
+---
+
+### 二、关键事件解读
+
+#### 事件 1：大规模召回
+> **Tesla 因软件问题召回 218,868 辆美国车辆**（NHTSA 确认）
+
+- **影响评估：** 大规模召回对品牌声誉和短期运营构成压力
+- 虽然 OTA 软件修复成本相对较低，但 **监管审查力度加大** 值得关注
+
+#### 事件 2：估值争议
+> **TSLA 过去一年上涨 40%，但年初至今下跌 9%**
+
+- 市场对当前估值是否合理存在 **明显分歧**
+- 年初至今的回调表明 **获利了结压力** 和 **估值修正预期**
+
+---
+
+### 三、情绪面综合判断
+
+```
+负面情绪 (-0.4)
+     │
+     ├── 召回事件 → 短期负面冲击
+     │
+     └── 估值争议 → 中长期不...
+      [ai:news_sentiment_expert] **Overall Sentiment:** Negative  
+**Sentiment Score:** -0.4  
+**Key Events:**  
+- Tesla stock has surged 40% over the past year but is down 9% YTD, raising
+      [ai:fundamental_expert] ---
+
+## 📋 TSLA 综合投资分析报告 — 完整版
+
+> **报告日期：** 2025年  
+> **分析覆盖：** ✅ 基本面 ✅ 技术面 ✅ 新闻情绪  
+> **免责声明：** ⚠️ *以下为客观数据呈现，不构成投资建议*
+
+---
+
+## 一、📊 基本面分析
+
+### 核心财务指标
+
+| 指标 | 最新数据 | 同比变化 | 趋势 |
+|:----|:--------:|:--------:|:----:|
+| **营收** | **$257亿** | **+2%** | 🟢 小幅增长 |
+| **GAAP净利润** | **$23亿** | **-71%** | 🔴 大幅恶化 |
+| **毛利率** | **16.3%** | 下降 | 🟡 承压 |
+| **净利润率** | **9.0%** | 收窄 | 🟡 盈利空间缩小 |
+| **单车成本** | **< $35,000** | 历史新低 | 🟢 成本优化 |
+
+### 🔑 基本面五大要点
+
+| # | 要点 | 方向 |
+|:-|:----|:----:|
+| 1️⃣ | **Q4交付量创历史纪录** | ✅...
+
+… [16:59:13] 仍在等待（图内部调度 / 下一轮 supervisor）… 
+
+============================================================
+⏱ [16:59:14] 第 12 步
+
+>>> 节点完成: supervisor
+    next: ['strategy_expert', 'risk_expert']
+
+⏳ 尚未结束的节点: risk_expert, strategy_expert
+
+… [16:59:33] 仍在等待并行分支返回: risk_expert, strategy_expert 
+
+============================================================
+⏱ [16:59:35] 第 13 步
+
+>>> 节点完成: risk_expert
+    messages: 新增/合并 16 条
+      [ai:fundamental_expert] ---
+
+## 📋 TSLA 综合投资分析报告 — 完整版
+
+> **报告日期：** 2025年  
+> **分析覆盖：** ✅ 基本面 ✅ 技术面 ✅ 新闻情绪  
+> **免责声明：** ⚠️ *以下为客观数据呈现，不构成投资建议*
+
+---
+
+## 一、📊 基本面分析
+
+### 核心财务指标
+
+| 指标 | 最新数据 | 同比变化 | 趋势 |
+|:----|:--------:|:--------:|:----:|
+| **营收** | **$257亿** | **+2%** | 🟢 小幅增长 |
+| **GAAP净利润** | **$23亿** | **-71%** | 🔴 大幅恶化 |
+| **毛利率** | **16.3%** | 下降 | 🟡 承压 |
+| **净利润率** | **9.0%** | 收窄 | 🟡 盈利空间缩小 |
+| **单车成本** | **< $35,000** | 历史新低 | 🟢 成本优化 |
+
+### 🔑 基本面五大要点
+
+| # | 要点 | 方向 |
+|:-|:----|:----:|
+| 1️⃣ | **Q4交付量创历史纪录** | ✅...
+      [ai:market_data_expert] ## 📊 TSLA 技术面分析报告
+
+### 一、核心数据一览
+
+| 指标 | 数值 | 解读 |
+|------|:----:|:----:|
+| **当前价格** | **$398.73** | 日内涨幅 **+2.40%** |
+| **RSI(14)** | **55.9** | 🟢 **中性偏强**，未进入超买区 |
+| **MACD** | **3.3546** | 信号线 0.7325 |
+| **MACD柱状图** | **+2.6220** | 🔵 正值，多头动能加速 |
+| **20日波动率** | **2.39%** | 🟡 中等偏高 |
+| **5日涨幅** | **+6.96%** | 🔵 短期强势上攻 |
+
+---
+
+### 二、技术指标详细解读
+
+#### 🔹 动量指标 — RSI = 55.9
+- 处于 **中性区间（30–70）**，既未超买（>70）也未超卖（<30）
+- 数值略高于50中轴线，表明 **短期多头动能占优**
+- 若后续RSI突破60，则确认动量进一步走强；若跌破50，则转弱
+
+#### 🔹 趋势指标 — MACD
+| 项目 | 数值...
+      [ai:risk_expert] ```json
+{
+  "volatility_risk": "MODERATE-HIGH — 20-day volatility at 2.39% is elevated, and the stock has surged 6.96% in 5 days, increasing short-term reversal risk. RSI at 55.9 provides some buffer from overbought conditions but does not eliminate sharp drawdown potential.",
+  "macro_risk": "MODERATE — Net profit plunged 71% YoY, gross margin compressed to 16.3%, and revenue growth slowed to just 2%, signaling fundamental deterioration. Negative sentiment (-0.4) from a 218k-vehicle recall and ...
+
+⏳ 尚未结束的节点: strategy_expert
+
+============================================================
+⏱ [16:59:35] 第 14 步
+
+>>> 节点完成: strategy_expert
+    messages: 新增/合并 16 条
+      [ai:fundamental_expert] ---
+
+## 📋 TSLA 综合投资分析报告 — 完整版
+
+> **报告日期：** 2025年  
+> **分析覆盖：** ✅ 基本面 ✅ 技术面 ✅ 新闻情绪  
+> **免责声明：** ⚠️ *以下为客观数据呈现，不构成投资建议*
+
+---
+
+## 一、📊 基本面分析
+
+### 核心财务指标
+
+| 指标 | 最新数据 | 同比变化 | 趋势 |
+|:----|:--------:|:--------:|:----:|
+| **营收** | **$257亿** | **+2%** | 🟢 小幅增长 |
+| **GAAP净利润** | **$23亿** | **-71%** | 🔴 大幅恶化 |
+| **毛利率** | **16.3%** | 下降 | 🟡 承压 |
+| **净利润率** | **9.0%** | 收窄 | 🟡 盈利空间缩小 |
+| **单车成本** | **< $35,000** | 历史新低 | 🟢 成本优化 |
+
+### 🔑 基本面五大要点
+
+| # | 要点 | 方向 |
+|:-|:----|:----:|
+| 1️⃣ | **Q4交付量创历史纪录** | ✅...
+      [ai:market_data_expert] ## 📊 TSLA 技术面分析报告
+
+### 一、核心数据一览
+
+| 指标 | 数值 | 解读 |
+|------|:----:|:----:|
+| **当前价格** | **$398.73** | 日内涨幅 **+2.40%** |
+| **RSI(14)** | **55.9** | 🟢 **中性偏强**，未进入超买区 |
+| **MACD** | **3.3546** | 信号线 0.7325 |
+| **MACD柱状图** | **+2.6220** | 🔵 正值，多头动能加速 |
+| **20日波动率** | **2.39%** | 🟡 中等偏高 |
+| **5日涨幅** | **+6.96%** | 🔵 短期强势上攻 |
+
+---
+
+### 二、技术指标详细解读
+
+#### 🔹 动量指标 — RSI = 55.9
+- 处于 **中性区间（30–70）**，既未超买（>70）也未超卖（<30）
+- 数值略高于50中轴线，表明 **短期多头动能占优**
+- 若后续RSI突破60，则确认动量进一步走强；若跌破50，则转弱
+
+#### 🔹 趋势指标 — MACD
+| 项目 | 数值...
+      [ai:strategy_expert] {
+  "recommendation": "Hold",
+  "confidence_score": 65,
+  "reasoning": "Chain-of-Thought Analysis: 1) Technical (30% weight) is Bullish: MACD bullish crossover confirmed at 3.35 vs signal 0.73, histogram at +2.62 showing accelerating momentum, RSI at 55.9 neutral with room to run higher, price at $398.73 up 6.96% in 5 days. Clear uptrend in place. 2) Fundamental (40% weight) is Bearish: Revenue growth slowed to just +2% YoY, GAAP net income collapsed 71% to $2.3B, gross margin compressed to 16.3...
+
+============================================================
+⏱ [16:59:41] 第 15 步
+
+>>> 节点完成: supervisor
+    next: '__end__'
+
+🔄 读取 checkpoint 最终状态（get_state，避免二次 invoke）...
+
+=== ✅ 5 Agent 完整测试结果（最终 state） ===
+messages 共 17 条
+  [ai] **Overall Sentiment:** Negative  
+**Sentiment Score:** -0.4  
+**Key Events:**  
+- Tesla stock has surged 40% over the past year but is down 9% YTD, raising
+  [ai] ---
+
+## 📋 TSLA 综合投资分析报告 — 完整版
+
+> **报告日期：** 2025年  
+> **分析覆盖：** ✅ 基本面 ✅ 技术面 ✅ 新闻情绪  
+> **免责声明：** ⚠️ *以下为客观数据呈现，不构成投资建议*
+
+---
+
+## 一、📊 基本面分析
+
+### 核心财务指标
+
+| 指标 | 最新数据 | 同比变化 | 趋势 |
+|:----|:--------:|:--------:|:----:|
+| **营收** | **$257亿** | **+2%** | 🟢 小幅增长 |
+| **GAAP净利润** | **$23亿** | **-71%** | 🔴 大幅恶化 |
+| **毛利率** | **16.3%** | 下降 | 🟡 承压 |
+| **净利润率** | **9.0%** | 收窄 | 🟡 盈利空间缩小 |
+| **单车成本** | **< $35,000** | 历史新低 | 🟢 成本优化 |
+
+### 🔑 基本面五大要点
+
+| # | 要点 | 方向 |
+|:-|:----|:----:|
+| 1️⃣ | **Q4交付量创历史纪录** | ✅ 利好 |
+| 2️⃣ | **储能部署量创历史新高，储能毛利率创纪录** | ✅ 利好 |
+| 3️⃣ | **上海Megafactory完工，2025 Q1爬坡** | ✅ 中期利好 |
+| 4️⃣ | **FSD目标2025年推出无监督版+Robotaxi** | ✅ 长期叙事 |
+| 5️⃣ | **营收增速仅2%，净利润暴跌71%** | ❌ 严重利空 |
+
+---
+
+## 二、📈 技术面分析
+
+### 当前行情数据
+
+| 指标 | 数值 | 信号 |
+|:----|:----:|:----:|
+| **当前价格** | **$398.73** | 日内 +2.40% |
+| **R...
+  [ai] ## 📊 TSLA 技术面分析报告
+
+### 一、核心数据一览
+
+| 指标 | 数值 | 解读 |
+|------|:----:|:----:|
+| **当前价格** | **$398.73** | 日内涨幅 **+2.40%** |
+| **RSI(14)** | **55.9** | 🟢 **中性偏强**，未进入超买区 |
+| **MACD** | **3.3546** | 信号线 0.7325 |
+| **MACD柱状图** | **+2.6220** | 🔵 正值，多头动能加速 |
+| **20日波动率** | **2.39%** | 🟡 中等偏高 |
+| **5日涨幅** | **+6.96%** | 🔵 短期强势上攻 |
+
+---
+
+### 二、技术指标详细解读
+
+#### 🔹 动量指标 — RSI = 55.9
+- 处于 **中性区间（30–70）**，既未超买（>70）也未超卖（<30）
+- 数值略高于50中轴线，表明 **短期多头动能占优**
+- 若后续RSI突破60，则确认动量进一步走强；若跌破50，则转弱
+
+#### 🔹 趋势指标 — MACD
+| 项目 | 数值 | 信号 |
+|:----|:----:|:----:|
+| MACD主线 | 3.3546 | — |
+| 信号线 | 0.7325 | — |
+| 柱状图 | **+2.6220** | ✅ **正值放大** |
+| 交叉状态 | MACD > 信号线 | 🔵 **看涨金叉确认** |
+
+> **MACD金叉 + 正柱放大** → 当前最明确的 **看涨趋势信号**，多头动能正在加速释放。
+
+#### 🔹 风险指标 — 波动率 2.39%
+- 20日波动率处于 **中等偏高水平**，意味着价格日内波动幅度较大
+- 近5日涨幅接近7%，短期波动风险正在累积
+
+---
+
+### 三、综合技术...
+  [ai] ```json
+{
+  "volatility_risk": "MODERATE-HIGH — 20-day volatility at 2.39% is elevated, and the stock has surged 6.96% in 5 days, increasing short-term reversal risk. RSI at 55.9 provides some buffer from overbought conditions but does not eliminate sharp drawdown potential.",
+  "macro_risk": "MODERATE — Net profit plunged 71% YoY, gross margin compressed to 16.3%, and revenue growth slowed to just 2%, signaling fundamental deterioration. Negative sentiment (-0.4) from a 218k-vehicle recall and valuation debates adds macro headwinds. EV industry pricing pressure and macroeconomic uncertainty further weigh on the stock.",
+  "stop_loss_suggestion": "Consider a stop loss near $370, approximately 7.2% below the current price of $398.73. This level provides sufficient buffer against the 2.39% d...
+  [ai] {
+  "recommendation": "Hold",
+  "confidence_score": 65,
+  "reasoning": "Chain-of-Thought Analysis: 1) Technical (30% weight) is Bullish: MACD bullish crossover confirmed at 3.35 vs signal 0.73, histogram at +2.62 showing accelerating momentum, RSI at 55.9 neutral with room to run higher, price at $398.73 up 6.96% in 5 days. Clear uptrend in place. 2) Fundamental (40% weight) is Bearish: Revenue growth slowed to just +2% YoY, GAAP net income collapsed 71% to $2.3B, gross margin compressed to 16.3%, net margin at 9.0%. Positives include record deliveries/energy storage, lowest-ever COGS at <$35K, and FSD/Robotaxi narrative for 2025 but these are offset by severe profit deterioration. 3) Sentiment (30% weight) is Bearish: Overall score -0.4 (Negative), driven by 218,868 vehicle recall due to ...
+其它字段:
+  stock_symbol: TSLA
+  next: __end__
+(AIAgent) ➜  alphapilot git:(dev) ✗ 
+```
 
 # 项目亮点:
 

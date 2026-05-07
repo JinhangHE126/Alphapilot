@@ -11,7 +11,7 @@ from config.llm import get_llm
 from config.proxy import get_proxy_for_agent
 from rag.vectorstore import rag
 
-model = get_llm("news")
+# model = get_llm("news")
 
 
 @contextmanager
@@ -85,7 +85,7 @@ def _extract_news_item(item: dict) -> dict:
     }
 
 
-def fetch_recent_news_and_sentiment(symbol: str) -> str:
+def fetch_recent_news_and_sentiment(symbol: str, model=None) -> str:
     """Fetch latest news and return validated sentiment JSON string."""
     try:
         news_list = _fetch_news_list(symbol)
@@ -111,7 +111,9 @@ def fetch_recent_news_and_sentiment(symbol: str) -> str:
             ]
         )
 
-        llm = model
+        if model is None:
+            from config.llm import get_llm
+            model = get_llm("news")
 
         prompt = f"""
         Please analyze the latest news below about {symbol} for sentiment.
@@ -122,7 +124,7 @@ def fetch_recent_news_and_sentiment(symbol: str) -> str:
         {news_text[:6000]}
         """
 
-        response = llm.invoke(prompt)
+        response = model.invoke(prompt)
         raw_content = response.content if hasattr(response, "content") else str(response)
         if isinstance(raw_content, list):
             raw_content = "\n".join(

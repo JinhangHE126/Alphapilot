@@ -4,6 +4,9 @@ from config.llm import get_llm
 
 
 model = get_llm("news")
+def fetch_recent_news_and_sentiment_tool(symbol: str) -> str:
+    return fetch_recent_news_and_sentiment(symbol=symbol, model=model)
+
 
 news_agent = create_react_agent(
     model=model,

@@ -8,9 +8,28 @@ from config.llm import get_llm
 
 model = get_llm('fundamental')
 
+# def analyze_fundamental_request_tool(symbol: str, user_query: str = ""):
+#     """Analyze a company's fundamental data from report PDF."""
+#     return analyze_fundamental_request(symbol=symbol, user_query=user_query, model=model)
+
+def analyze_fundamental_request_tool(
+    symbol: str, 
+    user_query: str = "", 
+    model=None
+) -> str:                                      # ← 改成 str（最稳）
+    """Tool wrapper for fundamental analysis"""
+    try:
+        return analyze_fundamental_request(
+            symbol=symbol, 
+            user_query=user_query, 
+            model=model
+        )
+    except Exception as e:
+        return f"Fundamental analysis failed: {str(e)}"
+
 fundamental_agent = create_react_agent(
     model=model,
-    tools=[analyze_fundamental_request],
+    tools=[analyze_fundamental_request_tool],
     name="fundamental_expert",
     prompt="""
     You are a professional fundamental analyst.
