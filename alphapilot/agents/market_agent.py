@@ -5,6 +5,7 @@ load_dotenv()
 from langgraph.prebuilt import create_react_agent
 from tools.market_tools import fetch_market_data
 from config.llm import get_llm
+from config.proxy import get_requests_proxies
 
 
 

@@ -1,23 +1,26 @@
-import os
-from dotenv import load_dotenv
-load_dotenv()
+import json
 
-from langgraph_supervisor import create_supervisor
+# from alphapilot.test.test_end_to_end import config
+from dotenv import load_dotenv
+from langgraph.graph import START, END, StateGraph
+
+from graph.state import GraphState
+from graph.checkpointer import get_checkpointer
+from config.llm import get_llm
 from agents.market_agent import market_agent
 from agents.fundamental_agent import fundamental_agent
 from agents.news_agent import news_agent
-from graph.state import GraphState
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.graph import START, END, StateGraph
-from config.llm import get_llm
-from langchain_core.messages import AIMessage
-from graph.checkpointer import get_checkpointer
+from agents.strategy_agent import strategy_agent
+from agents.risk_agent import risk_agent
+
+load_dotenv()
+
+checkpointer = get_checkpointer()
+model = get_llm("strategy")
 
 
-
-# Extract text content from message
 def extract_text_content(message) -> str:
-    content = getattr(message, "content", "")
+    content = getattr(message, "content", message)
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -27,98 +30,51 @@ def extract_text_content(message) -> str:
                 parts.append(item)
             elif isinstance(item, dict) and item.get("type") == "text":
                 parts.append(item.get("text", ""))
+            else:
+                parts.append(str(item))
         return "\n".join(part for part in parts if part)
     return str(content)
 
 
-# checkpointer = InMemorySaver()
-# 使用SQLite作为持久化存储
-checkpointer = get_checkpointer()
-
-
-
-# Supervisor Node
 def supervisor_node(state: GraphState) -> dict:
-    """Decide which agents to run based on user input."""
+    """Use LLM to decide next agent(s)."""
     messages = state.get("messages", [])
-    # last_content = messages[-1].content if messages else ""
-    last_content = extract_text_content(messages[-1]).lower() if messages else ""
+    last_message = extract_text_content(messages[-1]) if messages else ""
 
-    needs = {
-        "market_data_expert": any(
-            k in last_content
-            for k in ["technical", "price", "rsi", "macd", "volatility"]
-        ),
-        "fundamental_expert": any(
-            k in last_content
-            for k in ["earnings", "fundamental", "revenue", "eps"]
-        ),
-        "news_sentiment_expert": any(
-            k in last_content for k in ["news", "sentiment"]
-        ),
-    }
+    prompt = f"""
+你是一位 AlphaPilot 投资研究主管。
+当前可用 Agent 及其职责：
+- market_data_expert：技术面（价格、RSI、MACD、波动率）
+- fundamental_expert：基本面（财报、营收、EPS、毛利率）
+- news_sentiment_expert：新闻舆情和事件分析
+- strategy_expert：综合判断并给出 Buy/Hold/Sell 建议
+- risk_expert：风险评估、止损建议、仓位控制
 
-    # 如果用户要全面分析，默认调用全部三个
-    if not any(needs.values()):
-        return {
-            "next": [
-                "market_data_expert",
-                "fundamental_expert",
-                "news_sentiment_expert",
-            ]
-        }
+用户最新需求：{last_message}
 
-    # 返回需要并行执行的 Agent 列表
-    next_agents = [k for k, v in needs.items() if v]
-    return {"next": next_agents if next_agents else ["market_data_expert"]}
+请判断需要调用哪些 Agent（可并行调用多个）。
+只返回 JSON：
+{{"next": ["agent_name1", "agent_name2"]}}
+或
+{{"next": "__end__"}}
+"""
 
+    response = model.invoke(prompt)
+    response_text = extract_text_content(response).strip()
 
-def synthesis_node(state: GraphState) -> dict:
-    """Merge all expert outputs into one final response."""
-    ai_messages = [m for m in state.get("messages", []) if isinstance(m, AIMessage)]
+    try:
+        decision = json.loads(response_text)
+        next_step = decision.get("next", "__end__")
+    except json.JSONDecodeError:
+        next_step = "__end__"
 
-    market_text = ""
-    fundamental_text = ""
-    news_text = ""
-    for msg in ai_messages:
-        text = extract_text_content(msg).strip()
-        if not text:
-            continue
-        name = getattr(msg, "name", "") or ""
-        if name == "market_data_expert":
-            market_text = text
-        elif name == "fundamental_expert":
-            fundamental_text = text
-        elif name == "news_sentiment_expert":
-            news_text = text
+    if isinstance(next_step, str):
+        if next_step != "__end__":
+            next_step = [next_step]
+    elif not isinstance(next_step, list):
+        next_step = "__end__"
 
-    def _trim_capability_disclaimer(text: str) -> str:
-        markers = [
-            "\n\nI cannot provide technical analysis",
-            "\n\nI cannot provide technical or fundamental analysis",
-            "\n\nI can only provide a fundamental analysis",
-        ]
-        cleaned = text
-        for marker in markers:
-            idx = cleaned.find(marker)
-            if idx != -1:
-                cleaned = cleaned[:idx].strip()
-        return cleaned
-
-    market_text = _trim_capability_disclaimer(market_text)
-    fundamental_text = _trim_capability_disclaimer(fundamental_text)
-    news_text = _trim_capability_disclaimer(news_text)
-
-    sections = []
-    if market_text:
-        sections.append(f"## Market Analysis\n{market_text}")
-    if fundamental_text:
-        sections.append(f"## Fundamental Analysis\n{fundamental_text}")
-    if news_text:
-        sections.append(f"## News & Sentiment Analysis\n{news_text}")
-
-    final_text = "\n\n".join(sections) if sections else "No expert output generated."
-    return {"messages": [{"role": "assistant", "content": final_text}]}
+    return {"next": next_step}
 
 
 workflow = StateGraph(GraphState)
@@ -126,31 +82,38 @@ workflow = StateGraph(GraphState)
 workflow.add_node("market_data_expert", market_agent)
 workflow.add_node("fundamental_expert", fundamental_agent)
 workflow.add_node("news_sentiment_expert", news_agent)
+workflow.add_node("strategy_expert", strategy_agent)
+workflow.add_node("risk_expert", risk_agent)
 workflow.add_node("supervisor", supervisor_node)
-workflow.add_node("synthesis", synthesis_node)
 
 workflow.add_edge(START, "supervisor")
 
-# 并行路由
 workflow.add_conditional_edges(
     "supervisor",
-    lambda state: state.get("next", []),
+    lambda state: state.get("next", "__end__"),
     {
         "market_data_expert": "market_data_expert",
         "fundamental_expert": "fundamental_expert",
         "news_sentiment_expert": "news_sentiment_expert",
-        END: END,
-    }
+        "strategy_expert": "strategy_expert",
+        "risk_expert": "risk_expert",
+        "__end__": END,
+    },
 )
 
-# Wait for all expert branches, then synthesize once.
-workflow.add_edge(
-    ["market_data_expert", "fundamental_expert", "news_sentiment_expert"],
-    "synthesis",
-)
-workflow.add_edge("synthesis", END)
+for agent in [
+    "market_data_expert",
+    "fundamental_expert",
+    "news_sentiment_expert",
+    "strategy_expert",
+    "risk_expert",
+]:
+    workflow.add_edge(agent, "supervisor")
+    # workflow.add_edge(agent, END)
 
-# 编译workflow, 使用SQLite作为持久化存储
-app = workflow.compile(checkpointer=checkpointer)
+app = workflow.compile(
+    checkpointer=checkpointer,
+    # config={"configurable": {"max_concurrency": 2}}
+    )
 
 __all__ = ["app"]

@@ -11,7 +11,7 @@ from rag.vectorstore import rag
 from config.llm import get_llm
 
 
-model = get_llm("fundamental")
+# model = get_llm("fundamental")
 
 class FundamentalData(BaseModel):
     """Structured financial report data (Revenue, EPS, Margin, etc. required in the proposal)"""
@@ -106,7 +106,7 @@ def _resolve_pdf_path(symbol: str, user_query: str = "") -> str:
     )
 
 
-def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
+def parse_financial_pdf(pdf_path: str, symbol: str, model=None) -> FundamentalData:
     """
     Parse a financial report PDF and return structured data.「解析财务报告 PDF 文件并返回结构化数据。」
     (Currently uses an LLM-assisted parser; real projects can replace it with more precise rule-based extraction.)
@@ -120,7 +120,10 @@ def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
         doc.close()
 
         # 使用 LLM 提取结构化数据（推荐方式）
-        llm = model
+        if model is None:
+            from config.llm import get_llm
+            model = get_llm("fundamental")
+        # llm = model
         
         prompt = f"""
         Extract structured information from the following financial report text. The stock ticker is {symbol}.
@@ -131,7 +134,7 @@ def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
         {full_text[:8000]}  # Limit length to avoid exceeding the token limit
         """
 
-        response = llm.invoke(prompt)
+        response = model.invoke(prompt)
         response_text = response.content if hasattr(response, "content") else str(response)
         if isinstance(response_text, list):
             response_text = "".join(
@@ -147,7 +150,7 @@ def parse_financial_pdf(pdf_path: str, symbol: str) -> FundamentalData:
         raise ValueError(f"Failed to parse PDF: {str(e)}")
 
 
-def analyze_fundamental_request(symbol: str, user_query: str = "") -> FundamentalData:
+def analyze_fundamental_request(symbol: str, user_query: str = "", model=None) -> FundamentalData:
     """
     Smart entrypoint for agents:
     1) parse URL/local PDF path from user query
@@ -156,6 +159,8 @@ def analyze_fundamental_request(symbol: str, user_query: str = "") -> Fundamenta
     """
     resolved_pdf = _resolve_pdf_path(symbol=symbol, user_query=user_query)
     return parse_financial_pdf(pdf_path=resolved_pdf, symbol=symbol)
+
+
 
 
 
