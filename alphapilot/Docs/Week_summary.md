@@ -265,6 +265,386 @@ Tesla (TSLA) 2024年全年基本面分析：
 
 ## 测试结果:
 
+```python
+(AIAgent) ➜  alphapilot git:(dev) ✗ python test/test_end_to_end.py
+🚀 [LLM] MARKET       → deepseek-chat             | proxy: 直连 | temp=0.1 | timeout=180s
+🚀 [LLM] FUNDAMENTAL  → deepseek-reasoner         | proxy: 直连 | temp=0.1 | timeout=300s
+🚀 [LLM] NEWS         → grok-4-1-fast-reasoning   | proxy: http://127.0.0.1:7898 | temp=0.1 | timeout=60s
+🚀 [LLM] STRATEGY     → deepseek-reasoner         | proxy: http://127.0.0.1:7900 | temp=0.2 | timeout=120s
+🚀 [LLM] RISK         → deepseek-reasoner         | proxy: http://127.0.0.1:7900 | temp=0.15 | timeout=120s
+🚀 开始 5 Agent 完整协作测试（流式：app.stream，stream_mode=updates）...
+thread_id = full_test_5agents
+
+说明：Supervisor 若一次派发多个 agent，会并行跑。「第 N 步」= 某个节点刚结束；长时间无新步骤时，多半在等尚未返回的并行分支（常见最慢：market_data_expert、fundamental_expert）。
+
+
+🔍 Supervisor 决策日志:
+   用户输入: 请全面分析 TSLA 的投资机会，给出 Buy/Hold/Sell 建议和风险控制措施。...
+   已执行 Agent: []
+   下一步执行: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
+   当前执行进度: 0/5
+
+
+============================================================
+⏱ [21:53:55] 第 1 步
+
+>>> 节点完成: supervisor
+ next: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
+ executed_agents: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
+
+⏳ 尚未结束的节点: fundamental_expert, market_data_expert, news_sentiment_expert
+📥 [Attempt 1/4] Downloading TSLA (proxy: 直连)...
+
+1 Failed download:
+['TSLA']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+📥 [Attempt 2/4] Downloading TSLA (proxy: 直连)...
+🚀 [LLM] FUNDAMENTAL  → deepseek-reasoner         | proxy: 直连 | temp=0.1 | timeout=300s
+🚀 [LLM] NEWS         → grok-4-1-fast-reasoning   | proxy: http://127.0.0.1:7898 | temp=0.1 | timeout=60s
+✅ 下载成功！共 60 条记录
+
+… [21:54:15] 仍在等待并行分支返回: fundamental_expert, market_data_expert, news_sentiment_expert 
+
+============================================================
+⏱ [21:54:17] 第 2 步
+
+>>> 节点完成: market_data_expert
+ messages: 新增/合并 4 条
+ [ai:market_data_expert] 我来获取 TSLA 的市场数据进行分析。
+ [tool:fetch_market_data] [TSLA Technical Analysis Report]
+        Current Price: 410.59 (Change: +2.97%)
+        Latest Volume: 12,472,605
+        RSI(14): 55.9 (Neutral)
+        MACD: 5.0916 (Signal: 1.5664, Histogram: +3.5252)
+        20-Day Volatility: 2.44%
+        5-Day Change: +7.59%
+
+        Summary: MACD bullish crossover, upward trend
+ [ai:market_data_expert] ## 📊 TSLA 技术面分析报告
+
+### 一、当前价格与走势
+
+| 指标 | 数值 |
+|------|------|
+| **当前价格** | **$410.59** |
+| 日内涨跌幅 | **+2.97%** |
+| 5日涨跌幅 | **+7.59%** |
+| 成交量 | 12,472,605 |
+
+---
+
+### 二、核心技术指标解读
+
+#### 1️⃣ RSI（相对强弱指数）— **55.9（中性偏强）**
+- RSI 处于 **50~70 的中性偏强区间**，既未进入超买（>70），也未进入超卖（<30）。
+- **解读**：当前多头力量略占优势，但尚未过热，短期仍有上行空间，但也缺乏强烈的单边动能信号。
+
+#### 2️⃣ MACD（指数平滑异同移动平均线）— **看涨信号**
+| 指标 | 数值 |
+|------|------|
+| MACD 线 | 5.09 |
+| 信号线 | 1.57 |
+| 柱状图 | **+3.53（正值扩大）** |
+
+- **解读**：MACD 线位于信号线上方，且柱状图正值持续扩大，形成 **明确的看涨交叉（Bullish Cr...
+
+⏳ 尚未结束的节点: fundamental_expert, news_sentiment_expert
+
+============================================================
+⏱ [21:54:19] 第 3 步
+
+>>> 节点完成: news_sentiment_expert
+ messages: 新增/合并 4 条
+ [ai:news_sentiment_expert] 
+ [tool:fetch_recent_news_and_sentiment] {"symbol":"TSLA","overall_sentiment":"Positive","sentiment_score":0.85,"key_events":["Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.","Tesla stock passed an aggressive buy point and the 200-day line.","Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports."],"summary":"Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling stron...
+ [ai:news_sentiment_expert] **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line,...
+
+⏳ 尚未结束的节点: fundamental_expert
+
+… [21:54:35] 仍在等待并行分支返回: fundamental_expert 
+
+============================================================
+⏱ [21:54:37] 第 4 步
+
+>>> 节点完成: fundamental_expert
+ messages: 新增/合并 4 条
+ [ai:fundamental_expert] 好的，我将按照我的职责对 TSLA 进行基本面分析。我会调用工具解析最新财报。
+ [tool:analyze_fundamental_request_tool] symbol='TSLA' revenue_growth=2.0 eps_growth=3.0 gross_margin=16.3 net_margin=9.0 key_points=['Q4 2024 was a record quarter for vehicle deliveries and energy storage deployments.', 'COGS per vehicle reached its lowest level ever at <$35,000, driven by raw material cost improvement.', 'Energy business achieved record gross profit in Q4, and Megafactory Shanghai completed construction.', '2025 expected to be seminal year with FSD (Supervised) improvements and potential launch of unsupervised FSD an...
+ [ai:fundamental_expert] # TSLA 基本面分析报告
+
+根据最新的财务报告数据，以下是对 Tesla（TSLA）的结构化基本面分析：
+
+---
+
+## 📊 核心财务指标
+
+| 指标 | 数值 |
+|------|------|
+| **营收增长 (YoY)** | **+2%** (Q4 2024 总营收 $257亿) |
+| **EPS增长 (Non-GAAP, YoY)** | **+3%** ($0.73) |
+| **毛利率** | **16.3%** |
+| **净利润率** | **9.0%** |
+| **GAAP 营业利润率** | **6.2%**（同比下降） |
+
+---
+
+## 🔑 关键财务亮点
+
+1. **交付创纪录** — Q4 2024 车辆交付量和储能部署量均创历史新高。
+2. **单车成本历史最低** — 每辆车销售成本降至 **< $35,000**，受益于原材料成本持续优化。
+3. **储能业务爆发** — 储能业务在 Q4 实现创纪录的毛利润，上海 Megafactory 已竣工投产。
+4. **2025 关键之年** — FSD（监督版）持续改进，无监督 Full Se...
+
+🔍 Supervisor 决策日志:
+   用户输入: **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+...
+   已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
+   下一步执行: ['strategy_expert']
+   当前执行进度: 3/5
+
+
+============================================================
+⏱ [21:54:37] 第 5 步
+
+>>> 节点完成: supervisor
+ next: ['strategy_expert']
+ executed_agents: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert']
+
+⏳ 尚未结束的节点: strategy_expert
+
+… [21:54:55] 仍在等待并行分支返回: strategy_expert 
+
+============================================================
+⏱ [21:54:57] 第 6 步
+
+>>> 节点完成: strategy_expert
+ messages: 新增/合并 11 条
+ [tool:fetch_recent_news_and_sentiment] {"symbol":"TSLA","overall_sentiment":"Positive","sentiment_score":0.85,"key_events":["Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.","Tesla stock passed an aggressive buy point and the 200-day line.","Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports."],"summary":"Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling stron...
+ [ai:news_sentiment_expert] **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line,...
+ [ai:strategy_expert] {
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7.59%, indicating upward momentum. Fundamentals (40% weight) are mixed but net positive: revenue and EPS show modest growth (+2% and +3% YoY respectively), record vehicle deliveries and ...
+
+🔍 Supervisor 决策日志:
+   用户输入: {
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After syn...
+   已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert']
+   下一步执行: ['risk_expert']
+   当前执行进度: 4/5
+
+
+============================================================
+⏱ [21:54:57] 第 7 步
+
+>>> 节点完成: supervisor
+ next: ['risk_expert']
+ executed_agents: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+
+⏳ 尚未结束的节点: risk_expert
+
+… [21:55:15] 仍在等待并行分支返回: risk_expert 
+
+============================================================
+⏱ [21:55:24] 第 8 步
+
+>>> 节点完成: risk_expert
+ messages: 新增/合并 12 条
+ [ai:news_sentiment_expert] **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line,...
+ [ai:strategy_expert] {
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7.59%, indicating upward momentum. Fundamentals (40% weight) are mixed but net positive: revenue and EPS show modest growth (+2% and +3% YoY respectively), record vehicle deliveries and ...
+ [ai:risk_expert] ```json
+{
+  "volatility_risk": 78,
+  "macro_risk": 68,
+  "stop_loss_suggestion": "$380 (approximately 7.5% below current price of $410.59), which sits below the recent breakout level near $400, the 200-day moving average, and provides a buffer accommodating the stock's 2.44% daily volatility with roughly 3 standard deviations of daily movement. For a more conservative approach, consider a tighter stop at $395.",
+  "position_suggestion": "Given the moderate 65% confidence in the Buy recommendatio...
+
+🔍 Supervisor 决策日志:
+   用户输入: ```json
+{
+  "volatility_risk": 78,
+  "macro_risk": 68,
+  "stop_loss_suggestion":...
+   已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+   下一步执行: []
+   当前执行进度: 5/5
+
+
+============================================================
+⏱ [21:55:24] 第 9 步
+
+>>> 节点完成: supervisor
+ next: '__end__'
+ final_report: 
+# AlphaPilot 完整投资分析报告 - TSLA
+
+## 📊 执行路径
+已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+
+## 🎯 最终投资建议（Strategy Agent）
+{
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish cross...
+
+🔄 读取 checkpoint 最终状态（get_state，避免二次 invoke）...
+
+=== ✅ 5 Agent 完整测试结果（最终 state） ===
+messages 共 12 条
+ [ai] 
+ [tool] {"symbol":"TSLA","overall_sentiment":"Positive","sentiment_score":0.85,"key_events":["Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.","Tesla stock passed an aggressive buy point and the 200-day line.","Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports."],"summary":"Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling strong positive momentum."}
+ [ai] **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling strong positive momentum.
+ [ai] {
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7.59%, indicating upward momentum. Fundamentals (40% weight) are mixed but net positive: revenue and EPS show modest growth (+2% and +3% YoY respectively), record vehicle deliveries and lowest-ever COGS per vehicle (<$35k) reflect operational efficiency gains, while the energy business posted record gross profit. However, GAAP operating margin fell to 6.2% and operating income dropped 23% YoY due to ASP compression and rising AI investments. Sentiment (30% weight) is strongly posit...
+ [ai] ```json
+{
+  "volatility_risk": 78,
+  "macro_risk": 68,
+  "stop_loss_suggestion": "$380 (approximately 7.5% below current price of $410.59), which sits below the recent breakout level near $400, the 200-day moving average, and provides a buffer accommodating the stock's 2.44% daily volatility with roughly 3 standard deviations of daily movement. For a more conservative approach, consider a tighter stop at $395.",
+  "position_suggestion": "Given the moderate 65% confidence in the Buy recommendation combined with high daily volatility of 2.44% and macro uncertainties, a position size of 8-12% of the total portfolio is recommended. Aggressive traders may size up to 12%, while conservative investors should limit to 5-8%. Use tiered entry (e.g., 50% now, 25% on a pullback to $395-$400, 25% on co...
+其它字段:
+ stock_symbol: TSLA
+ next: __end__
+ executed_agents: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+ final_report: 
+# AlphaPilot 完整投资分析报告 - TSLA
+
+## 📊 执行路径
+已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+
+## 🎯 最终投资建议（Strategy Agent）
+{
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7...
+
+================================================================================
+🎯 AlphaPilot 最终完整报告
+================================================================================
+
+# AlphaPilot 完整投资分析报告 - TSLA
+
+## 📊 执行路径
+已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+
+## 🎯 最终投资建议（Strategy Agent）
+{
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7.59%, indicating upward momentum. Fundamentals (40% weight) are mixed but net positive: revenue and EPS show modest growth (+2% and +3% YoY respectively), record vehicle deliveries and lowest-ever COGS per vehicle (<$35k) reflect operational efficiency gains, while the energy business posted record gross profit. However, GAAP operating margin fell to 6.2% and operating income dropped 23% YoY due to ASP compression and rising AI investments. Sentiment (30% weight) is strongly positive (score 0.85), driven by Tesla China sales surging 36% in April—the sixth consecutive monthly gain—which propelled the stock above $400 and the 200-day moving average. Key risk control measures: (1) set a stop-loss at $380 (below recent support and 200-day MA), (2) limit position size given 2.44% daily volatility, (3) monitor Q1 2025 delivery numbers and FSD regulatory developments closely, (4)...
+
+## ⚠️ 风险评估（Risk Agent）
+```json
+{
+  "volatility_risk": 78,
+  "macro_risk": 68,
+  "stop_loss_suggestion": "$380 (approximately 7.5% below current price of $410.59), which sits below the recent breakout level near $400, the 200-day moving average, and provides a buffer accommodating the stock's 2.44% daily volatility with roughly 3 standard deviations of daily movement. For a more conservative approach, consider a tighter stop at $395.",
+  "position_suggestion": "Given the moderate 65% confidence in the Buy recommendation combined with high daily volatility of 2.44% and macro uncertainties, a position size of 8-12% of the total portfolio is recommended. Aggressive traders may size up to 12%, while conservative investors should limit to 5-8%. Use tiered entry (e.g., 50% now, 25% on a pullback to $395-$400, 25% on confirmation above $420) to reduce average entry risk.",
+  "overall_risk_score": 70,
+  "risk_reasoning": "[Chain of Thought]\n1. Volatility Risk (Score: 78): TSLA's 20-day volatility stands at 2.44%, wh...
+
+## 📋 详细分析
+**技术面（Market Agent）**  
+## 📊 TSLA 技术面分析报告
+
+### 一、当前价格与走势
+
+| 指标 | 数值 |
+|------|------|
+| **当前价格** | **$410.59** |
+| 日内涨跌幅 | **+2.97%** |
+| 5日涨跌幅 | **+7.59%** |
+| 成交量 | 12,472,605 |
+
+---
+
+### 二、核心技术指标解读
+
+#### 1️⃣ RSI（相对强弱指数）— **55.9（中性偏强）**
+- RSI 处于 **50~70 的中性偏强区间**，既未进入超买（>70），也未进入超卖（<30）。
+- **解读**：当前多头力量略占优势，但尚未过热，短期仍有上行空间，但也缺乏强烈的单边动能信号。
+
+#### 2️⃣ MACD（指数平滑异同移动平均线）— **看涨信号**
+| 指标 | 数值 |
+|------|------|
+| MACD 线 | 5.09 |...
+
+**基本面（Fundamental Agent）**  
+# TSLA 基本面分析报告
+
+根据最新的财务报告数据，以下是对 Tesla（TSLA）的结构化基本面分析：
+
+---
+
+## 📊 核心财务指标
+
+| 指标 | 数值 |
+|------|------|
+| **营收增长 (YoY)** | **+2%** (Q4 2024 总营收 $257亿) |
+| **EPS增长 (Non-GAAP, YoY)** | **+3%** ($0.73) |
+| **毛利率** | **16.3%** |
+| **净利润率** | **9.0%** |
+| **GAAP 营业利润率** | **6.2%**（同比下降） |
+
+---
+
+## 🔑 关键财务亮点
+
+1. **交付创纪录** — Q4 2024 车辆交付量和储能部署量均创历史新高。
+2. **单车成本历史最低** — 每辆车销售成本降至 **< $35,000**，受益于原材料成本持续优化。
+...
+
+**舆情分析（News Agent）**  
+**Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year su...
+
+
+📊 执行路径： ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+✅ 5 Agent 完整协作测试通过！
+```
+
 ```text
 (AIAgent) ➜  alphapilot git:(dev) ✗ python test/test_end_to_end.py
 🚀 [LLM] MARKET       → deepseek-chat             | proxy: 直连 | temp=0.1 | timeout=180s
@@ -275,8 +655,8 @@ Tesla (TSLA) 2024年全年基本面分析：
 🚀 开始 5 Agent 完整协作测试（流式：app.stream，stream_mode=updates）...
 thread_id = full_test_5agents
 
-说明：Supervisor 若一次派发多个 agent，会并行跑。「第 N 步」= 某个节点刚结束；
-长时间无新步骤时，多半在等尚未返回的并行分支。
+说明：Supervisor 若一次派发多个 agent，会并行跑。「第 N 步」= 某个节点刚结束；长时间无新步骤时，多半在等尚未返回的并行分支（常见最慢：market_data_expert、fundamental_expert）。
+
 
 🔍 Supervisor 决策日志:
    用户输入: 请全面分析 TSLA 的投资机会，给出 Buy/Hold/Sell 建议和风险控制措施。...
@@ -284,115 +664,367 @@ thread_id = full_test_5agents
    下一步执行: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
    当前执行进度: 0/5
 
+
+============================================================
+⏱ [21:53:55] 第 1 步
+
 >>> 节点完成: supervisor
  next: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
  executed_agents: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
 
 ⏳ 尚未结束的节点: fundamental_expert, market_data_expert, news_sentiment_expert
 📥 [Attempt 1/4] Downloading TSLA (proxy: 直连)...
+
 1 Failed download:
 ['TSLA']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
 📥 [Attempt 2/4] Downloading TSLA (proxy: 直连)...
+🚀 [LLM] FUNDAMENTAL  → deepseek-reasoner         | proxy: 直连 | temp=0.1 | timeout=300s
+🚀 [LLM] NEWS         → grok-4-1-fast-reasoning   | proxy: http://127.0.0.1:7898 | temp=0.1 | timeout=60s
 ✅ 下载成功！共 60 条记录
 
+… [21:54:15] 仍在等待并行分支返回: fundamental_expert, market_data_expert, news_sentiment_expert 
+
+============================================================
+⏱ [21:54:17] 第 2 步
+
 >>> 节点完成: market_data_expert
-[tool:fetch_market_data] [TSLA Technical Analysis Report]
-       Current Price: 410.59 (Change: +2.97%)
-       Latest Volume: 12,472,605
-       RSI(14): 55.9 (Neutral)
-       MACD: 5.0916 (Signal: 1.5664, Histogram: +3.5252)
-       20-Day Volatility: 2.44%
-       5-Day Change: +7.59%
-       Summary: MACD bullish crossover, upward trend
+ messages: 新增/合并 4 条
+ [ai:market_data_expert] 我来获取 TSLA 的市场数据进行分析。
+ [tool:fetch_market_data] [TSLA Technical Analysis Report]
+        Current Price: 410.59 (Change: +2.97%)
+        Latest Volume: 12,472,605
+        RSI(14): 55.9 (Neutral)
+        MACD: 5.0916 (Signal: 1.5664, Histogram: +3.5252)
+        20-Day Volatility: 2.44%
+        5-Day Change: +7.59%
+
+        Summary: MACD bullish crossover, upward trend
+ [ai:market_data_expert] ## 📊 TSLA 技术面分析报告
+
+### 一、当前价格与走势
+
+| 指标 | 数值 |
+|------|------|
+| **当前价格** | **$410.59** |
+| 日内涨跌幅 | **+2.97%** |
+| 5日涨跌幅 | **+7.59%** |
+| 成交量 | 12,472,605 |
+
+---
+
+### 二、核心技术指标解读
+
+#### 1️⃣ RSI（相对强弱指数）— **55.9（中性偏强）**
+- RSI 处于 **50~70 的中性偏强区间**，既未进入超买（>70），也未进入超卖（<30）。
+- **解读**：当前多头力量略占优势，但尚未过热，短期仍有上行空间，但也缺乏强烈的单边动能信号。
+
+#### 2️⃣ MACD（指数平滑异同移动平均线）— **看涨信号**
+| 指标 | 数值 |
+|------|------|
+| MACD 线 | 5.09 |
+| 信号线 | 1.57 |
+| 柱状图 | **+3.53（正值扩大）** |
+
+- **解读**：MACD 线位于信号线上方，且柱状图正值持续扩大，形成 **明确的看涨交叉（Bullish Cr...
+
+⏳ 尚未结束的节点: fundamental_expert, news_sentiment_expert
+
+============================================================
+⏱ [21:54:19] 第 3 步
 
 >>> 节点完成: news_sentiment_expert
-[tool:fetch_recent_news_and_sentiment]
-{"symbol":"TSLA","overall_sentiment":"Positive","sentiment_score":0.85,
-"key_events":["Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.",
-"Tesla stock passed an aggressive buy point and the 200-day line.",
-"Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports."],
-"summary":"Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling strong positive momentum."}
+ messages: 新增/合并 4 条
+ [ai:news_sentiment_expert] 
+ [tool:fetch_recent_news_and_sentiment] {"symbol":"TSLA","overall_sentiment":"Positive","sentiment_score":0.85,"key_events":["Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.","Tesla stock passed an aggressive buy point and the 200-day line.","Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports."],"summary":"Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling stron...
+ [ai:news_sentiment_expert] **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line,...
+
+⏳ 尚未结束的节点: fundamental_expert
+
+… [21:54:35] 仍在等待并行分支返回: fundamental_expert 
+
+============================================================
+⏱ [21:54:37] 第 4 步
 
 >>> 节点完成: fundamental_expert
-[tool:analyze_fundamental_request_tool]
-symbol='TSLA' revenue_growth=2.0 eps_growth=3.0 gross_margin=16.3 net_margin=9.0
-key_points=[
-  'Q4 2024 was a record quarter for vehicle deliveries and energy storage deployments.',
-  'COGS per vehicle reached its lowest level ever at <$35,000.',
-  'Energy business achieved record gross profit in Q4.',
-  '2025 expected to be seminal year with FSD improvements and potential unsupervised FSD launch.'
-]
+ messages: 新增/合并 4 条
+ [ai:fundamental_expert] 好的，我将按照我的职责对 TSLA 进行基本面分析。我会调用工具解析最新财报。
+ [tool:analyze_fundamental_request_tool] symbol='TSLA' revenue_growth=2.0 eps_growth=3.0 gross_margin=16.3 net_margin=9.0 key_points=['Q4 2024 was a record quarter for vehicle deliveries and energy storage deployments.', 'COGS per vehicle reached its lowest level ever at <$35,000, driven by raw material cost improvement.', 'Energy business achieved record gross profit in Q4, and Megafactory Shanghai completed construction.', '2025 expected to be seminal year with FSD (Supervised) improvements and potential launch of unsupervised FSD an...
+ [ai:fundamental_expert] # TSLA 基本面分析报告
+
+根据最新的财务报告数据，以下是对 Tesla（TSLA）的结构化基本面分析：
+
+---
+
+## 📊 核心财务指标
+
+| 指标 | 数值 |
+|------|------|
+| **营收增长 (YoY)** | **+2%** (Q4 2024 总营收 $257亿) |
+| **EPS增长 (Non-GAAP, YoY)** | **+3%** ($0.73) |
+| **毛利率** | **16.3%** |
+| **净利润率** | **9.0%** |
+| **GAAP 营业利润率** | **6.2%**（同比下降） |
+
+---
+
+## 🔑 关键财务亮点
+
+1. **交付创纪录** — Q4 2024 车辆交付量和储能部署量均创历史新高。
+2. **单车成本历史最低** — 每辆车销售成本降至 **< $35,000**，受益于原材料成本持续优化。
+3. **储能业务爆发** — 储能业务在 Q4 实现创纪录的毛利润，上海 Megafactory 已竣工投产。
+4. **2025 关键之年** — FSD（监督版）持续改进，无监督 Full Se...
 
 🔍 Supervisor 决策日志:
+   用户输入: **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+...
    已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert']
    下一步执行: ['strategy_expert']
    当前执行进度: 3/5
 
+
+============================================================
+⏱ [21:54:37] 第 5 步
+
+>>> 节点完成: supervisor
+ next: ['strategy_expert']
+ executed_agents: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert']
+
+⏳ 尚未结束的节点: strategy_expert
+
+… [21:54:55] 仍在等待并行分支返回: strategy_expert 
+
+============================================================
+⏱ [21:54:57] 第 6 步
+
 >>> 节点完成: strategy_expert
-{
+ messages: 新增/合并 11 条
+ [tool:fetch_recent_news_and_sentiment] {"symbol":"TSLA","overall_sentiment":"Positive","sentiment_score":0.85,"key_events":["Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.","Tesla stock passed an aggressive buy point and the 200-day line.","Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports."],"summary":"Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling stron...
+ [ai:news_sentiment_expert] **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line,...
+ [ai:strategy_expert] {
   "recommendation": "Buy",
   "confidence_score": 65,
-  "reasoning": "综合技术面、基本面和舆情信号后，整体为中等偏多。技术面 MACD 看涨交叉、RSI 55.9；基本面营收和 EPS 温和增长，但利润率仍受 ASP 与 AI 投入影响；舆情分数 0.85，China sales 与突破 $400 提供正向催化。"
-}
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7.59%, indicating upward momentum. Fundamentals (40% weight) are mixed but net positive: revenue and EPS show modest growth (+2% and +3% YoY respectively), record vehicle deliveries and ...
 
 🔍 Supervisor 决策日志:
+   用户输入: {
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After syn...
    已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert']
    下一步执行: ['risk_expert']
    当前执行进度: 4/5
 
+
+============================================================
+⏱ [21:54:57] 第 7 步
+
+>>> 节点完成: supervisor
+ next: ['risk_expert']
+ executed_agents: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+
+⏳ 尚未结束的节点: risk_expert
+
+… [21:55:15] 仍在等待并行分支返回: risk_expert 
+
+============================================================
+⏱ [21:55:24] 第 8 步
+
 >>> 节点完成: risk_expert
+ messages: 新增/合并 12 条
+ [ai:news_sentiment_expert] **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line,...
+ [ai:strategy_expert] {
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7.59%, indicating upward momentum. Fundamentals (40% weight) are mixed but net positive: revenue and EPS show modest growth (+2% and +3% YoY respectively), record vehicle deliveries and ...
+ [ai:risk_expert] ```json
 {
   "volatility_risk": 78,
   "macro_risk": 68,
-  "stop_loss_suggestion": "$380（约低于当前价格 $410.59 的 7.5%，位于 $400 突破位和 200 日均线下方）；保守方案可考虑 $395。",
-  "position_suggestion": "建议仓位 8-12%；保守投资者控制在 5-8%；可采用分批建仓降低入场风险。",
-  "overall_risk_score": 70
-}
+  "stop_loss_suggestion": "$380 (approximately 7.5% below current price of $410.59), which sits below the recent breakout level near $400, the 200-day moving average, and provides a buffer accommodating the stock's 2.44% daily volatility with roughly 3 standard deviations of daily movement. For a more conservative approach, consider a tighter stop at $395.",
+  "position_suggestion": "Given the moderate 65% confidence in the Buy recommendatio...
 
 🔍 Supervisor 决策日志:
+   用户输入: ```json
+{
+  "volatility_risk": 78,
+  "macro_risk": 68,
+  "stop_loss_suggestion":...
    已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
    下一步执行: []
    当前执行进度: 5/5
 
+
+============================================================
+⏱ [21:55:24] 第 9 步
+
 >>> 节点完成: supervisor
  next: '__end__'
- final_report:
+ final_report: 
 # AlphaPilot 完整投资分析报告 - TSLA
 
 ## 📊 执行路径
 已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
 
 ## 🎯 最终投资建议（Strategy Agent）
-recommendation: Buy
-confidence_score: 65
-
-## ⚠️ 风险评估（Risk Agent）
-volatility_risk: 78
-macro_risk: 68
-overall_risk_score: 70
-stop_loss_suggestion: $380；保守止损可考虑 $395
-position_suggestion: 8-12%，保守投资者 5-8%
+{
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish cross...
 
 🔄 读取 checkpoint 最终状态（get_state，避免二次 invoke）...
 
 === ✅ 5 Agent 完整测试结果（最终 state） ===
 messages 共 12 条
+ [ai] 
+ [tool] {"symbol":"TSLA","overall_sentiment":"Positive","sentiment_score":0.85,"key_events":["Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.","Tesla stock passed an aggressive buy point and the 200-day line.","Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports."],"summary":"Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling strong positive momentum."}
+ [ai] **Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year surge in China sales has propelled the stock past key technical levels like $400 and the 200-day line, signaling strong positive momentum.
+ [ai] {
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7.59%, indicating upward momentum. Fundamentals (40% weight) are mixed but net positive: revenue and EPS show modest growth (+2% and +3% YoY respectively), record vehicle deliveries and lowest-ever COGS per vehicle (<$35k) reflect operational efficiency gains, while the energy business posted record gross profit. However, GAAP operating margin fell to 6.2% and operating income dropped 23% YoY due to ASP compression and rising AI investments. Sentiment (30% weight) is strongly posit...
+ [ai] ```json
+{
+  "volatility_risk": 78,
+  "macro_risk": 68,
+  "stop_loss_suggestion": "$380 (approximately 7.5% below current price of $410.59), which sits below the recent breakout level near $400, the 200-day moving average, and provides a buffer accommodating the stock's 2.44% daily volatility with roughly 3 standard deviations of daily movement. For a more conservative approach, consider a tighter stop at $395.",
+  "position_suggestion": "Given the moderate 65% confidence in the Buy recommendation combined with high daily volatility of 2.44% and macro uncertainties, a position size of 8-12% of the total portfolio is recommended. Aggressive traders may size up to 12%, while conservative investors should limit to 5-8%. Use tiered entry (e.g., 50% now, 25% on a pullback to $395-$400, 25% on co...
 其它字段:
  stock_symbol: TSLA
  next: __end__
  executed_agents: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+ final_report: 
+# AlphaPilot 完整投资分析报告 - TSLA
+
+## 📊 执行路径
+已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+
+## 🎯 最终投资建议（Strategy Agent）
+{
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7...
+
+================================================================================
+🎯 AlphaPilot 最终完整报告
+================================================================================
+
+# AlphaPilot 完整投资分析报告 - TSLA
+
+## 📊 执行路径
+已执行 Agent: ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
+
+## 🎯 最终投资建议（Strategy Agent）
+{
+  "recommendation": "Buy",
+  "confidence_score": 65,
+  "reasoning": "After synthesizing all three modules, the overall signal is moderately bullish. Technical Analysis (30% weight) shows a clear MACD bullish crossover with expanding histogram, RSI at 55.9 (neutral-bullish, not overbought), and a 5-day gain of +7.59%, indicating upward momentum. Fundamentals (40% weight) are mixed but net positive: revenue and EPS show modest growth (+2% and +3% YoY respectively), record vehicle deliveries and lowest-ever COGS per vehicle (<$35k) reflect operational efficiency gains, while the energy business posted record gross profit. However, GAAP operating margin fell to 6.2% and operating income dropped 23% YoY due to ASP compression and rising AI investments. Sentiment (30% weight) is strongly positive (score 0.85), driven by Tesla China sales surging 36% in April—the sixth consecutive monthly gain—which propelled the stock above $400 and the 200-day moving average. Key risk control measures: (1) set a stop-loss at $380 (below recent support and 200-day MA), (2) limit position size given 2.44% daily volatility, (3) monitor Q1 2025 delivery numbers and FSD regulatory developments closely, (4)...
+
+## ⚠️ 风险评估（Risk Agent）
+```json
+{
+  "volatility_risk": 78,
+  "macro_risk": 68,
+  "stop_loss_suggestion": "$380 (approximately 7.5% below current price of $410.59), which sits below the recent breakout level near $400, the 200-day moving average, and provides a buffer accommodating the stock's 2.44% daily volatility with roughly 3 standard deviations of daily movement. For a more conservative approach, consider a tighter stop at $395.",
+  "position_suggestion": "Given the moderate 65% confidence in the Buy recommendation combined with high daily volatility of 2.44% and macro uncertainties, a position size of 8-12% of the total portfolio is recommended. Aggressive traders may size up to 12%, while conservative investors should limit to 5-8%. Use tiered entry (e.g., 50% now, 25% on a pullback to $395-$400, 25% on confirmation above $420) to reduce average entry risk.",
+  "overall_risk_score": 70,
+  "risk_reasoning": "[Chain of Thought]\n1. Volatility Risk (Score: 78): TSLA's 20-day volatility stands at 2.44%, wh...
+
+## 📋 详细分析
+**技术面（Market Agent）**  
+## 📊 TSLA 技术面分析报告
+
+### 一、当前价格与走势
+
+| 指标 | 数值 |
+|------|------|
+| **当前价格** | **$410.59** |
+| 日内涨跌幅 | **+2.97%** |
+| 5日涨跌幅 | **+7.59%** |
+| 成交量 | 12,472,605 |
+
+---
+
+### 二、核心技术指标解读
+
+#### 1️⃣ RSI（相对强弱指数）— **55.9（中性偏强）**
+- RSI 处于 **50~70 的中性偏强区间**，既未进入超买（>70），也未进入超卖（<30）。
+- **解读**：当前多头力量略占优势，但尚未过热，短期仍有上行空间，但也缺乏强烈的单边动能信号。
+
+#### 2️⃣ MACD（指数平滑异同移动平均线）— **看涨信号**
+| 指标 | 数值 |
+|------|------|
+| MACD 线 | 5.09 |...
+
+**基本面（Fundamental Agent）**  
+# TSLA 基本面分析报告
+
+根据最新的财务报告数据，以下是对 Tesla（TSLA）的结构化基本面分析：
+
+---
+
+## 📊 核心财务指标
+
+| 指标 | 数值 |
+|------|------|
+| **营收增长 (YoY)** | **+2%** (Q4 2024 总营收 $257亿) |
+| **EPS增长 (Non-GAAP, YoY)** | **+3%** ($0.73) |
+| **毛利率** | **16.3%** |
+| **净利润率** | **9.0%** |
+| **GAAP 营业利润率** | **6.2%**（同比下降） |
+
+---
+
+## 🔑 关键财务亮点
+
+1. **交付创纪录** — Q4 2024 车辆交付量和储能部署量均创历史新高。
+2. **单车成本历史最低** — 每辆车销售成本降至 **< $35,000**，受益于原材料成本持续优化。
+...
+
+**舆情分析（News Agent）**  
+**Overall Sentiment:** Positive  
+**Sentiment Score:** 0.85  
+**Key Events:**  
+- Tesla China sales spiked 36% in April, marking the sixth straight monthly gain.  
+- Tesla stock passed an aggressive buy point and the 200-day line.  
+- Tesla stock rose above $400, driven by strong China sales of 79,478 vehicles including exports.  
+
+**One-Sentence Summary:** Tesla's impressive 36% year-over-year su...
+
 
 📊 执行路径： ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
 ✅ 5 Agent 完整协作测试通过！
 ```
 
-# 项目亮点:
-
-- 多 Agent 并行架构：market、news、fundamental 可以并行运行，提高整体分析效率。
-- 网络流量隔离：通过 sing-box mixed inbound，把不同 agent 类型的请求拆到不同本地入口，便于调试、限流和后续扩展。
-- 多模型路由：不同 agent 可以使用不同模型供应商，不再依赖单一 Gemini。
-- 工程稳定性增强：缓解并行请求时单一代理端口拥塞、连接断开、API 不稳定等问题。
-- 可扩展性：后续新增 risk agent、strategy agent、portfolio agent 时，可以继续分配独立模型、代理入口和出口策略。
 - RAG thchology.
 - 
 
