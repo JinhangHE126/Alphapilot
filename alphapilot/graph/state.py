@@ -27,7 +27,15 @@ class GraphState(TypedDict):
     rag_context: Annotated[str, "RAG retrieved context"] = ""
     # memory_summary: Annotated[str, "Memory summary"] = ""
     final_score: Annotated[float, "Final score 0-100"] = 0.0
+
+
+        # Agent 执行记录（防止重复调用）
+    executed_agents: Annotated[list[str], "List of executed agents"] = []
+    
+    # 最终输出
+    # final_recommendation: Annotated[str, "最终 Buy/Hold/Sell"] = ""
     final_recommendation: Annotated[str, "Final Buy/Hold/Sell"] = ""
+    final_report: Annotated[str, "Complete analysis report"] = ""
     
     #  Memory 相关
     memory_summary: Annotated[str, "history analysis memory"] = ""
