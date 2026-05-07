@@ -11,7 +11,7 @@ from agents.risk_agent import risk_agent
 
 checkpointer = get_checkpointer()
 
-# ====================== 智能 Supervisor (5.8 Explainability 版) ======================
+# ====================== 智能 Supervisor (5.8 最终报告修复版) ======================
 def supervisor_node(state: GraphState) -> dict:
     messages = state.get("messages", [])
     executed = state.get("executed_agents", [])
@@ -29,7 +29,7 @@ def supervisor_node(state: GraphState) -> dict:
     
     next_agents = [name for name, need in available_agents.items() if need]
     
-    # === 新增：Explainability 日志（5.8 Step 1）===
+    # === Explainability 日志 ===
     print(f"\n🔍 Supervisor 决策日志:")
     print(f"   用户输入: {last_content[:80]}...")
     print(f"   已执行 Agent: {executed}")
@@ -37,11 +37,41 @@ def supervisor_node(state: GraphState) -> dict:
     print(f"   当前执行进度: {len(executed)}/5\n")
     
     if not next_agents:
-        return {"next": "__end__"}
+        # === 修复版最终报告：从 messages 中智能提取真实内容 ===
+        def get_last_agent_content(agent_name: str, max_len: int = 800) -> str:
+            for msg in reversed(messages):
+                if getattr(msg, "name", None) == agent_name:
+                    content = getattr(msg, "content", str(msg))
+                    return str(content)[:max_len] + "..." if len(str(content)) > max_len else str(content)
+            return "未生成"
+        
+        final_report = f"""
+# AlphaPilot 完整投资分析报告 - {state.get('stock_symbol', 'TSLA')}
+
+## 📊 执行路径
+已执行 Agent: {executed}
+
+## 🎯 最终投资建议（Strategy Agent）
+{get_last_agent_content('strategy_expert', 1200)}
+
+## ⚠️ 风险评估（Risk Agent）
+{get_last_agent_content('risk_expert', 1000)}
+
+## 📋 详细分析
+**技术面（Market Agent）**  
+{get_last_agent_content('market_data_expert', 400)}
+
+**基本面（Fundamental Agent）**  
+{get_last_agent_content('fundamental_expert', 400)}
+
+**舆情分析（News Agent）**  
+{get_last_agent_content('news_sentiment_expert', 400)}
+"""
+        return {"next": "__end__", "final_report": final_report}
     
     return {
         "next": next_agents,
-        "executed_agents": executed + next_agents   # 更新执行记录
+        "executed_agents": executed + next_agents
     }
 
 
@@ -70,7 +100,6 @@ workflow.add_conditional_edges(
     }
 )
 
-# 所有 Agent 执行完后回到 supervisor
 for agent in [
     "market_data_expert",
     "fundamental_expert",

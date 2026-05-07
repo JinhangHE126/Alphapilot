@@ -165,9 +165,17 @@ if __name__ == "__main__":
     else:
         print(result, flush=True)
 
-    # ====================== 5.8 Step 2 新增：最终可解释性报告 ======================
+    # # ====================== 5.8 Step 2 新增：最终可解释性报告 ======================
+    # print("\n" + "="*80)
+    # print("🎯 AlphaPilot 最终可解释性报告")
+    # print("="*80)
+    # print(result.get("final_report") or result["messages"][-1].content)
+    # print("\n📊 执行路径：", result.get("executed_agents", []))
+    # print("✅ 5 Agent 完整协作测试通过！")
+
+        # ====================== 5.8 Step 2：精简最终输出 ======================
     print("\n" + "="*80)
-    print("🎯 AlphaPilot 最终可解释性报告")
+    print("🎯 AlphaPilot 最终完整报告")
     print("="*80)
     print(result.get("final_report") or result["messages"][-1].content)
     print("\n📊 执行路径：", result.get("executed_agents", []))
