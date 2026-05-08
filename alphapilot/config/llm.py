@@ -71,6 +71,12 @@ AGENT_LLM_ROUTES = {
         "max_retries": 5,
         "timeout": 120,
     },
+    "orchestrator": {
+        "profile": "deepseek_reasoner",
+        "temperature": 0.2,
+        "max_retries": 5,
+        "timeout": 90,
+    },
 }
 
 # def get_llm(agent: str = "market"):
