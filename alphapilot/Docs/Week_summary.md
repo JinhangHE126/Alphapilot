@@ -1025,12 +1025,38 @@ messages 共 12 条
 ✅ 5 Agent 完整协作测试通过！
 ```
 
-- RAG thchology.
+# Week 4 Summary
+
+## 完成情况:
+
+- Market Data Agent + StateGraph + Supervisor 已经完整跑通.
+- Market Data Agent的输出已经根据GraphState定义传回给特定的Agent Data. 保证了每个agent的输出隔离化.
 - 
 
-```
+## 收获:
+
+- 熟悉 LangGraph supervisor + 自定义 StateGraph 的两种方式
+- 理解了 GraphState 在Multi-Agent的重要性
+- 同时把Agent 封装成Node
+
+## 遇到的问题 & 解决:
+
+- 首先就是LLM RateLimit问题, 尝试了很多方法, 最后选择充值..
+- GraphState字段没有自动填充, 通过initiate_state传入解决.
+
+## 测试结果:
+
+```text
 
 ```
+
+
+
+
+
+
+
+
 
 # 项目亮点:
 
