@@ -12,16 +12,17 @@ load_dotenv()
 
 if __name__ == "__main__":
     symbol = "TSLA"
-    # Test custom instruction
-    user_input = "Please only analyze TSLA's fundamentals and risk, and give position suggestions"
-   
+    # 测试不同指令（可手动切换）
+    user_input = "Please only update latest data for TSLA"   # ← 改成这行测试部分更新
+    # user_input = "Please perform comprehensive analysis of TSLA"  # 完整分析
+
     initial_state = {
         "stock_symbol": symbol,
         "messages": [{"role": "user", "content": user_input}],
     }
-   
+
     config = {"configurable": {"thread_id": "orchestrator_test_6.1"}}
-   
+
     print("🚀 Starting Orchestrator Dynamic Routing Test...")
     for chunk in app.stream(initial_state, config=config, stream_mode="updates"):
         for node_name, update in chunk.items():

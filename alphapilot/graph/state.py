@@ -36,6 +36,10 @@ class GraphState(TypedDict):
     # final_recommendation: Annotated[str, "最终 Buy/Hold/Sell"] = ""
     final_recommendation: Annotated[str, "Final Buy/Hold/Sell"] = ""
     final_report: Annotated[str, "Complete analysis report"] = ""
+        # === Week 4 新增：持久化 Memory ===
+    conversation_history: Annotated[list[dict], "Conversation history record"] = []
+    user_profile: Annotated[dict, "User preference profile"] = {}
+    memory: Annotated[dict, "Long-term memory (Historical stock analysis)"] = {}
     
     #  Memory 相关
     memory_summary: Annotated[str, "history analysis memory"] = ""
@@ -44,6 +48,3 @@ class GraphState(TypedDict):
     # 可选：错误记录
     errors: list[str] = []
 
-    #  Memory 相关
-    memory_summary: Annotated[str, "history analysis memory"] = ""
-    conversation_history: Annotated[list, 'history messages'] = []

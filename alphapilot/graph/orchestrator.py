@@ -3,77 +3,92 @@ import json
 import re
 from graph.state import GraphState
 from config.llm import get_llm
+from graph.memory import load_persistent_memory
 
 model = get_llm("orchestrator")
 
 def orchestrator_node(state: GraphState) -> Dict[str, Any]:
     """
-    智能 Orchestrator：根据用户指令 + 已执行 Agent 动态决定下一步
+    Memory 最终智能版 Orchestrator - 支持智能部分更新
     """
     messages = state.get("messages", [])
     executed = state.get("executed_agents", [])
     stock_symbol = state.get("stock_symbol", "Unknown Stock")
-   
-    # 提取用户原始指令（支持 dict 和 Message 对象）
-    user_instruction = "Please perform comprehensive analysis"
-    for m in messages:
-        if getattr(m, "role", None) == "user" or (isinstance(m, dict) and m.get("role") == "user"):
-            content = getattr(m, "content", m.get("content", "")) if isinstance(m, dict) else m.content
-            user_instruction = str(content)
-            break
-   
+
+    user_instruction = next(
+        (getattr(m, "content", m.get("content", "")) 
+         for m in messages 
+         if getattr(m, "role", None) == "user" or (isinstance(m, dict) and m.get("role") == "user")),
+        "Please perform comprehensive analysis"
+    )
+
+    # 加载历史记忆
+    persistent_memory = load_persistent_memory()
+    history = persistent_memory.get(stock_symbol, {})
+    history_summary = (
+        f"Previous analysis found (last updated: {history.get('last_updated', 'N/A')}): "
+        f"{history.get('last_analysis', 'None')[:300]}..."
+        if history else "No previous analysis for this stock."
+    )
+
+    print(f"📖 [Orchestrator] Historical Memory for {stock_symbol}: {'Found' if history else 'None'}")
+
     prompt = f"""
 You are an AlphaPilot Investment Research Orchestrator.
 Current Stock: {stock_symbol}
-Original User Instruction: {user_instruction}
-Executed Agents: {executed}
+User Instruction: {user_instruction}
+Executed Agents This Run: {executed or "None"}
+Historical Memory: {history_summary}
 
-Available Agents and Dependencies:
+Available Agents and Dependencies (STRICT):
 - market_data_expert: Technical analysis (No dependencies)
 - fundamental_expert: Fundamental analysis (No dependencies)
 - news_sentiment_expert: News sentiment (No dependencies)
-- strategy_expert: Buy/Hold/Sell advice (Must be after the first 3)
-- risk_expert: Risk and position suggestions (Must be after strategy)
+- strategy_expert: Buy/Hold/Sell (MUST wait for first 3)
+- risk_expert: Risk & position (MUST wait for strategy)
 
-Rules:
-1. Do not call agents that have already been executed.
-2. Strictly follow dependency relationships.
-3. If the user specified a scope (e.g., "only analyze fundamentals and risk"), only call relevant Agents.
+Smart Decision Rules (VERY IMPORTANT):
+1. If user says "comprehensive", "full analysis", "complete analysis" → ALWAYS run the FULL chain (market → fundamental → news → strategy → risk).
+2. If user says "update", "refresh", "only update latest data", "update latest", "refresh news", "refresh risk", "update risk" → intelligently perform PARTIAL update: only call the necessary agents, skip completed parts using historical memory.
+3. Never repeat agents already executed in this run.
+4. Use historical memory to avoid redundant work whenever possible.
 
-Return ONLY JSON (no explanation):
+Return ONLY valid JSON:
 {{
   "next": ["agent1", "agent2"] or "__end__",
-  "reasoning": "One-sentence explanation of decision reason"
+  "reasoning": "Short explanation (mention if using history or doing partial update)"
 }}
 """
 
     response = model.invoke(prompt)
     response_text = response.content.strip()
-   
+
+    json_match = re.search(r'```(?:json)?\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
+    clean_json = json_match.group(1).strip() if json_match else response_text
+
     try:
-        decision = json.loads(response_text)
+        decision = json.loads(clean_json)
         next_agents = decision.get("next", "__end__")
         reasoning = decision.get("reasoning", "No reasoning provided")
-    except:
+    except Exception:
         next_agents = "__end__"
-        reasoning = "JSON parsing failed, terminating process"
-   
+        reasoning = "JSON parsing failed"
+
     if isinstance(next_agents, str):
         next_agents = [next_agents] if next_agents != "__end__" else []
-   
+
     next_agents = [a for a in next_agents if a not in executed]
-   
-    # Clean English Logging
+
     if next_agents or not executed:
         print(f"\n🎛️ Orchestrator Decision:")
-        print(f" User Instruction: {user_instruction[:60]}...")
-        print(f" Executed: {executed}")
-        print(f" Next step: {next_agents}")
-        print(f" Reasoning: {reasoning}\n")
-   
+        print(f"   User Instruction: {user_instruction[:70]}...")
+        print(f"   Executed: {executed}")
+        print(f"   Next: {next_agents}")
+        print(f"   Reasoning: {reasoning}\n")
+
     if not next_agents:
         return {"next": "__end__"}
-   
+
     return {
         "next": next_agents,
         "executed_agents": executed + next_agents,
