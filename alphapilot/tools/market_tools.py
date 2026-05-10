@@ -3,152 +3,39 @@ import pandas as pd
 import time
 from yfinance.exceptions import YFRateLimitError   # 新增
 from config.proxy import get_proxy_for_agent
+# from tools.rag_tools import retrieve_knowledge
+# import time
+
 # import time
 # from yfinance.exceptions import YFRateLimitError
 
-# def _download_price_frame(symbol: str):
-#     """Try proxied download first, then fallback to direct."""
-#     proxy = get_proxy_for_agent("market")
-#     proxied_error = ""
-#     direct_error = ""
-#     try:
-#         df = yf.download(symbol, period="60d", progress=False, proxy=proxy)
-#         if df is not None and not df.empty:
-#             return df, ""
-#     except Exception as exc:
-#         proxied_error = str(exc)
-
-#     try:
-#         df = yf.download(symbol, period="60d", progress=False)
-#         if df is not None and not df.empty:
-#             return df, ""
-#     except Exception as exc:
-#         direct_error = str(exc)
-
-#     details = f"proxied={proxied_error or 'empty response'}; direct={direct_error or 'empty response'}"
-#     return None, details
-
-
-
-# def _download_price_frame(symbol: str):
-#     """Try proxied download first, then fallback to direct with retry logic."""
-#     proxy = get_proxy_for_agent("market")
-#     max_retries = 4                     # 最多重试 4 次
-#     backoff = 1                         # 初始等待秒数
-
-#     for attempt in range(max_retries):
-#         try:
-#             print(f"📥 [Attempt {attempt+1}/{max_retries}] Downloading {symbol} (proxy: {proxy is not None})...")
-            
-#             df = yf.download(
-#                 symbol,
-#                 period="60d",
-#                 progress=False,
-#                 proxy=proxy,
-#                 timeout=30
-#             )
-            
-#             if df is not None and not df.empty:
-#                 print(f"✅ 下载成功！共 {len(df)} 条记录")
-#                 return df, ""
-                
-#         except YFRateLimitError:
-#             print(f"⚠️  [Attempt {attempt+1}] Yahoo Finance Rate Limit 触发，等待 {backoff} 秒后重试...")
-#             time.sleep(backoff)
-#             backoff *= 2                    # 指数退避：1→2→4→8秒
-            
-#         except Exception as exc:
-#             print(f"❌ [Attempt {attempt+1}] 其他错误: {exc}")
-#             if attempt == max_retries - 1:
-#                 break
-#             time.sleep(1)
-
-#     # 最后一次尝试完全直连（不走代理）
-#     print("🔄 所有尝试失败，尝试完全直连...")
-#     try:
-#         df = yf.download(symbol, period="60d", progress=False, timeout=30)
-#         if df is not None and not df.empty:
-#             print(f"✅ 直连下载成功！共 {len(df)} 条记录")
-#             return df, ""
-#     except Exception as exc:
-#         direct_error = str(exc)
-
-#     details = f"proxied_and_retry_failed; last_direct_error={direct_error or 'empty response'}"
-#     return None, details
-
-
-
-
-# def _download_price_frame(symbol: str):
-#     """Try proxied download first, then fallback to direct with retry logic."""
-#     proxy = get_proxy_for_agent("market")
-#     max_retries = 4
-#     backoff = 1
-
-#     for attempt in range(max_retries):
-#         try:
-#             print(f"📥 [Attempt {attempt+1}/{max_retries}] Downloading {symbol} (proxy: {proxy is not None})...")
-
-#             # 关键修复：只有 proxy 不为空时才传入 proxy 参数
-#             if proxy:
-#                 df = yf.download(symbol, period="60d", progress=False, proxy=proxy, timeout=30)
-#             else:
-#                 df = yf.download(symbol, period="60d", progress=False, timeout=30)
-
-#             if df is not None and not df.empty:
-#                 print(f"✅ 下载成功！共 {len(df)} 条记录")
-#                 return df, ""
-
-#         except YFRateLimitError:
-#             print(f"⚠️ [Attempt {attempt+1}] Rate Limit 触发，等待 {backoff} 秒后重试...")
-#             time.sleep(backoff)
-#             backoff *= 2
-#         except Exception as exc:
-#             print(f"❌ [Attempt {attempt+1}] 错误: {exc}")
-#             time.sleep(1)
-
-#     print("🔄 所有尝试失败，尝试完全直连...")
-#     try:
-#         df = yf.download(symbol, period="60d", progress=False, timeout=30)
-#         if df is not None and not df.empty:
-#             print(f"✅ 直连下载成功！共 {len(df)} 条记录")
-#             return df, ""
-#     except Exception as exc:
-#         direct_error = str(exc)
-
-#     return None, f"all_attempts_failed; last_error={direct_error or 'empty response'}"
-
-
-import time
-from yfinance.exceptions import YFRateLimitError
 
 
 def _download_price_frame(symbol: str):
-    """Try proxied download first, then fallback to direct with retry logic."""
+    """增强版下载函数：更长的指数退避 + jitter + 最终兜底"""
     proxy = get_proxy_for_agent("market")
-    max_retries = 4
-    backoff = 1
+    max_retries = 6                    # 增加到 6 次
+    base_backoff = 8                   # 从 8 秒开始（关键！）
 
     for attempt in range(max_retries):
         try:
             print(f"📥 [Attempt {attempt+1}/{max_retries}] Downloading {symbol} "
                   f"(proxy: {'启用' if proxy else '直连'})...")
 
-            # 关键：只有 proxy 不为空时才传入 proxy 参数
             if proxy:
                 df = yf.download(
                     symbol,
                     period="60d",
                     progress=False,
                     proxy=proxy,
-                    timeout=30
+                    timeout=45,           # 适当增加超时
                 )
             else:
                 df = yf.download(
                     symbol,
                     period="60d",
                     progress=False,
-                    timeout=30
+                    timeout=45,
                 )
 
             if df is not None and not df.empty:
@@ -156,28 +43,28 @@ def _download_price_frame(symbol: str):
                 return df, ""
 
         except YFRateLimitError:
-            print(f"⚠️ [Attempt {attempt+1}] Yahoo Finance Rate Limit 触发，等待 {backoff} 秒后重试...")
+            backoff = base_backoff * (2 ** attempt) + random.uniform(0, 3)  # 指数退避 + jitter
+            print(f"⚠️ [Attempt {attempt+1}] Yahoo Finance Rate Limit 触发，等待 {backoff:.1f} 秒后重试...")
             time.sleep(backoff)
-            backoff *= 2   # 指数退避
 
         except Exception as exc:
-            print(f"❌ [Attempt {attempt+1}] 错误: {exc}")
-            time.sleep(1)
+            print(f"❌ [Attempt {attempt+1}] 其他错误: {exc}")
+            time.sleep(3)
 
-    # 最后一次完全直连尝试（带重试）
-    print("🔄 所有尝试失败，执行最终直连重试...")
-    for attempt in range(2):   # 最后再试两次
+    # ==================== 最终兜底直连重试（更保守） ====================
+    print("🔄 所有代理尝试失败，执行最终直连兜底重试...")
+    for attempt in range(3):
         try:
-            df = yf.download(symbol, period="60d", progress=False, timeout=30)
+            print(f"   → 最终尝试 {attempt+1}/3（直连）")
+            df = yf.download(symbol, period="60d", progress=False, timeout=60)
             if df is not None and not df.empty:
                 print(f"✅ 最终直连下载成功！共 {len(df)} 条记录")
                 return df, ""
         except Exception as exc:
-            print(f"❌ 最终直连尝试 {attempt+1} 失败: {exc}")
-            time.sleep(2)
+            print(f"   ❌ 最终尝试 {attempt+1} 失败: {exc}")
+            time.sleep(5)
 
     return None, "all_attempts_failed"
-    
 
 def fetch_market_data(symbol: str) -> str:
     """获取完整技术面数据：价格 + RSI + MACD + 波动率"""
