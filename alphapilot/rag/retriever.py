@@ -130,12 +130,14 @@ class FinancialRAG:
         persist_directory: str | None = None,
         embedding_backend: str | None = None,
     ):
+        #  确定后端位置
         self.backend = embedding_backend or _resolve_rag_embedding_backend()
         self.persist_directory = persist_directory or _default_persist_for_backend(
             self.backend
         )
         os.makedirs(self.persist_directory, exist_ok=True)
 
+        # 创建一个Chroma持久化客户端, 将向量库数据存储到指定目录下.
         self.client = chromadb.PersistentClient(path=self.persist_directory)
         if self.backend == "xai":
             self.embedding_function: object = ChromaGrokEmbeddingFunction()
@@ -146,7 +148,7 @@ class FinancialRAG:
             name="financial_reports",
             embedding_function=self.embedding_function,
         )
-
+    # 给向量库增加文档.
     def add_document(self, text: str, metadata: dict, doc_id: str):
         self.collection.add(
             documents=[text],
@@ -155,6 +157,7 @@ class FinancialRAG:
         )
         print(f"✅ Document added: {doc_id}")
 
+    # 根据查询文本, 从向量库中检索最相关的文档.
     def query(self, query_text: str, n_results: int = 3) -> List[str]:
         results = self.collection.query(
             query_texts=[query_text],
@@ -162,6 +165,7 @@ class FinancialRAG:
         )
         return results["documents"][0] if results["documents"] else []
 
+    # 根据查询文本, 从向量库中检索最相关的文档.
     def retrieve(self, query: str, k: int = 3) -> List[str]:
         return self.query(query_text=query, n_results=k)
 
