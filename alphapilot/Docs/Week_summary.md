@@ -1041,8 +1041,45 @@ messages 共 12 条
 
 ## 遇到的问题 & 解决:
 
-- 首先就是LLM RateLimit问题, 尝试了很多方法, 最后选择充值..
-- GraphState字段没有自动填充, 通过initiate_state传入解决.
+### 问题描述
+
+在跑 `test/test_rag1.py` 全流程时，系统在 Market 等 Agent 调用 `retrieve_knowledge`（Chroma RAG 检索）阶段反复失败：先出现访问 xAI 做向量时的超时 / 502/503 / 代理断开，切到 Gemini 嵌入后又出现 `embed_query` 相关类型错误（`float` 不能当作 `Sequence`），以及 News 侧 `ChromaGoogleEmbeddingFunction` 缺少 `embed_query`。部分运行还会在日志里夹杂 Yahoo Finance 限流，但主阻塞在 RAG 嵌入与 Chroma 接口约定。
+
+### 原因
+
+1. **xAI Grok Embedding + 网络**  
+   行情/编排用的 LLM 能通，但 Embedding 请求走 `api.x.ai` 的路径与 Chat 不一致或未走代理，导致直连超时；走代理后又可能不同端口对 `/v1/embeddings` 与 chat 分流不同，出现 upstream reset / 503。
+
+2. **`embed_query` 未实现（Google 适配器）**  
+   Chroma 在 `query()` 时会对查询文本调用 `embed_query`，而早期 vectorstore 里只实现了 `__call__`（文档批量），缺少 `embed_query`，触发 `AttributeError`。
+
+3. **Chroma 对 `embed_query` 返回形状的约定**  
+   新版 Chroma 期望 `embed_query` 返回 `Embeddings = List[List[float]]`（外层：若干条查询；内层：每条一条向量）。实现成只返回 `List[float]` 时，Rust 层把每个 `float` 误当成一条向量，出现 `float` 无法转为 `Sequence`。同时 Chroma 传入的 `input` 常为 `["查询字符串"]` 这种列表，不能直接当作 LangChain 的 `text: str` 使用，需要先归一成多条字符串再逐条嵌入。
+
+4. **（次要）雅虎行情**  
+   `YFRateLimitError` 来自 Yahoo API 频率限制，与 RAG 嵌入根因无关，重试有时可恢复。
+
+### 解决方法
+
+1. **嵌入后端可切换（默认 Gemini）**  
+   增加 `RAG_EMBEDDING_BACKEND`（默认 `google`），Market RAG 用 Gemini `gemini-embedding-001`，与 vectorstore 共用 `./rag_data`；若坚持用 xAI，设 `xai` 并使用独立目录 `./rag_data_xai`，避免与 Gemini 向量混库。按需配置 `RAG_PERSIST_PATH`、代理 / `NEWS_PROXY` / `EMBEDDING_PROXY`。
+
+2. **代理与候选顺序**  
+   对 xAI 路径：在 `config/proxy` 中整理 `get_embedding_proxy_candidates()`，按 NEWS → EMBEDDING → … → 直连依次尝试；Grok 仍不稳时优先改用 Gemini 嵌入。
+
+3. **补齐并实现符合 Chroma 的 `embed_query`**  
+   在 `ChromaGoogleEmbeddingFunction`（及共享模块 `embeddings_google.py`）中实现 `embed_query`：规范化 `input` → `List[str]` → 对每个字符串调用 LangChain 的 `embed_query` → 返回 `List[List[float]]`。
+
+4. **拆分共享代码与工具返回值**  
+   将 Gemini 适配器抽到 `rag/embeddings_google.py`，vectorstore / retriever 共用；修正 `rag_tools.retrieve_knowledge` 对 `List[str]` 结果的拼接（不再误用 `page_content`）。
+
+5. **雅虎限流**  
+   降频、加重试/backoff，或行情侧改代理（与 RAG 无直接关系）。
+
+### 其他（Week 4 早期）
+
+- LLM RateLimit 问题，尝试多种方法后选择充值。
+- GraphState 字段没有自动填充，通过 `initiate_state` 传入解决。
 
 ## 测试结果:
 

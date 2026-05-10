@@ -1,24 +1,8 @@
 import chromadb
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import os
 from typing import List
 
-
-class ChromaGoogleEmbeddingFunction:
-    """Adapter that lets ChromaDB use LangChain's Google embeddings."""
-
-    def __init__(self):
-        self.embedding_model = GoogleGenerativeAIEmbeddings(
-            model=os.getenv("GOOGLE_EMBEDDING_MODEL", "gemini-embedding-001"),
-            google_api_key=os.getenv("GOOGLE_API_KEY"),
-            task_type="retrieval_document",
-        )
-
-    def name(self) -> str:
-        return "google_generative_ai_embeddings"
-
-    def __call__(self, input: List[str]) -> List[List[float]]:
-        return self.embedding_model.embed_documents(input)
+from rag.embeddings_google import ChromaGoogleEmbeddingFunction
 
 
 class FinancialRAG:

@@ -9,6 +9,9 @@ NEWS_PROXY = os.getenv("NEWS_PROXY", "http://127.0.0.1:7898")
 LLM_PROXY = os.getenv("LLM_PROXY", "http://127.0.0.1:7899")
 FUNDAMENTAL_PROXY = os.getenv("FUNDAMENTAL_PROXY", "http://127.0.0.1:7901")
 REASONER_PROXY = os.getenv("REASONER_PROXY", "http://127.0.0.1:7900")
+# xAI Embedding（Chroma）专用；空字符串视为未设置。端口须与本机代理监听一致（常见笔误 7998→7898）
+_EMB_RAW = os.getenv("EMBEDDING_PROXY")
+EMBEDDING_PROXY = _EMB_RAW.strip() if (_EMB_RAW and _EMB_RAW.strip()) else None
 
 def get_proxy_for_agent(agent: str) -> str | None:
     """根据 Agent 类型返回对应代理地址（已按方案一配置）"""
@@ -21,6 +24,8 @@ def get_proxy_for_agent(agent: str) -> str | None:
         "fundamental": None, # 直连
         "strategy": REASONER_PROXY or LLM_PROXY,         # ← 独立 7900
         "risk": REASONER_PROXY or LLM_PROXY,             # ← 独立 7900
+        "orchestrator": REASONER_PROXY or LLM_PROXY,
+        "embedding": EMBEDDING_PROXY or NEWS_PROXY or REASONER_PROXY or LLM_PROXY,
     }
     proxy = proxies.get(agent)
     return proxy
@@ -31,6 +36,25 @@ def get_requests_proxies(agent: str) -> dict[str, str] | None:
     if not proxy:
         return None
     return {"http": proxy, "https": proxy}
+
+
+def get_embedding_proxy_candidates() -> list[str | None]:
+    """xAI embeddings：先试 NEWS 出口（通常已与 Grok/HTTPS 验证过），再试 EMBEDDING_PROXY，避免错误端口长时间占用。"""
+    ordered = [
+        NEWS_PROXY,
+        EMBEDDING_PROXY,
+        REASONER_PROXY,
+        LLM_PROXY,
+        None,
+    ]
+    seen: set[str | None] = set()
+    out: list[str | None] = []
+    for p in ordered:
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
 
 
 

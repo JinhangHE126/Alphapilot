@@ -37,6 +37,19 @@ LLM_PROFILES = {
     },
 }
 
+_DEFAULT_NEWS_PROFILE = "deepseek_fast"
+_news_llm_profile_raw = (os.getenv("NEWS_LLM_PROFILE") or "").strip()
+if _news_llm_profile_raw and _news_llm_profile_raw not in LLM_PROFILES:
+    print(
+        f"⚠️ NEWS_LLM_PROFILE={_news_llm_profile_raw!r} 未知，回退为 {_DEFAULT_NEWS_PROFILE}",
+        flush=True,
+    )
+_NEWS_LLM_PROFILE = (
+    _news_llm_profile_raw
+    if _news_llm_profile_raw in LLM_PROFILES
+    else _DEFAULT_NEWS_PROFILE
+)
+
 
 AGENT_LLM_ROUTES = {
     "market": {
@@ -47,7 +60,7 @@ AGENT_LLM_ROUTES = {
         "timeout": 180,
     },
     "news": {
-        "profile": "grok_fast",
+        "profile": _NEWS_LLM_PROFILE,
         "temperature": 0.1,
         "max_retries": 5,
         "timeout": 60,
