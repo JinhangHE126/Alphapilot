@@ -48,3 +48,8 @@ class GraphState(TypedDict):
     # 可选：错误记录
     errors: list[str] = []
 
+    # === 6.4 幻觉防护相关 ===
+    guard_check: Annotated[dict, "Guard Agent validation results"] = {}
+    sources: Annotated[list[str], "All source references"] = []
+    confidence_score: Annotated[int, "Final confidence score 0-100"] = 0
+
