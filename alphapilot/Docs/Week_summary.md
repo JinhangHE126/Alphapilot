@@ -1029,15 +1029,16 @@ messages 共 12 条
 
 ## 完成情况:
 
-- Market Data Agent + StateGraph + Supervisor 已经完整跑通.
-- Market Data Agent的输出已经根据GraphState定义传回给特定的Agent Data. 保证了每个agent的输出隔离化.
-- 
+- Orchestrator 升级 + 动态路由（支持用户自定义指令、严格依赖、并行执行）
+- 持久化 Memory 深化（跨会话记忆、用户画像、历史分析记录）
+- RAG 知识增强（FAISS 索引 + retrieve_knowledge 工具，已接入 Market/Fundamental/News Agent）
+- 幻觉防护 + Self-Correction（Guard Agent + 事实校验 + 置信度评分 + 来源引用）
 
 ## 收获:
 
-- 熟悉 LangGraph supervisor + 自定义 StateGraph 的两种方式
-- 理解了 GraphState 在Multi-Agent的重要性
-- 同时把Agent 封装成Node
+- 学习了RAG的相关知识
+- 如何添加memory
+- 
 
 ## 遇到的问题 & 解决:
 
@@ -1047,34 +1048,27 @@ messages 共 12 条
 
 ### 原因
 
-1. **xAI Grok Embedding + 网络**  
-   行情/编排用的 LLM 能通，但 Embedding 请求走 `api.x.ai` 的路径与 Chat 不一致或未走代理，导致直连超时；走代理后又可能不同端口对 `/v1/embeddings` 与 chat 分流不同，出现 upstream reset / 503。
-
-2. **`embed_query` 未实现（Google 适配器）**  
-   Chroma 在 `query()` 时会对查询文本调用 `embed_query`，而早期 vectorstore 里只实现了 `__call__`（文档批量），缺少 `embed_query`，触发 `AttributeError`。
-
-3. **Chroma 对 `embed_query` 返回形状的约定**  
-   新版 Chroma 期望 `embed_query` 返回 `Embeddings = List[List[float]]`（外层：若干条查询；内层：每条一条向量）。实现成只返回 `List[float]` 时，Rust 层把每个 `float` 误当成一条向量，出现 `float` 无法转为 `Sequence`。同时 Chroma 传入的 `input` 常为 `["查询字符串"]` 这种列表，不能直接当作 LangChain 的 `text: str` 使用，需要先归一成多条字符串再逐条嵌入。
-
-4. **（次要）雅虎行情**  
-   `YFRateLimitError` 来自 Yahoo API 频率限制，与 RAG 嵌入根因无关，重试有时可恢复。
+1. **xAI Grok Embedding + 网络**
+  行情/编排用的 LLM 能通，但 Embedding 请求走 `api.x.ai` 的路径与 Chat 不一致或未走代理，导致直连超时；走代理后又可能不同端口对 `/v1/embeddings` 与 chat 分流不同，出现 upstream reset / 503。
+2. `**embed_query` 未实现（Google 适配器）**
+  Chroma 在 `query()` 时会对查询文本调用 `embed_query`，而早期 vectorstore 里只实现了 `__call_`_（文档批量），缺少 `embed_query`，触发 `AttributeError`。
+3. **Chroma 对 `embed_query` 返回形状的约定**
+  新版 Chroma 期望 `embed_query` 返回 `Embeddings = List[List[float]]`（外层：若干条查询；内层：每条一条向量）。实现成只返回 `List[float]` 时，Rust 层把每个 `float` 误当成一条向量，出现 `float` 无法转为 `Sequence`。同时 Chroma 传入的 `input` 常为 `["查询字符串"]` 这种列表，不能直接当作 LangChain 的 `text: str` 使用，需要先归一成多条字符串再逐条嵌入。
+4. **（次要）雅虎行情**
+  `YFRateLimitError` 来自 Yahoo API 频率限制，与 RAG 嵌入根因无关，重试有时可恢复。
 
 ### 解决方法
 
-1. **嵌入后端可切换（默认 Gemini）**  
-   增加 `RAG_EMBEDDING_BACKEND`（默认 `google`），Market RAG 用 Gemini `gemini-embedding-001`，与 vectorstore 共用 `./rag_data`；若坚持用 xAI，设 `xai` 并使用独立目录 `./rag_data_xai`，避免与 Gemini 向量混库。按需配置 `RAG_PERSIST_PATH`、代理 / `NEWS_PROXY` / `EMBEDDING_PROXY`。
-
-2. **代理与候选顺序**  
-   对 xAI 路径：在 `config/proxy` 中整理 `get_embedding_proxy_candidates()`，按 NEWS → EMBEDDING → … → 直连依次尝试；Grok 仍不稳时优先改用 Gemini 嵌入。
-
-3. **补齐并实现符合 Chroma 的 `embed_query`**  
-   在 `ChromaGoogleEmbeddingFunction`（及共享模块 `embeddings_google.py`）中实现 `embed_query`：规范化 `input` → `List[str]` → 对每个字符串调用 LangChain 的 `embed_query` → 返回 `List[List[float]]`。
-
-4. **拆分共享代码与工具返回值**  
-   将 Gemini 适配器抽到 `rag/embeddings_google.py`，vectorstore / retriever 共用；修正 `rag_tools.retrieve_knowledge` 对 `List[str]` 结果的拼接（不再误用 `page_content`）。
-
-5. **雅虎限流**  
-   降频、加重试/backoff，或行情侧改代理（与 RAG 无直接关系）。
+1. **嵌入后端可切换（默认 Gemini）**
+  增加 `RAG_EMBEDDING_BACKEND`（默认 `google`），Market RAG 用 Gemini `gemini-embedding-001`，与 vectorstore 共用 `./rag_data`；若坚持用 xAI，设 `xai` 并使用独立目录 `./rag_data_xai`，避免与 Gemini 向量混库。按需配置 `RAG_PERSIST_PATH`、代理 / `NEWS_PROXY` / `EMBEDDING_PROXY`。
+2. **代理与候选顺序**
+  对 xAI 路径：在 `config/proxy` 中整理 `get_embedding_proxy_candidates()`，按 NEWS → EMBEDDING → … → 直连依次尝试；Grok 仍不稳时优先改用 Gemini 嵌入。
+3. **补齐并实现符合 Chroma 的 `embed_query`**
+  在 `ChromaGoogleEmbeddingFunction`（及共享模块 `embeddings_google.py`）中实现 `embed_query`：规范化 `input` → `List[str]` → 对每个字符串调用 LangChain 的 `embed_query` → 返回 `List[List[float]]`。
+4. **拆分共享代码与工具返回值**
+  将 Gemini 适配器抽到 `rag/embeddings_google.py`，vectorstore / retriever 共用；修正 `rag_tools.retrieve_knowledge` 对 `List[str]` 结果的拼接（不再误用 `page_content`）。
+5. **雅虎限流**
+  降频、加重试/backoff，或行情侧改代理（与 RAG 无直接关系）。
 
 ### 其他（Week 4 早期）
 
@@ -1086,14 +1080,6 @@ messages 共 12 条
 ```text
 
 ```
-
-
-
-
-
-
-
-
 
 # 项目亮点:
 
