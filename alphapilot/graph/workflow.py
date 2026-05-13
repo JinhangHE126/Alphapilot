@@ -13,6 +13,7 @@ from agents.risk_agent import risk_agent
 
 
 checkpointer = get_checkpointer()
+MAX_GUARD_RETRIES = 3
 
 # ====================== StateGraph ======================
 workflow = StateGraph(GraphState)
@@ -50,7 +51,14 @@ for agent in ["market_data_expert", "fundamental_expert", "news_sentiment_expert
 # Guard 检查后决定是否修正或结束
 workflow.add_conditional_edges(
     "guard_agent",
-    lambda state: "recheck" if not state.get("guard_check", {}).get("is_valid", True) else "memory",
+    lambda state: (
+        "recheck"
+        if (
+            not state.get("guard_check", {}).get("is_valid", True)
+            and state.get("guard_retry_count", 0) < MAX_GUARD_RETRIES
+        )
+        else "memory"
+    ),
     {
         "recheck": "strategy_expert",   # 如果不通过，回到 strategy 重新生成
         "memory": "memory"

@@ -52,4 +52,5 @@ class GraphState(TypedDict):
     guard_check: Annotated[dict, "Guard Agent validation results"] = {}
     sources: Annotated[list[str], "All source references"] = []
     confidence_score: Annotated[int, "Final confidence score 0-100"] = 0
+    guard_retry_count: Annotated[int, "Current guard retry count"] = 0
 

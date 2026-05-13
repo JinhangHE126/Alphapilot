@@ -1,199 +1,128 @@
 import os
-from typing import Any, List
+from pathlib import Path
+from typing import List, Dict, Any
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document
 
-import chromadb
-from langchain_openai import OpenAIEmbeddings
-from openai import APIConnectionError, APITimeoutError, InternalServerError
+# ====================== 配置 ======================
+EMBEDDING_MODEL_NAME = os.getenv(
+    "RAG_EMBEDDING_MODEL", "all-MiniLM-L6-v2"
+)
 
-from config.proxy import get_embedding_proxy_candidates
-from rag.embeddings_google import ChromaGoogleEmbeddingFunction
+RAG_INDEX_PATH = Path("rag_data/faiss_index")
+RAG_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-_EMBED_TIMEOUT = 45.0
-_RETRYABLE_EMBED = (InternalServerError, APIConnectionError, APITimeoutError)
-
-
-def _resolve_rag_embedding_backend() -> str:
-    raw = (os.getenv("RAG_EMBEDDING_BACKEND") or "google").strip().lower()
-    if raw in ("xai", "grok", "grok-embedding"):
-        return "xai"
-    return "google"
-
-
-def _default_persist_for_backend(backend: str) -> str:
-    override = (os.getenv("RAG_PERSIST_PATH") or "").strip()
-    if override:
-        return override
-    # Google 与 news 的 vectorstore 共用 ./rag_data，避免两套索引
-    if backend == "google":
-        return "./rag_data"
-    return "./rag_data_xai"
+def _resolve_model_name() -> str:
+    """Support short model name and full HF repo name."""
+    if "/" in EMBEDDING_MODEL_NAME:
+        return EMBEDDING_MODEL_NAME
+    return f"sentence-transformers/{EMBEDDING_MODEL_NAME}"
 
 
-class ChromaGrokEmbeddingFunction:
-    """Grok Embedding：LangChain OpenAIEmbeddings + 多代理回退。"""
+def _build_embedding_model() -> HuggingFaceEmbeddings:
+    """
+    Build embeddings with robust fallback:
+    1) local cache only (no network dependency)
+    2) online download if local cache unavailable
+    """
+    model_name = _resolve_model_name()
+    base_model_kwargs = {"device": "cpu"}
+    encode_kwargs = {"normalize_embeddings": True}
+
+    try:
+        return HuggingFaceEmbeddings(
+            model_name=model_name,
+            model_kwargs={**base_model_kwargs, "local_files_only": True},
+            encode_kwargs=encode_kwargs,
+        )
+    except Exception as local_error:
+        print(f"⚠️ 本地离线加载 embedding 失败，尝试联网加载: {local_error}")
+
+    return HuggingFaceEmbeddings(
+        model_name=model_name,
+        model_kwargs=base_model_kwargs,
+        encode_kwargs=encode_kwargs,
+    )
+
+# ====================== 主 RAG 类 ======================
+class RagRetriever:
+    """AlphaPilot 本地 FAISS RAG（离线版）"""
 
     def __init__(self):
-        api_key = os.getenv("XAI_API_KEY")
-        if not api_key:
-            raise ValueError("❌ 请设置环境变量 XAI_API_KEY")
+        self.vectorstore = None
+        self.embedding_model = None
+        try:
+            self.embedding_model = _build_embedding_model()
+            self.load_or_create_index()
+        except Exception as err:
+            print(f"❌ RAG 初始化失败，已降级为禁用模式: {err}")
+            self.vectorstore = None
 
-        self._api_key = api_key
-        self.model = os.getenv("XAI_EMBEDDING_MODEL", "grok-embedding-small")
-        self._candidates = get_embedding_proxy_candidates()
-        self._lc_cache: dict[str, OpenAIEmbeddings] = {}
+    def load_or_create_index(self):
+        """加载已有索引或创建新索引"""
+        if not self.embedding_model:
+            return
 
-    def _lc(self, proxy_url: str | None) -> OpenAIEmbeddings:
-        key = proxy_url or "__direct__"
-        if key not in self._lc_cache:
-            kw: dict = {
-                "model": self.model,
-                "api_key": self._api_key,
-                "base_url": "https://api.x.ai/v1",
-                "check_embedding_ctx_length": False,
-                "tiktoken_enabled": False,
-                "timeout": _EMBED_TIMEOUT,
-                "max_retries": 1,
-                "model_kwargs": {"encoding_format": "float"},
-            }
-            if proxy_url:
-                kw["openai_proxy"] = proxy_url
-            self._lc_cache[key] = OpenAIEmbeddings(**kw)
-        return self._lc_cache[key]
-
-    def name(self) -> str:
-        return "xai_grok_embeddings"
-
-    def __call__(self, input: List[str]) -> List[List[float]]:
-        if not input:
-            return []
-        last_err: BaseException | None = None
-        for proxy_url in self._candidates:
-            try:
-                return self._lc(proxy_url).embed_documents(input)
-            except _RETRYABLE_EMBED as e:
-                print(
-                    f"   ⚠️ [Grok embedding] {proxy_url or '直连'} 失败 ({type(e).__name__})，换下一出口…",
-                    flush=True,
-                )
-                last_err = e
-                continue
-        if last_err is not None:
-            raise last_err
-        return []
-
-    def embed_query(self, input: Any, **kwargs) -> List[List[float]]:
-        """Chroma 要求 Embeddings = List[List[float]]。"""
-        if input is None:
-            return []
-        if isinstance(input, str):
-            texts = [input]
-        elif isinstance(input, (list, tuple)):
-            texts = list(input)
+        if RAG_INDEX_PATH.exists():
+            print(f"✅ 加载现有 FAISS 索引: {RAG_INDEX_PATH}")
+            self.vectorstore = FAISS.load_local(
+                str(RAG_INDEX_PATH),
+                self.embedding_model,
+                allow_dangerous_deserialization=True,
+            )
         else:
-            texts = [str(input)]
-        out: List[List[float]] = []
-        for t in texts:
-            s = t if isinstance(t, str) else str(t)
-            if not s.strip():
-                out.append([])
-                continue
-            last_err: BaseException | None = None
-            row: List[float] | None = None
-            for proxy_url in self._candidates:
-                try:
-                    row = self._lc(proxy_url).embed_query(s)
-                    break
-                except _RETRYABLE_EMBED as e:
-                    print(
-                        f"   ⚠️ [Grok embedding] {proxy_url or '直连'} 失败 ({type(e).__name__})，换下一出口…",
-                        flush=True,
-                    )
-                    last_err = e
-                    continue
-            if row is None:
-                if last_err is not None:
-                    raise last_err
-                out.append([])
-            else:
-                out.append(list(row))
-        return out
+            print("🆕 创建新的 FAISS 索引...")
+            self.vectorstore = FAISS.from_texts(
+                ["[Placeholder] AlphaPilot RAG 初始化文档"],
+                self.embedding_model,
+                metadatas=[{"source": "init", "type": "placeholder"}],
+            )
+            self.vectorstore.save_local(str(RAG_INDEX_PATH))
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return self.__call__(texts)
-
-
-class FinancialRAG:
-    """金融财报 RAG：默认 Gemini 嵌入（稳定）；可选 xAI Grok。"""
-
-    def __init__(
-        self,
-        persist_directory: str | None = None,
-        embedding_backend: str | None = None,
-    ):
-        #  确定后端位置
-        self.backend = embedding_backend or _resolve_rag_embedding_backend()
-        self.persist_directory = persist_directory or _default_persist_for_backend(
-            self.backend
-        )
-        os.makedirs(self.persist_directory, exist_ok=True)
-
-        # 创建一个Chroma持久化客户端, 将向量库数据存储到指定目录下.
-        self.client = chromadb.PersistentClient(path=self.persist_directory)
-        if self.backend == "xai":
-            self.embedding_function: object = ChromaGrokEmbeddingFunction()
-        else:
-            self.embedding_function = ChromaGoogleEmbeddingFunction()
-
-        self.collection = self.client.get_or_create_collection(
-            name="financial_reports",
-            embedding_function=self.embedding_function,
-        )
-    # 给向量库增加文档.
-    def add_document(self, text: str, metadata: dict, doc_id: str):
-        self.collection.add(
-            documents=[text],
-            metadatas=[metadata],
-            ids=[doc_id],
-        )
+    def add_document(self, text: str, metadata: Dict[str, Any], doc_id: str):
+        """添加单篇文档（推荐使用）"""
+        if not self.vectorstore:
+            print("⚠️ RAG 未初始化，跳过 add_document")
+            return
+        doc = Document(page_content=text, metadata={**metadata, "doc_id": doc_id})
+        self.vectorstore.add_documents([doc])
+        self.vectorstore.save_local(str(RAG_INDEX_PATH))
         print(f"✅ Document added: {doc_id}")
 
-    # 根据查询文本, 从向量库中检索最相关的文档.
+    def add_documents(self, documents: List[Document]):
+        """批量添加 Document 对象"""
+        if not self.vectorstore:
+            print("⚠️ RAG 未初始化，跳过 add_documents")
+            return
+        self.vectorstore.add_documents(documents)
+        self.vectorstore.save_local(str(RAG_INDEX_PATH))
+        print(f"✅ 已添加 {len(documents)} 篇文档")
+
+    def retrieve(self, query: str, k: int = 5) -> List[Document]:
+        """语义检索，返回 Document 对象（带 metadata）"""
+        if not self.vectorstore:
+            return []
+        return self.vectorstore.similarity_search(query, k=k)
+
     def query(self, query_text: str, n_results: int = 3) -> List[str]:
-        results = self.collection.query(
-            query_texts=[query_text],
-            n_results=n_results,
-        )
-        return results["documents"][0] if results["documents"] else []
-
-    # 根据查询文本, 从向量库中检索最相关的文档.
-    def retrieve(self, query: str, k: int = 3) -> List[str]:
-        return self.query(query_text=query, n_results=k)
+        """返回纯文本列表（兼容原有 tools/rag_tools.py）"""
+        docs = self.retrieve(query_text, k=n_results)
+        return [doc.page_content for doc in docs]
 
 
-rag = FinancialRAG()
-retriever = rag
+# ====================== 全局实例 ======================
+retriever = RagRetriever()
 
 
 def retrieve_knowledge(query_text: str, n_results: int = 3) -> List[str]:
-    return rag.query(query_text=query_text, n_results=n_results)
+    """供 Agent 工具调用的函数（保持完全兼容）"""
+    return retriever.query(query_text, n_results=n_results)
 
 
-_be = _resolve_rag_embedding_backend()
-_pd = _default_persist_for_backend(_be)
-if _be == "xai":
-    _cands = get_embedding_proxy_candidates()
-    print(
-        "✅ rag/retriever.py → xAI Grok Embedding | 库路径:",
-        _pd,
-        "| 代理顺序:",
-        " → ".join(p or "直连" for p in _cands),
-        flush=True,
-    )
-else:
-    print(
-        "✅ rag/retriever.py → Google Gemini Embedding | 库路径:",
-        _pd,
-        "| 模型:",
-        os.getenv("GOOGLE_EMBEDDING_MODEL", "gemini-embedding-001"),
-        flush=True,
-    )
+# ====================== 启动提示 ======================
+print(
+    f"✅ rag/retriever.py → FAISS 本地离线 RAG | "
+    f"模型: {_resolve_model_name()} | "
+    f"索引路径: {RAG_INDEX_PATH}"
+)
