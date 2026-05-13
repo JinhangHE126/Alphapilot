@@ -9,5 +9,27 @@
       "risk_expert"
     ],
     "last_updated": "2026-05-09"
+  },
+  "请全面分析": {
+    "last_analysis": "No report yet",
+    "executed_agents": [
+      "market_data_expert",
+      "fundamental_expert",
+      "news_sentiment_expert",
+      "strategy_expert",
+      "risk_expert"
+    ],
+    "last_updated": "2026-05-09"
+  },
+  "PLEASE": {
+    "last_analysis": "No report yet",
+    "executed_agents": [
+      "market_data_expert",
+      "fundamental_expert",
+      "news_sentiment_expert",
+      "strategy_expert",
+      "risk_expert"
+    ],
+    "last_updated": "2026-05-09"
   }
 }
