@@ -5,8 +5,7 @@
       "market_data_expert",
       "fundamental_expert",
       "news_sentiment_expert",
-      "strategy_expert",
-      "risk_expert"
+      "strategy_expert"
     ],
     "last_updated": "2026-05-09"
   },
