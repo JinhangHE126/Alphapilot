@@ -1,7 +1,5 @@
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
 from .proxy import get_proxy_for_agent
 
 load_dotenv()
@@ -84,6 +82,13 @@ AGENT_LLM_ROUTES = {
         "max_retries": 5,
         "timeout": 120,
     },
+    "portfolio": {
+        # 先复用 strategy/risk 的推理模型配置
+        "profile": "deepseek_reasoner",
+        "temperature": 0.15,
+        "max_retries": 5,
+        "timeout": 120,
+    },
     "orchestrator": {
         "profile": "deepseek_reasoner",
         "temperature": 0.2,
@@ -115,6 +120,8 @@ def get_llm(agent: str = "market"):
     )
 
     if provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
         # 【修复版】只传 Gemini 支持的参数，绝不传 base_url 或错误的 client_options
         return ChatGoogleGenerativeAI(
             model=profile["model"],
@@ -126,6 +133,8 @@ def get_llm(agent: str = "market"):
         )
 
     if provider == "openai_compatible":
+        from langchain_openai import ChatOpenAI
+
         # Grok / DeepSeek 继续正常走独立代理
         return ChatOpenAI(
             model=profile["model"],

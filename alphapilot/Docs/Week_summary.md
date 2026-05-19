@@ -1051,7 +1051,7 @@ messages 共 12 条
 1. **xAI Grok Embedding + 网络**
   行情/编排用的 LLM 能通，但 Embedding 请求走 `api.x.ai` 的路径与 Chat 不一致或未走代理，导致直连超时；走代理后又可能不同端口对 `/v1/embeddings` 与 chat 分流不同，出现 upstream reset / 503。
 2. `**embed_query` 未实现（Google 适配器）**
-  Chroma 在 `query()` 时会对查询文本调用 `embed_query`，而早期 vectorstore 里只实现了 `__call_`_（文档批量），缺少 `embed_query`，触发 `AttributeError`。
+  Chroma 在 `query()` 时会对查询文本调用 `embed_query`，而早期 vectorstore 里只实现了 `__call`__（文档批量），缺少 `embed_query`，触发 `AttributeError`。
 3. **Chroma 对 `embed_query` 返回形状的约定**
   新版 Chroma 期望 `embed_query` 返回 `Embeddings = List[List[float]]`（外层：若干条查询；内层：每条一条向量）。实现成只返回 `List[float]` 时，Rust 层把每个 `float` 误当成一条向量，出现 `float` 无法转为 `Sequence`。同时 Chroma 传入的 `input` 常为 `["查询字符串"]` 这种列表，不能直接当作 LangChain 的 `text: str` 使用，需要先归一成多条字符串再逐条嵌入。
 4. **（次要）雅虎行情**
@@ -1080,6 +1080,45 @@ messages 共 12 条
 ```text
 
 ```
+
+# Week 5 Summary
+
+## 完成情况
+
+- 5.1 Web UI 基础框架（Gradio + 深色科技主题）
+- 5.2 聊天界面 + 历史会话管理（多轮对话支持）
+- 5.3 报告可视化（结构化 Markdown + 关键指标卡片 + Guard 高亮）
+- 5.4 实时流式输出 + 进度条（每个 Agent 实时显示状态和摘要）
+- 5.5 Week 5 最终优化 + 总结文档
+
+## 核心亮点
+
+- 实现**实时流式分析界面**：用户输入后可看到每个 Agent 的执行进度（Market / Fundamental / News / Strategy / Risk / Guard）
+- **Guard 实时高亮卡片**：置信度大数字显示 + 问题列表 + 修正建议 + 来源引用
+- **结构化报告**：执行摘要、关键指标卡片、Guard 质量门控、可折叠详细正文
+- 深色高端科技仪表盘风格，视觉专业且现代
+- 支持快捷分析按钮 + 清空对话 + 历史记录
+
+## 当前状态
+
+- Web UI（`ui/app.py`）已可实际使用
+- 完整 Multi-Agent 流程（Orchestrator + 5 Agent + Guard + Memory）与前端实时联动
+- RAG 知识库 + Memory + Guard 三重防护已接入 UI
+- 用户可在浏览器中输入需求，获得透明、可解释、可视化的投资分析报告
+
+## 下周目标（Week 6）
+
+- Portfolio 管理 Agent（持仓建议、仓位控制）
+- 回测引擎（历史表现验证）
+- 多股票对比分析
+- 个性化推荐（基于用户画像）
+- Week 6 总结 + 集成测试
+
+**个人评价：Week 5 完成度 100%！**  
+我们成功把命令行工具升级为**专业级 Web 交互界面**，系统已具备实时可视化、可解释性和良好用户体验。  
+AlphaPilot 正在从“后台工具”向“用户可直接使用的智能投资平台”迈进。🚀
+
+**当前最值得骄傲的功能**：实时进度面板 + Guard 实时检查 + 结构化报告
 
 # 项目亮点:
 

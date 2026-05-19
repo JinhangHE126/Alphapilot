@@ -54,3 +54,6 @@ class GraphState(TypedDict):
     confidence_score: Annotated[int, "Final confidence score 0-100"] = 0
     guard_retry_count: Annotated[int, "Current guard retry count"] = 0
 
+# === Week 6 新增：Portfolio 相关 ===
+    portfolio_suggestion: Annotated[str, "Position sizing and portfolio suggestions"] = ""
+    current_portfolio: Annotated[dict, "Current portfolio holdings record"] = {}
