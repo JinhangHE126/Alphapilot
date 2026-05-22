@@ -25,6 +25,7 @@ def get_proxy_for_agent(agent: str) -> str | None:
         "strategy": REASONER_PROXY or LLM_PROXY,         # ← 独立 7900
         "risk": REASONER_PROXY or LLM_PROXY,             # ← 独立 7900
         "portfolio": REASONER_PROXY or LLM_PROXY,        # 复用推理代理
+        "backtesting": REASONER_PROXY or LLM_PROXY,      # 回测复用推理代理
         "orchestrator": REASONER_PROXY or LLM_PROXY,
         "embedding": EMBEDDING_PROXY or NEWS_PROXY or REASONER_PROXY or LLM_PROXY,
     }

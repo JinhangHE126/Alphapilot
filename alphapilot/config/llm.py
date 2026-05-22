@@ -89,6 +89,13 @@ AGENT_LLM_ROUTES = {
         "max_retries": 5,
         "timeout": 120,
     },
+    "backtesting": {
+        # 回测场景需要推理与结构化输出，先复用 reasoner 配置
+        "profile": "deepseek_reasoner",
+        "temperature": 0.15,
+        "max_retries": 5,
+        "timeout": 120,
+    },
     "orchestrator": {
         "profile": "deepseek_reasoner",
         "temperature": 0.2,

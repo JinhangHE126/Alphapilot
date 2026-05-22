@@ -57,3 +57,8 @@ class GraphState(TypedDict):
 # === Week 6 新增：Portfolio 相关 ===
     portfolio_suggestion: Annotated[str, "Position sizing and portfolio suggestions"] = ""
     current_portfolio: Annotated[dict, "Current portfolio holdings record"] = {}
+
+# === Week 6 新增：Portfolio & Backtesting ===
+    # portfolio_suggestion: Annotated[str, "Position sizing and portfolio suggestions"] = ""
+    backtest_report: Annotated[str, "Historical backtesting report"] = ""
+    backtest_metrics: Annotated[dict, "Key backtesting metrics"] = {}
