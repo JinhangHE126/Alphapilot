@@ -15,6 +15,7 @@ from agents.risk_agent import risk_agent
 from agents.portfolio_agent import portfolio_agent
 from agents.backtesting_agent import backtesting_agent
 from agents.comparison_agent import comparison_agent
+from agents.recommendation_agent import recommendation_agent
 
 load_dotenv()
 checkpointer = get_checkpointer()
@@ -57,6 +58,7 @@ def orchestrator_node(state: GraphState) -> dict:
             ["risk_expert"],
             ["portfolio_agent"],
             ["backtesting_agent"],
+            ["recommendation_agent"],
         ]
         executed_set = set(executed)
         next_agents = []
@@ -92,6 +94,7 @@ workflow.add_node("risk_expert", risk_agent)
 workflow.add_node("portfolio_agent", portfolio_agent)
 workflow.add_node("backtesting_agent", backtesting_agent)
 workflow.add_node("comparison_agent", comparison_agent)
+workflow.add_node("recommendation_agent", recommendation_agent)
 workflow.add_node("orchestrator", orchestrator_node)
 
 workflow.add_edge(START, "orchestrator")
@@ -108,6 +111,7 @@ workflow.add_conditional_edges(
         "portfolio_agent": "portfolio_agent",
         "backtesting_agent": "backtesting_agent",
         "comparison_agent": "comparison_agent",
+        "recommendation_agent": "recommendation_agent",
         "__end__": END,
     },
 )
@@ -121,6 +125,7 @@ for agent in [
     "portfolio_agent",
     "backtesting_agent",
     "comparison_agent",
+    "recommendation_agent",
 ]:
     workflow.add_edge(agent, "orchestrator")
 

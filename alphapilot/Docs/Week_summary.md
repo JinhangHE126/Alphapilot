@@ -1106,21 +1106,35 @@ messages 共 12 条
 - RAG 知识库 + Memory + Guard 三重防护已接入 UI
 - 用户可在浏览器中输入需求，获得透明、可解释、可视化的投资分析报告
 
-## 下周目标（Week 6）
 
-- Portfolio 管理 Agent（持仓建议、仓位控制）
-- 回测引擎（历史表现验证）
-- 多股票对比分析
-- 个性化推荐（基于用户画像）
-- Week 6 总结 + 集成测试
 
-**个人评价：Week 5 完成度 100%！**  
-我们成功把命令行工具升级为**专业级 Web 交互界面**，系统已具备实时可视化、可解释性和良好用户体验。  
-AlphaPilot 正在从“后台工具”向“用户可直接使用的智能投资平台”迈进。🚀
 
-**当前最值得骄傲的功能**：实时进度面板 + Guard 实时检查 + 结构化报告
+# Week 6 总结（
+## 完成情况
+- 6.1 Portfolio Agent（仓位管理 + 个性化持仓建议）
+- 6.2 Backtesting Agent（历史回测引擎 + 策略表现评估）
+- 6.3 Comparison Agent（多股票对比分析）
+- 6.4 Recommendation Agent（个性化推荐引擎）
+
+## 核心亮点
+- **Portfolio Agent**：根据 Strategy + Risk + Guard 结果，给出具体仓位比例、止损/止盈计划、风险评级
+- **Backtesting Agent**：支持 Buy & Hold、MACD、中国需求驱动等多种策略回测，输出详细指标（年化收益、Sharpe Ratio、最大回撤、与 SPY 对比等）
+- **Comparison Agent**：支持同时对比多只股票（TSLA vs NVDA、TSLA vs AAPL、TSLA/NVDA/AAPL 等），生成结构化对比表格
+- **Recommendation Agent**：基于用户风险偏好（保守型、中线持有等）+ 历史分析结果，给出高度个性化的最终投资计划
+- Orchestrator 已支持**写死完整链路** + **智能检测**（多股票对比请求、个性化推荐请求），路由逻辑稳定可靠
+
+## 当前状态
+- AlphaPilot 已具备**生产级智能投资助手**的核心能力：
+  - 单股票全面分析
+  - 多股票横向对比
+  - 历史回测验证
+  - 个性化仓位建议
+  - 个性化最终推荐
+- Web UI 实时流式 + 结构化报告 + Guard 校验 + 多 Agent 协作全部就绪
+- 系统从“单股票分析工具”升级为**真正的 AI 投资决策平台**
 
 # 项目亮点:
+
 
 - 多 Agent 并行架构：market、news、fundamental 可以并行运行，提高整体分析效率。
 - 网络流量隔离：通过 sing-box mixed inbound，把不同 agent 类型的请求拆到不同本地入口，便于调试、限流和后续扩展。
