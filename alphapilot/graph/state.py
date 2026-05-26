@@ -62,3 +62,6 @@ class GraphState(TypedDict):
     # portfolio_suggestion: Annotated[str, "Position sizing and portfolio suggestions"] = ""
     backtest_report: Annotated[str, "Historical backtesting report"] = ""
     backtest_metrics: Annotated[dict, "Key backtesting metrics"] = {}
+    
+    # === Week 6 新增：Comparison Agent ===
+    comparison_report: Annotated[str, "Multi-stock comparative analysis report"] = ""
