@@ -65,3 +65,10 @@ class GraphState(TypedDict):
     
     # === Week 6 新增：Comparison Agent ===
     comparison_report: Annotated[str, "Multi-stock comparative analysis report"] = ""
+
+# === Week 7 新增：用户画像与长期记忆 ===
+    user_profile: Annotated[dict, "User profile (risk preference, style, historical memory)"] = {}
+    long_term_memory: Annotated[dict, "Cross-session long-term memory"] = {}
+# === Week 7 新增：Portfolio Optimization ===
+    portfolio_optimization_report: Annotated[str, "Portfolio optimization report"] = ""
+    optimized_weights: Annotated[dict, "Optimized asset weights"] = {}
