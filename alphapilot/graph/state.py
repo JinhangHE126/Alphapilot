@@ -72,3 +72,7 @@ class GraphState(TypedDict):
 # === Week 7 新增：Portfolio Optimization ===
     portfolio_optimization_report: Annotated[str, "Portfolio optimization report"] = ""
     optimized_weights: Annotated[dict, "Optimized asset weights"] = {}
+
+    # === Week 7 新增：Alert Agent ===
+    alert_report: Annotated[str, "实时警报报告"] = ""
+    active_alerts: Annotated[list, "当前激活的警报列表"] = []

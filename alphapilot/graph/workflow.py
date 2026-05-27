@@ -18,12 +18,13 @@ from agents.backtesting_agent import backtesting_agent
 from agents.comparison_agent import comparison_agent
 from agents.recommendation_agent import recommendation_agent
 from agents.portfolio_optimization_agent import portfolio_optimization_agent
+from agents.alert_agent import alert_agent
 
 load_dotenv()
 checkpointer = get_checkpointer()
 
 def orchestrator_node(state: GraphState) -> dict:
-    """智能 Orchestrator - 支持用户画像 + 个性化推荐"""
+    """智能 Orchestrator - 支持实时警报模式"""
     messages = state.get("messages", [])
     executed = state.get("executed_agents", [])
     stock_symbol = state.get("stock_symbol", "TSLA")
@@ -40,46 +41,65 @@ def orchestrator_node(state: GraphState) -> dict:
         "Please perform comprehensive analysis",
     )
 
-    user_profile = load_user_profile("default")
-    state["user_profile"] = user_profile
-
     lower_instruction = user_instruction.lower()
 
-    is_comparison = any(
-        keyword in lower_instruction
-        for keyword in ["对比", "compare", "vs", "versus", "comparison", "多股票", "多个股票", "which is better", "哪个更好"]
-    )
-
-    is_portfolio_optimization = any(
-        keyword in lower_instruction
-        for keyword in ["组合", "sharpe", "持仓配置", "资产配置", "权重", "portfolio optimization", "优化.*组合"]
-    )
-
-    is_personalized = not is_portfolio_optimization and any(
+    is_alert = any(
         keyword in lower_instruction
         for keyword in [
-            "个性化", "personalized", "我的", "给我", "为我",
-            "投资计划", "投资建议", "仓位建议",
+            "警报", "alert", "监控", "monitor", "通知", "提醒",
+            "价格突破", "价格跌破", "rsi", "macd", "触发"
+        ]
+    )
+
+    is_optimization = any(
+        keyword in lower_instruction
+        for keyword in [
+            "优化", "optimization", "组合优化", "资产配置",
+            "权重", "portfolio optimization", "sharpe ratio"
+        ]
+    )
+
+    is_personalized = any(
+        keyword in lower_instruction
+        for keyword in [
+            "个性化", "personalized", "我的", "给出", "为我",
+            "投资计划", "投资建议", "仓位建议", "风险偏好",
             "保守型", "中线持有", "我的偏好"
         ]
     )
 
-    if is_comparison:
-        if "comparison_agent" in executed:
+    _alert_done = any(
+        getattr(m, "name", None) == "alert_agent"
+        for m in messages
+        if not isinstance(m, dict)
+    )
+    _optimization_done = any(
+        getattr(m, "name", None) == "portfolio_optimization_agent"
+        for m in messages
+        if not isinstance(m, dict)
+    )
+    _recommendation_done = any(
+        getattr(m, "name", None) == "recommendation_agent"
+        for m in messages
+        if not isinstance(m, dict)
+    )
+
+    if is_alert:
+        if _alert_done:
             next_agents = []
-            reasoning = "Comparison agent completed. Ending workflow."
+            reasoning = "Alert agent completed. Ending workflow."
         else:
-            next_agents = ["comparison_agent"]
-            reasoning = "User requested multi-stock comparison → directly route to comparison_agent"
-    elif is_portfolio_optimization:
-        if "portfolio_optimization_agent" in executed:
+            next_agents = ["alert_agent"]
+            reasoning = "User requested real-time alert / monitoring → route to alert_agent"
+    elif is_optimization:
+        if _optimization_done:
             next_agents = []
             reasoning = "Portfolio optimization agent completed. Ending workflow."
         else:
             next_agents = ["portfolio_optimization_agent"]
             reasoning = "User requested portfolio optimization → route to portfolio_optimization_agent"
     elif is_personalized:
-        if "recommendation_agent" in executed:
+        if _recommendation_done:
             next_agents = []
             reasoning = "Recommendation agent completed. Ending workflow."
         else:
@@ -107,7 +127,6 @@ def orchestrator_node(state: GraphState) -> dict:
     print(f"   Executed: {executed}")
     print(f"   Next: {next_agents}")
     print(f"   Reasoning: {reasoning}\n")
-    print(f"   User Profile: {user_profile}\n")
 
     if not next_agents:
         return {"next": "__end__", "orchestrator_reasoning": reasoning}
@@ -128,6 +147,7 @@ workflow.add_node("risk_expert", risk_agent)
 workflow.add_node("portfolio_agent", portfolio_agent)
 workflow.add_node("backtesting_agent", backtesting_agent)
 workflow.add_node("comparison_agent", comparison_agent)
+workflow.add_node("alert_agent", alert_agent)
 workflow.add_node("recommendation_agent", recommendation_agent)
 workflow.add_node("orchestrator", orchestrator_node)
 workflow.add_node("portfolio_optimization_agent", portfolio_optimization_agent)   # 新增：Portfolio优化Agent
@@ -146,6 +166,7 @@ workflow.add_conditional_edges(
         "portfolio_agent": "portfolio_agent",
         "backtesting_agent": "backtesting_agent",
         "comparison_agent": "comparison_agent",
+        "alert_agent": "alert_agent",
         "recommendation_agent": "recommendation_agent",
         "portfolio_optimization_agent": "portfolio_optimization_agent",
         "__end__": END,
@@ -160,6 +181,7 @@ for agent in [
     "risk_expert",
     "portfolio_agent",
     "backtesting_agent",
+    "alert_agent",
     "comparison_agent",
     "portfolio_optimization_agent",   # 新增：Portfolio优化Agent
     "recommendation_agent",

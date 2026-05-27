@@ -114,6 +114,12 @@ AGENT_LLM_ROUTES = {
         "max_retries": 5,
         "timeout": 90,
     },
+    "alert": {
+        "profile": "deepseek_reasoner",
+        "temperature": 0.15,
+        "max_retries": 5,
+        "timeout": 90,
+    },
     "recommendation": {
         "profile": "deepseek_reasoner",
         "temperature": 0.15,
@@ -121,6 +127,12 @@ AGENT_LLM_ROUTES = {
         "timeout": 120,
     },
     "optimization": {
+        "profile": "deepseek_reasoner",
+        "temperature": 0.15,
+        "max_retries": 5,
+        "timeout": 120,
+    },
+    "alert": {
         "profile": "deepseek_reasoner",
         "temperature": 0.15,
         "max_retries": 5,

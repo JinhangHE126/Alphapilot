@@ -28,6 +28,7 @@ def get_proxy_for_agent(agent: str) -> str | None:
         "backtesting": REASONER_PROXY or LLM_PROXY,      # 回测复用推理代理
         "recommendation": REASONER_PROXY or LLM_PROXY,    # 推荐复用推理代理
         "optimization": REASONER_PROXY or LLM_PROXY,      # 组合优化复用推理代理
+        "alert": REASONER_PROXY or LLM_PROXY,              # 警报复用推理代理
         "orchestrator": REASONER_PROXY or LLM_PROXY,
         "embedding": EMBEDDING_PROXY or NEWS_PROXY or REASONER_PROXY or LLM_PROXY,
     }
