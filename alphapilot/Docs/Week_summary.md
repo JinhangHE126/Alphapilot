@@ -1131,9 +1131,47 @@ messages 共 12 条
 - Web UI 实时流式 + 结构化报告 + Guard 校验 + 多 Agent 协作全部就绪
 - 系统从“单股票分析工具”升级为**真正的 AI 投资决策平台**
 
-## 遇到的问题
 
-## AlphaPilot Docker 部署完整踩坑记录
+# Week 7 总结（2026.5.18 - 5.24）
+
+## 完成情况（100%）
+
+- **7.1** User Profile + 个性化 Recommendation Agent  
+- **7.2** Portfolio Optimization Agent（Markowitz 优化 + 夏普比率最大化）  
+- **7.3** Real-time Alert Agent（价格/RSI/MACD/新闻监控）  
+- **7.4** 完整 RESTful API + Docker 部署（FastAPI + docker-compose）  
+- **7.5** 全接口端到端测试 + 项目收尾
+
+## 核心亮点
+
+- **6 大独立 API 端点**：`/analyze`、`/compare`、`/backtest`、`/alert`、`/optimize`、`/health`
+- **智能路由**：Orchestrator 根据用户指令自动选择最合适的 Agent
+- **个性化支持**：集成 User Profile，支持风险偏好和投资周期
+- **Docker 一键部署**：生产级配置已就绪（健康检查 + 持久化卷）
+- **结构化输出**：所有接口均返回清晰的 Markdown 报告
+- **容错能力**：yfinance 限流时自动重试 + 兜底逻辑
+
+## 项目当前状态
+
+- ✅ 多 Agent 完整协作链路
+- ✅ RAG + Memory + Guard + 用户画像
+- ✅ 可对外提供服务的 API 平台
+- ✅ Docker 生产部署就绪
+
+## 📅 下周目标（Week 8）
+
+- 前端 UI v2（React / Next.js 可视化仪表盘 + 实时流式）
+- WebSocket 实时警报推送
+- PostgreSQL 持久化 + 用户历史记录
+- CI/CD 流水线（GitHub Actions）
+- 速率限制、监控、日志收集（Prometheus + Grafana 可选）
+
+---
+
+
+
+## 遇到的问题
+**AlphaPilot Docker 部署完整踩坑记录**
 
 ### 一、起点：为什么触发这个问题
 
