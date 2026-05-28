@@ -4,7 +4,7 @@
 
 - Market Data Agent + StateGraph + Supervisor 已经完整跑通.
 - Market Data Agent的输出已经根据GraphState定义传回给特定的Agent Data. 保证了每个agent的输出隔离化.
-- 
+- <br />
 
 ## 收获:
 
@@ -15,7 +15,7 @@
 ## 遇到的问题 & 解决:
 
 - 首先就是LLM RateLimit问题, 尝试了很多方法, 最后选择充值..
-- GraphState字段没有自动填充, 通过initiate_state传入解决.
+- GraphState字段没有自动填充, 通过initiate\_state传入解决.
 
 ## 测试结果:
 
@@ -78,7 +78,7 @@ Number of Messages: 2
     ```
 - ChromaDB embedding 接口不兼容
   - 运行`test_rag.py`时候报错: `AttributeError: 'GoogleGenerativeAIEmbeddings' object has no attribute 'name'`
-  - 原因: `rag/vectorstore.py`里直接把LangChain的`GoogleGeneraetiveAIEmbeddings`传给了 CharmaDB:`embedding_function=self.embedding_function`, 但是ChromaDB原声 client 需要的是带 `name()`和`_call()_`的embedding function. 
+  - 原因: `rag/vectorstore.py`里直接把LangChain的`GoogleGeneraetiveAIEmbeddings`传给了 CharmaDB:`embedding_function=self.embedding_function`, 但是ChromaDB原声 client 需要的是带 `name()`和`_call()_`的embedding function.
   - 解决方法:在`rag/vectorstore.py`里面加了一层适配器:
     ```python
     class ChromaGoogleEmbeddingFunction:
@@ -110,8 +110,7 @@ Number of Messages: 2
   ```
   - 原因：多 Agent 并行执行时，market/news/fundamental 会同时访问 Yahoo Finance、新闻源、PDF、LLM API。原先所有流量都挤在 SakuraCat 单一本地端口 `7897` 上，并发时容易出现连接超时或 `Server disconnected without sending a response`。
   - 解决方案：基于 `sing-box` 增加多个本地 mixed inbound 端口，用于按 Agent 类型拆分入口流量；再通过统一 selector 出口转发到 SakuraCat 的 `7897` 或直连。
-  配置文件：`alphapilot/config/sing-box.agent.example.json`
-
+    配置文件：`alphapilot/config/sing-box.agent.example.json`
     | 项目                        | 状态  | 说明                                                                           |
     | ------------------------- | --- | ---------------------------------------------------------------------------- |
     | `market-agent` inbound    | 已完成 | `127.0.0.1:7896`，用于 Yahoo Finance、股票价格、技术指标等市场数据请求                           |
@@ -120,7 +119,6 @@ Number of Messages: 2
     | `agent-proxy` selector    | 已完成 | 当前包含 `sakuracat-http` 和 `direct` 两个出口，默认走 `sakuracat-http`                   |
     | `sakuracat-http` outbound | 已完成 | 将 sing-box 流量转发到 SakuraCat 本地端口 `127.0.0.1:7897`                             |
     | route rules               | 已完成 | 根据 inbound tag 将 `market-agent`、`news-agent`、`llm-agent` 分别路由到 `agent-proxy` |
-
   - 当前设计实现了本地入口隔离：代码层可以分别使用 `7896`、`7898`、`7899`，避免所有工具和 LLM 请求直接共用同一个本地入口。
   - 当前出口层仍然统一经过 `agent-proxy`，默认转发到 SakuraCat 的 `7897`。如果后续需要真正的多出口节点隔离，可以继续把 `agent-proxy` 拆成 `market-proxy`、`news-proxy`、`llm-proxy` 三个 selector，并分别绑定不同远程节点。
   - 使用多模型并行配置，不再只依赖单一 Gemini 模型。LLM 路由配置位于：`alphapilot/config/llm.py`
@@ -245,10 +243,10 @@ Tesla (TSLA) 2024年全年基本面分析：
 
 - Strategy Agent（Chain-of-Thought + 权重评分）
 - Risk Agent（波动/宏观风险 + 止损/仓位建议）
-- Supervisor 完整 LLM 动态路由 + executed_agents 防重复
+- Supervisor 完整 LLM 动态路由 + executed\_agents 防重复
 - 5 Agent 完整协作流程（Market → Fundamental → News → Strategy → Risk）
 - Explainability 日志（Supervisor 决策过程可视化）
-- 
+- <br />
 
 ## 收获:
 
@@ -259,13 +257,13 @@ Tesla (TSLA) 2024年全年基本面分析：
 
 - `ConnectTimeout` 问题
   - 原因:  `Gemini` 对本地代理(7896,7901)不稳定, 新加坡地区网络+代理容易导致连接超时.
-  - 解决方法: 
+  - 解决方法:
     - 把`market` 改为`deepseek_fast` 直连
     - 把`fundamental` 改成`deepseek_reasoner` 直连
 
 ## 测试结果:
 
-```python
+````python
 (AIAgent) ➜  alphapilot git:(dev) ✗ python test/test_end_to_end.py
 🚀 [LLM] MARKET       → deepseek-chat             | proxy: 直连 | temp=0.1 | timeout=180s
 🚀 [LLM] FUNDAMENTAL  → deepseek-reasoner         | proxy: 直连 | temp=0.1 | timeout=300s
@@ -643,9 +641,9 @@ messages 共 12 条
 
 📊 执行路径： ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
 ✅ 5 Agent 完整协作测试通过！
-```
+````
 
-```text
+````text
 (AIAgent) ➜  alphapilot git:(dev) ✗ python test/test_end_to_end.py
 🚀 [LLM] MARKET       → deepseek-chat             | proxy: 直连 | temp=0.1 | timeout=180s
 🚀 [LLM] FUNDAMENTAL  → deepseek-reasoner         | proxy: 直连 | temp=0.1 | timeout=300s
@@ -1023,7 +1021,7 @@ messages 共 12 条
 
 📊 执行路径： ['market_data_expert', 'fundamental_expert', 'news_sentiment_expert', 'strategy_expert', 'risk_expert']
 ✅ 5 Agent 完整协作测试通过！
-```
+````
 
 # Week 4 Summary
 
@@ -1031,14 +1029,14 @@ messages 共 12 条
 
 - Orchestrator 升级 + 动态路由（支持用户自定义指令、严格依赖、并行执行）
 - 持久化 Memory 深化（跨会话记忆、用户画像、历史分析记录）
-- RAG 知识增强（FAISS 索引 + retrieve_knowledge 工具，已接入 Market/Fundamental/News Agent）
+- RAG 知识增强（FAISS 索引 + retrieve\_knowledge 工具，已接入 Market/Fundamental/News Agent）
 - 幻觉防护 + Self-Correction（Guard Agent + 事实校验 + 置信度评分 + 来源引用）
 
 ## 收获:
 
 - 学习了RAG的相关知识
 - 如何添加memory
-- 
+- <br />
 
 ## 遇到的问题 & 解决:
 
@@ -1049,26 +1047,26 @@ messages 共 12 条
 ### 原因
 
 1. **xAI Grok Embedding + 网络**
-  行情/编排用的 LLM 能通，但 Embedding 请求走 `api.x.ai` 的路径与 Chat 不一致或未走代理，导致直连超时；走代理后又可能不同端口对 `/v1/embeddings` 与 chat 分流不同，出现 upstream reset / 503。
-2. `**embed_query` 未实现（Google 适配器）**
-  Chroma 在 `query()` 时会对查询文本调用 `embed_query`，而早期 vectorstore 里只实现了 `__call`__（文档批量），缺少 `embed_query`，触发 `AttributeError`。
-3. **Chroma 对 `embed_query` 返回形状的约定**
-  新版 Chroma 期望 `embed_query` 返回 `Embeddings = List[List[float]]`（外层：若干条查询；内层：每条一条向量）。实现成只返回 `List[float]` 时，Rust 层把每个 `float` 误当成一条向量，出现 `float` 无法转为 `Sequence`。同时 Chroma 传入的 `input` 常为 `["查询字符串"]` 这种列表，不能直接当作 LangChain 的 `text: str` 使用，需要先归一成多条字符串再逐条嵌入。
+   行情/编排用的 LLM 能通，但 Embedding 请求走 `api.x.ai` 的路径与 Chat 不一致或未走代理，导致直连超时；走代理后又可能不同端口对 `/v1/embeddings` 与 chat 分流不同，出现 upstream reset / 503。
+2. `**embed_query` 未实现（Google 适配器）\*\*
+   Chroma 在 `query()` 时会对查询文本调用 `embed_query`，而早期 vectorstore 里只实现了 `__call`\_\_（文档批量），缺少 `embed_query`，触发 `AttributeError`。
+3. **Chroma 对** **`embed_query`** **返回形状的约定**
+   新版 Chroma 期望 `embed_query` 返回 `Embeddings = List[List[float]]`（外层：若干条查询；内层：每条一条向量）。实现成只返回 `List[float]` 时，Rust 层把每个 `float` 误当成一条向量，出现 `float` 无法转为 `Sequence`。同时 Chroma 传入的 `input` 常为 `["查询字符串"]` 这种列表，不能直接当作 LangChain 的 `text: str` 使用，需要先归一成多条字符串再逐条嵌入。
 4. **（次要）雅虎行情**
-  `YFRateLimitError` 来自 Yahoo API 频率限制，与 RAG 嵌入根因无关，重试有时可恢复。
+   `YFRateLimitError` 来自 Yahoo API 频率限制，与 RAG 嵌入根因无关，重试有时可恢复。
 
 ### 解决方法
 
 1. **嵌入后端可切换（默认 Gemini）**
-  增加 `RAG_EMBEDDING_BACKEND`（默认 `google`），Market RAG 用 Gemini `gemini-embedding-001`，与 vectorstore 共用 `./rag_data`；若坚持用 xAI，设 `xai` 并使用独立目录 `./rag_data_xai`，避免与 Gemini 向量混库。按需配置 `RAG_PERSIST_PATH`、代理 / `NEWS_PROXY` / `EMBEDDING_PROXY`。
+   增加 `RAG_EMBEDDING_BACKEND`（默认 `google`），Market RAG 用 Gemini `gemini-embedding-001`，与 vectorstore 共用 `./rag_data`；若坚持用 xAI，设 `xai` 并使用独立目录 `./rag_data_xai`，避免与 Gemini 向量混库。按需配置 `RAG_PERSIST_PATH`、代理 / `NEWS_PROXY` / `EMBEDDING_PROXY`。
 2. **代理与候选顺序**
-  对 xAI 路径：在 `config/proxy` 中整理 `get_embedding_proxy_candidates()`，按 NEWS → EMBEDDING → … → 直连依次尝试；Grok 仍不稳时优先改用 Gemini 嵌入。
-3. **补齐并实现符合 Chroma 的 `embed_query`**
-  在 `ChromaGoogleEmbeddingFunction`（及共享模块 `embeddings_google.py`）中实现 `embed_query`：规范化 `input` → `List[str]` → 对每个字符串调用 LangChain 的 `embed_query` → 返回 `List[List[float]]`。
+   对 xAI 路径：在 `config/proxy` 中整理 `get_embedding_proxy_candidates()`，按 NEWS → EMBEDDING → … → 直连依次尝试；Grok 仍不稳时优先改用 Gemini 嵌入。
+3. **补齐并实现符合 Chroma 的** **`embed_query`**
+   在 `ChromaGoogleEmbeddingFunction`（及共享模块 `embeddings_google.py`）中实现 `embed_query`：规范化 `input` → `List[str]` → 对每个字符串调用 LangChain 的 `embed_query` → 返回 `List[List[float]]`。
 4. **拆分共享代码与工具返回值**
-  将 Gemini 适配器抽到 `rag/embeddings_google.py`，vectorstore / retriever 共用；修正 `rag_tools.retrieve_knowledge` 对 `List[str]` 结果的拼接（不再误用 `page_content`）。
+   将 Gemini 适配器抽到 `rag/embeddings_google.py`，vectorstore / retriever 共用；修正 `rag_tools.retrieve_knowledge` 对 `List[str]` 结果的拼接（不再误用 `page_content`）。
 5. **雅虎限流**
-  降频、加重试/backoff，或行情侧改代理（与 RAG 无直接关系）。
+   降频、加重试/backoff，或行情侧改代理（与 RAG 无直接关系）。
 
 ### 其他（Week 4 早期）
 
@@ -1078,7 +1076,6 @@ messages 共 12 条
 ## 测试结果:
 
 ```text
-
 ```
 
 # Week 5 Summary
@@ -1106,17 +1103,17 @@ messages 共 12 条
 - RAG 知识库 + Memory + Guard 三重防护已接入 UI
 - 用户可在浏览器中输入需求，获得透明、可解释、可视化的投资分析报告
 
-
-
-
 # Week 6 总结（
+
 ## 完成情况
+
 - 6.1 Portfolio Agent（仓位管理 + 个性化持仓建议）
 - 6.2 Backtesting Agent（历史回测引擎 + 策略表现评估）
 - 6.3 Comparison Agent（多股票对比分析）
 - 6.4 Recommendation Agent（个性化推荐引擎）
 
 ## 核心亮点
+
 - **Portfolio Agent**：根据 Strategy + Risk + Guard 结果，给出具体仓位比例、止损/止盈计划、风险评级
 - **Backtesting Agent**：支持 Buy & Hold、MACD、中国需求驱动等多种策略回测，输出详细指标（年化收益、Sharpe Ratio、最大回撤、与 SPY 对比等）
 - **Comparison Agent**：支持同时对比多只股票（TSLA vs NVDA、TSLA vs AAPL、TSLA/NVDA/AAPL 等），生成结构化对比表格
@@ -1124,6 +1121,7 @@ messages 共 12 条
 - Orchestrator 已支持**写死完整链路** + **智能检测**（多股票对比请求、个性化推荐请求），路由逻辑稳定可靠
 
 ## 当前状态
+
 - AlphaPilot 已具备**生产级智能投资助手**的核心能力：
   - 单股票全面分析
   - 多股票横向对比
@@ -1133,8 +1131,170 @@ messages 共 12 条
 - Web UI 实时流式 + 结构化报告 + Guard 校验 + 多 Agent 协作全部就绪
 - 系统从“单股票分析工具”升级为**真正的 AI 投资决策平台**
 
-# 项目亮点:
+## 遇到的问题
 
+## AlphaPilot Docker 部署完整踩坑记录
+
+### 一、起点：为什么触发这个问题
+
+执行 `docker compose up --build -d` 容器化部署 AlphaPilot，第一次报错：
+
+```text
+failed to fetch oauth token: Post "https://auth.docker.io/token": TLS handshake timeout
+```
+
+**根因**：中国大陆网络环境，Docker daemon 无法直连 Docker Hub 拉取 `python:3.12-slim` 基础镜像。
+
+---
+
+### 二、尝试的解决方案及连环问题
+
+#### 尝试 1：Docker Desktop 镜像加速器
+
+在 Docker Engine 配置中添加 `registry-mirrors`（`docker.1panel.live`、`dockerpull.com`）。
+
+| | |
+|---|---|
+| **结果** | 镜像拉取时 403 Forbidden（加速器失效），且容器内 `apt-get` 也被镜像加速器拦截，产生 502 Bad Gateway |
+| **新问题** | 加速器干扰了 `apt-get` 阶段 |
+
+#### 尝试 2：固定 Debian 版本（bookworm）
+
+`FROM python:3.12-slim` → `FROM python:3.12-slim-bookworm`，避免 trixie arm64 仓库 404。
+
+| | |
+|---|---|
+| **结果** | 镜像成功拉取，但 `apt-get` 阶段 115 个包中偶有 3 个超时 |
+| **新问题** | 镜像加速器 + 无代理 = 间歇性 502 |
+
+#### 尝试 3：apt 加重试 + `--fix-missing`
+
+Dockerfile 加 `Acquire::Retries "10"` 和 `apt-get install --fix-missing`。
+
+| | |
+|---|---|
+| **结果** | 仍有个别包超时（gcc-12、g++-12、libalgorithm-merge-perl） |
+| **新问题** | 重试不够快，镜像源本身不稳定 |
+
+#### 尝试 4：构建时传代理
+
+`docker-compose.yml` 的 `build.args` 传 `HTTP_PROXY=http://host.docker.internal:7897`，Dockerfile 用 `ARG` + `ENV` 代理 apt 和 pip。
+
+| | |
+|---|---|
+| **结果** | `host.docker.internal:7897` 连接被拒 — 当时梯子不在 7897 |
+| **新问题** | 端口不匹配，用户反复调整梯子端口 |
+
+#### 尝试 5：改用清华镜像源（apt + pip）
+
+apt 用 `sed` 切换为清华 Debian 源，pip 设 `pypi.tuna.tsinghua.edu.cn`。
+
+| | |
+|---|---|
+| **结果** | Docker Desktop 的 Proxy 设置拦截了所有容器流量，清华源也超时 |
+| **新问题** | 清空 Docker Desktop Proxies 后，Docker Hub 又拉不了镜像 |
+
+#### 尝试 6：去掉所有代理，全部直连
+
+清空 `.env`、`docker-compose.yml`、`Dockerfile` 三层代理配置。
+
+| | |
+|---|---|
+| **结果** | Docker Hub 拉不到镜像（`DeadlineExceeded`），镜像缓存也丢失 |
+| **新问题** | 完全断网状态 |
+
+#### 尝试 7：恢复代理 + `pull: false`
+
+恢复 `build.args` 代理，加 `pull: false` 跳过基础镜像检查。
+
+| | |
+|---|---|
+| **结果** | `pull: false` 不生效，Docker 始终要连 `auth.docker.io` 认证 |
+| **新问题** | Docker daemon 代理设置不生效（虽在 UI 配了代理，daemon 层未生效） |
+
+### 三、关键突破：用户说明了 Throne 架构
+
+用户使用 **Throne**（sing-box GUI 客户端）管理代理，配置了 5 个本地入口：
+
+| 端口 | 标签 | 用途 |
+|:---:|------|------|
+| 7896 | market-agent | MARKET Agent |
+| 7898 | news-agent | NEWS Agent |
+| 7899 | llm-agent | LLM Agent |
+| 7900 | reasoner-agent | STRATEGY / RISK / PORTFOLIO |
+| 7901 | fundamental-agent | FUNDAMENTAL Agent |
+
+全部路由到 `sakuracat-http`（`127.0.0.1:7897`），不匹配规则的流量走直连（`route.final = "direct"`）。
+
+#### 关键发现
+
+容器日志中 **MARKET 和 FUNDAMENTAL Agent 直连 DeepSeek 没有报错**，只有走代理的 Agent 报 `APIConnectionError`。
+
+> **结论：DeepSeek API（`api.deepseek.com`）在国内可以直连，容器内不需要梯子。**
+
+---
+
+### 四、最终解决方案
+
+#### 问题本质
+
+旧镜像里 `proxy.py` 硬编码了默认代理地址，容器内 `127.0.0.1` 指向容器自己，这些端口上没有任何代理服务：
+
+```python
+NEWS_PROXY      = os.getenv("NEWS_PROXY",      "http://127.0.0.1:7898")
+REASONER_PROXY  = os.getenv("REASONER_PROXY",  "http://127.0.0.1:7900")
+LLM_PROXY       = os.getenv("LLM_PROXY",       "http://127.0.0.1:7899")
+```
+
+#### 解决方法
+
+在 `docker-compose.yml` 的 `environment` 中设空值覆盖默认值：
+
+```yaml
+environment:
+  - REASONER_PROXY=
+  - NEWS_PROXY=
+  - LLM_PROXY=
+```
+
+所有 6 个 Agent 全部直连 DeepSeek，不再走代理。
+
+#### 额外优化
+
+挂载 `hf_cache` 持久化 HuggingFace 模型缓存：
+
+```yaml
+volumes:
+  - ./hf_cache:/app/hf_cache
+environment:
+  - HF_HOME=/app/hf_cache
+```
+
+用 `cp -r ~/.cache/huggingface/hub ./hf_cache/` 复用本地已有模型，避免每次重建容器时从 HuggingFace 下载。
+
+---
+
+### 五、最终配置清单
+
+| 文件 | 关键内容 |
+|------|---------|
+| `docker-compose.yml` | `build: .`（无 args）；`environment` 中 `*_PROXY=` 全部为空 + `HF_HOME` |
+| `Dockerfile` | `FROM python:3.12-slim-bookworm`；`apt-get install` 无额外配置；`pip install` 走清华源 |
+| `.env` | 仅保留 API Key + 应用配置，**无代理行** |
+
+---
+
+### 六、重要备忘
+
+> 当前运行的镜像是已有的 `alphapilot-alphapilot:latest`。如果改动了项目代码需要重新构建镜像时，因为 Docker daemon 拉不了 Docker Hub，会卡住。用这条命令绕过：
+>
+> ```bash
+> docker compose up -d --force-recreate
+> ```
+>
+> 不加 `--build`，直接用现有镜像启动。等以后网络环境改善或部署到香港服务器，再 `docker compose up --build -d` 重新构建即可。
+
+# 项目亮点:
 
 - 多 Agent 并行架构：market、news、fundamental 可以并行运行，提高整体分析效率。
 - 网络流量隔离：通过 sing-box mixed inbound，把不同 agent 类型的请求拆到不同本地入口，便于调试、限流和后续扩展。
@@ -1142,9 +1302,8 @@ messages 共 12 条
 - 工程稳定性增强：缓解并行请求时单一代理端口拥塞、连接断开、API 不稳定等问题。
 - 可扩展性：后续新增 risk agent、strategy agent、portfolio agent 时，可以继续分配独立模型、代理入口和出口策略。
 - RAG thchology.
-- 
+- <br />
 
 ```
-
 ```
 

@@ -4,6 +4,10 @@ langgraph-supervisor
 langchain-openai
 langchain-google-genai
 langchain-community
+langchain-huggingface
+langchain-core
+sentence-transformers
+faiss-cpu
 yfinance
 pandas
 chromadb
@@ -11,3 +15,9 @@ pydantic
 python-dotenv
 streamlit
 pymupdf
+gradio
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.0
+python-multipart>=0.0.9

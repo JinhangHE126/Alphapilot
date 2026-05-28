@@ -25,3 +25,9 @@ env/
 
 # 本地代理配置示例（不上传）
 alphapilot/config/sing-box.agent.example.json
+
+# 本地持久化数据
+rag_data/
+hf_cache/
+checkpoints/
+data/

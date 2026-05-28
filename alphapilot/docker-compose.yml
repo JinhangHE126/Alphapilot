@@ -1,0 +1,32 @@
+services:
+  alphapilot:
+    build:
+      context: .
+      pull: false
+      args:
+        - HTTP_PROXY=http://host.docker.internal:7897
+        - HTTPS_PROXY=http://host.docker.internal:7897
+        - NO_PROXY=localhost,127.0.0.1,::1
+    container_name: alphapilot-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./rag_data:/app/rag_data
+      - ./data:/app/data
+      - ./checkpoints:/app/checkpoints
+      - ./hf_cache:/app/hf_cache
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/app/hf_cache
+      - REASONER_PROXY=
+      - NEWS_PROXY=
+      - LLM_PROXY=
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
