@@ -21,6 +21,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - HF_HOME=/app/hf_cache
+      - JWT_SECRET=${JWT_SECRET:-change_this_in_prod}
       - REASONER_PROXY=
       - NEWS_PROXY=
       - LLM_PROXY=

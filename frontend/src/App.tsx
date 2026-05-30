@@ -1,0 +1,108 @@
+import { createContext, useContext, useEffect, useState } from "react";
+import { Link, Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
+import AnalyzePage from "./pages/AnalyzePage";
+import AnalysisDetailPage from "./pages/AnalysisDetailPage";
+import DashboardPage from "./pages/DashboardPage";
+import HistoryPage from "./pages/HistoryPage";
+import LoginPage from "./pages/LoginPage";
+import SettingsPage from "./pages/SettingsPage";
+import { clearToken, getMe, hasToken, refreshToken, saveToken } from "./services/api";
+
+interface AuthState {
+  userId: number | null;
+  username: string | null;
+  authed: boolean;
+}
+
+const AuthContext = createContext<{
+  auth: AuthState;
+  setAuth: (s: AuthState) => void;
+  logout: () => void;
+}>({
+  auth: { userId: null, username: null, authed: false },
+  setAuth: () => {},
+  logout: () => {},
+});
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [auth, setAuth] = useState<AuthState>({ userId: null, username: null, authed: hasToken() });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!auth.authed || auth.userId) return;
+    getMe()
+      .then((user) => setAuth({ userId: user.id, username: user.username, authed: true }))
+      .catch(async () => {
+        try {
+          const res = await refreshToken();
+          saveToken(res.access_token);
+          const user = await getMe();
+          setAuth({ userId: user.id, username: user.username, authed: true });
+        } catch {
+          clearToken();
+          setAuth({ userId: null, username: null, authed: false });
+        }
+      });
+  }, [auth.authed, auth.userId]);
+
+  function logout() {
+    clearToken();
+    setAuth({ userId: null, username: null, authed: false });
+    navigate("/login");
+  }
+
+  return <AuthContext.Provider value={{ auth, setAuth, logout }}>{children}</AuthContext.Provider>;
+}
+
+function ProtectedRoute() {
+  const { auth } = useAuth();
+  if (!auth.authed) return <Navigate to="/login" replace />;
+  return <AppShell />;
+}
+
+function AppShell() {
+  const { logout } = useAuth();
+
+  return (
+    <div className="layout">
+      <aside className="sidebar">
+        <h1>AlphaPilot</h1>
+        <nav>
+          <Link to="/">Dashboard</Link>
+          <Link to="/analyze">Analyze</Link>
+          <Link to="/history">History</Link>
+          <Link to="/settings">Settings</Link>
+        </nav>
+        <button className="btn ghost" onClick={logout}>
+          Logout
+        </button>
+      </aside>
+      <main className="content">
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<LoginPage defaultMode="register" />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/analyze" element={<AnalyzePage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/history/:id" element={<AnalysisDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
+  );
+}

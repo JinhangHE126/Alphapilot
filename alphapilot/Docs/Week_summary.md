@@ -1332,6 +1332,83 @@ environment:
 >
 > 不加 `--build`，直接用现有镜像启动。等以后网络环境改善或部署到香港服务器，再 `docker compose up --build -d` 重新构建即可。
 
+# Week 8 Summary — 生产级前端 v2 + 实时系统 + 完整部署流水线
+
+## 完成情况
+
+### 8.1 React + Vite 前端基础框架 ✅
+
+- 使用 React 18 + Vite + TypeScript 搭建前端项目
+- 纯手写 CSS 暗色主题（生产级视觉效果，无第三方 UI 库依赖）
+- 核心布局：侧边栏导航 + 主内容区
+- 路由：Dashboard、Analyze、History、Settings、Login/Register
+- Vite proxy 配置，开发环境自动代理 `/api` 到后端 `:8000`
+- 通过 JWT Bearer Token 认证调用后端 API
+
+### 8.2 实时流式输出 ✅
+
+- 后端新增 `POST /analyze/stream` SSE 接口（及 compare/backtest/alert/optimize 流式变体）
+- 前端 `sse.ts` 基于 fetch + ReadableStream 解析 SSE 事件流
+- AnalyzePage 展示 6 个 Agent 实时进度卡片（Market → Fundamental → News → Risk → Strategy → Recommendation）
+- 每个 Agent 卡片支持 running / done 状态动画 + 内容流式追加
+- 最终报告和推荐建议实时呈现
+
+**注**：计划中提到的 WebSocket 最终采用 SSE 实现。SSE 对「服务端→前端单向推送」场景更简洁，无需额外依赖。
+
+### 8.3 SQLite 持久化 + 分析历史 ✅
+
+- 创建 5 张业务表：users、sessions、messages、analysis_history、analysis_events
+- `/analyze` 和 `/analyze/stream` 接口自动保存分析记录和事件
+- 前端 HistoryPage：分页列表 + 股票代码筛选 + 删除
+- AnalysisDetailPage：查看单次分析的完整事件时间线
+- DashboardPage：总分析数、独立股票数、平均评分、最近活跃时间统计
+- docker-compose.yml 挂载 `./checkpoints` 目录持久化 SQLite 文件
+
+### 8.4 用户画像管理 + 认证 ✅
+
+- 完整 JWT 认证体系：register / login / refresh / me
+- 新增 `GET /profile` 和 `PUT /profile` API 路由
+- 用户画像字段：risk_preference（low/medium/high）、horizon（short/medium/long）
+- 前端 SettingsPage：下拉框选择风险偏好和投资周期，保存后立即生效
+- 分析时自动加载用户画像注入 LangGraph 工作流，实现个性化推荐
+- LoginPage 支持登录/注册双模式切换
+
+### 8.5 CI/CD + 项目收尾 ✅
+
+- **CI** (`.github/workflows/ci.yml`)：
+  - 后端：Ruff Lint + Pytest
+  - 前端：ESLint + TypeScript 类型检查 + Vitest 测试 + Vite Build
+  - 触发条件：PR / push main & dev
+- **CD** (`.github/workflows/cd.yml`)：
+  - Quality gate → Docker build 前后端镜像 → 推送 GHCR → SSH 远程部署
+  - Nginx 前端镜像 + FastAPI 后端镜像独立构建
+- **README.md** 重写为完整项目文档（技术栈、快速开始、架构图、API 表、项目结构）
+- 部署脚本 `deploy/` 目录（deploy.sh、docker-compose.prod.yml、环境变量模板）
+
+## 技术决策
+
+| 决策 | 方案 | 理由 |
+|------|------|------|
+| 前端样式方案 | 纯手写 CSS | 项目规模适中，避免 Tailwind 迁移成本 |
+| 实时通信 | SSE 替代 WebSocket | 单向推送场景 SSE 更简洁，无需 ws 库 |
+| 数据库 | SQLite | 单机部署最简单，无需额外数据库服务 |
+| 用户画像存储 | JSON 文件 | 读写频率低，结构灵活，无需改表 |
+| 前端部署 | Docker + Nginx | 与后端统一部署体系，不引入 Vercel 复杂性 |
+
+## 项目最终交付物
+
+- 可对外使用的生产级 Web 应用（React 前端 + FastAPI 后端）
+- 12 个专业 Agent 的多智能体分析系统
+- 实时流式分析体验（SSE 进度卡片）
+- 完整的用户认证 + 画像管理系统
+- SQLite 持久化的分析历史记录
+- GitHub Actions CI/CD 一键部署流水线
+- 完整项目文档（README + 架构 + Week 总结）
+
+
+
+
+
 # 项目亮点:
 
 - 多 Agent 并行架构：market、news、fundamental 可以并行运行，提高整体分析效率。

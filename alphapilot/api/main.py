@@ -1,24 +1,56 @@
+import sqlite3
+import json
 import sys
 from pathlib import Path
+from typing import Any, List, Optional
+import os
+import time
+import uuid
+import logging
+
+import jwt
+import uvicorn
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-import uvicorn
-import os
-
-from graph.workflow import app as langgraph_app
+from api.response import error, success
+from db.models import init_db
+from db.repository import (
+    add_analysis_event,
+    add_message,
+    authenticate_user,
+    complete_analysis_record,
+    create_analysis_record,
+    create_session,
+    create_user,
+    delete_analysis_record,
+    get_analysis_detail,
+    get_analysis_events,
+    get_session,
+    get_user_stats,
+    list_analysis_history,
+    list_messages,
+    list_sessions,
+)
 from graph.state import GraphState
-from graph.user_profile import load_user_profile
-from agents.comparison_agent import comparison_agent
-from agents.backtesting_agent import backtesting_agent
-from agents.alert_agent import alert_agent
-from agents.portfolio_optimization_agent import portfolio_optimization_agent
+from graph.user_profile import load_user_profile, save_user_profile
+from services.auth_service import create_access_token, decode_access_token
+
+JWT_SECRET = os.getenv("JWT_SECRET", "change_this_in_prod")
+auth_scheme = HTTPBearer()
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format='{"ts":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}',
+)
+logger = logging.getLogger("alphapilot.api")
+allowed_origins = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
 
 # ====================== FastAPI 应用 ======================
 api = FastAPI(
@@ -30,146 +62,434 @@ api = FastAPI(
 # CORS 支持（允许前端调用）
 api.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境建议改为具体域名
+    allow_origins=allowed_origins if allowed_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+@api.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    started = time.time()
+    response = await call_next(request)
+    elapsed_ms = int((time.time() - started) * 1000)
+    response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "request path=%s method=%s status=%s request_id=%s duration_ms=%s",
+        request.url.path,
+        request.method,
+        response.status_code,
+        request_id,
+        elapsed_ms,
+    )
+    return response
+
+@api.on_event("startup")
+def startup_event() -> None:
+    init_db()
+
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict[str, Any]:
+    token = credentials.credentials
+    try:
+        payload = decode_access_token(token, JWT_SECRET)
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+    return {
+        "id": int(payload["sub"]),
+        "username": payload.get("username", ""),
+    }
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=8, max_length=128)
+    display_name: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 class AnalyzeRequest(BaseModel):
     message: str
     stock_symbol: Optional[str] = "TSLA"
-    user_id: Optional[str] = "default"
+    session_id: Optional[str] = None
+
+class AnalyzeStreamRequest(BaseModel):
+    message: str
+    stock_symbol: Optional[str] = "TSLA"
+    session_id: Optional[str] = None
 
 class CompareRequest(BaseModel):
     stock_symbols: List[str] = ["TSLA", "NVDA"]
-    user_id: Optional[str] = "default"
+
+class CompareStreamRequest(BaseModel):
+    stock_symbols: List[str] = ["TSLA", "NVDA"]
 
 class BacktestRequest(BaseModel):
     stock_symbol: str = "TSLA"
     strategy_desc: Optional[str] = ""
-    user_id: Optional[str] = "default"
 
 class AlertRequest(BaseModel):
     stock_symbol: str = "TSLA"
     condition: Optional[str] = ""
-    user_id: Optional[str] = "default"
 
 class OptimizeRequest(BaseModel):
     stock_symbols: List[str] = ["TSLA", "NVDA", "AAPL"]
     risk_preference: Optional[str] = "medium"
-    user_id: Optional[str] = "default"
+
+class ProfileUpdateRequest(BaseModel):
+    risk_preference: Optional[str] = None
+    horizon: Optional[str] = None
+    display_name: Optional[str] = None
+
+class SessionCreateRequest(BaseModel):
+    title: Optional[str] = "New Session"
+
+
+@api.post("/auth/register")
+async def register(request: RegisterRequest):
+    try:
+        user = create_user(request.username, request.password)
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Username already exists") from exc
+    token = create_access_token(user, JWT_SECRET)
+    return success({"user_id": user["id"], "username": user["username"], "access_token": token, "token_type": "bearer"})
+
+
+@api.post("/auth/login")
+async def login(request: LoginRequest):
+    user = authenticate_user(request.username, request.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = create_access_token(user, JWT_SECRET)
+    return success({"access_token": token, "token_type": "bearer", "user_id": user["id"], "username": user["username"]})
+
+
+@api.post("/auth/refresh")
+async def refresh_token(current_user: dict[str, Any] = Depends(get_current_user)):
+    token = create_access_token(current_user, JWT_SECRET)
+    return success({"access_token": token, "token_type": "bearer"})
+
+
+@api.get("/auth/me")
+async def get_me(current_user: dict[str, Any] = Depends(get_current_user)):
+    return success({"id": current_user["id"], "username": current_user["username"]})
+
+
+@api.post("/sessions")
+async def create_user_session(
+    request: SessionCreateRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    session = create_session(current_user["id"], title=request.title or "New Session")
+    return success(session)
+
+
+@api.get("/sessions")
+async def get_user_sessions(current_user: dict[str, Any] = Depends(get_current_user)):
+    return success(list_sessions(current_user["id"]))
+
+
+@api.get("/sessions/{session_id}/messages")
+async def get_session_messages(session_id: str, current_user: dict[str, Any] = Depends(get_current_user)):
+    session = get_session(session_id, current_user["id"])
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    messages = list_messages(session_id, current_user["id"])
+    return success({"session": session, "messages": messages})
+
 
 @api.post("/analyze")
-async def analyze(request: AnalyzeRequest):
+async def analyze(request: AnalyzeRequest, current_user: dict[str, Any] = Depends(get_current_user)):
     """核心分析接口"""
-    initial_state = {
-        "stock_symbol": request.stock_symbol,
-        "messages": [{"role": "user", "content": request.message}],
+    from services.analysis_service import run_analysis_once
+
+    session = None
+    if request.session_id:
+        session = get_session(request.session_id, current_user["id"])
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+    else:
+        session = create_session(current_user["id"], title=request.message[:60] or "New Session")
+    session_id = session["id"]
+    thread_id = f"user_{current_user['id']}_{session_id}"
+
+    add_message(session_id, "user", request.message, node_name="user_input")
+    result = run_analysis_once(
+        user_message=request.message,
+        stock_symbol=request.stock_symbol or "TSLA",
+        user_id=str(current_user["id"]),
+        thread_id=thread_id,
+    )
+    add_message(session_id, "assistant", result["final_report"], node_name="recommendation_agent")
+
+    return success({
+        "session_id": session_id,
+        "stock_symbol": request.stock_symbol or "TSLA",
+        "report": result["final_report"],
+        "recommendation": result["recommendation"],
+    })
+
+@api.post("/analyze/stream")
+async def analyze_stream(request: AnalyzeStreamRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import stream_analysis_events
+
+    session = None
+    if request.session_id:
+        session = get_session(request.session_id, current_user["id"])
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+    else:
+        session = create_session(current_user["id"], title=request.message[:60] or "New Session")
+    session_id = session["id"]
+    thread_id = f"user_{current_user['id']}_{session_id}"
+
+    add_message(session_id, "user", request.message, node_name="user_input")
+
+    def event_generator():
+        final_payload = {"final_report": "分析完成", "recommendation": None}
+        stream = stream_analysis_events(
+            user_message=request.message,
+            stock_symbol=request.stock_symbol or "TSLA",
+            user_id=str(current_user["id"]),
+            thread_id=thread_id,
+            session_id=session_id,
+        )
+        while True:
+            try:
+                event = next(stream)
+                if event.startswith("event: analysis_complete"):
+                    data_line = event.split("\n")[1]
+                    payload = data_line.replace("data: ", "", 1).strip()
+                    final_payload = json.loads(payload)
+                yield event
+            except StopIteration as stop:
+                if isinstance(stop.value, dict):
+                    final_payload = stop.value
+                break
+            except Exception as exc:
+                yield f"event: error\ndata: {{\"detail\": \"{str(exc)}\"}}\n\n"
+                break
+
+        add_message(
+            session_id,
+            "assistant",
+            final_payload.get("final_report", "分析完成"),
+            node_name="recommendation_agent",
+        )
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
     }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
-    config = {"configurable": {"thread_id": f"api_{request.user_id}_{os.urandom(4).hex()}"}}
-
-    result = {}
-    for chunk in langgraph_app.stream(initial_state, config=config, stream_mode="updates"):
-        for node_name, update in chunk.items():
-            if "final_report" in update and update.get("final_report"):
-                result["final_report"] = update["final_report"]
-            if node_name == "recommendation_agent" and update.get("messages"):
-                result["recommendation"] = update["messages"][-1].content if hasattr(update["messages"][-1], "content") else str(update["messages"][-1])
-
-    return {
-        "status": "success",
-        "stock_symbol": request.stock_symbol,
-        "report": result.get("final_report", "分析完成"),
-        "recommendation": result.get("recommendation")
-    }
 
 @api.post("/compare")
-async def compare(request: CompareRequest):
-    symbols_str = ", ".join(request.stock_symbols)
-    message = f"请对比分析以下股票: {symbols_str}，包括技术面、基本面、新闻情绪和投资建议的全面对比"
+async def compare(request: CompareRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import run_comparison_once
 
-    initial_state: GraphState = {
-        "stock_symbol": request.stock_symbols[0],
-        "messages": [{"role": "user", "content": message}],
-        "user_profile": load_user_profile(request.user_id),
-    }
+    result = run_comparison_once(request.stock_symbols, str(current_user["id"]))
+    return success(result)
 
-    result = comparison_agent(initial_state)
-    messages = result.get("messages", [])
-    content = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1]) if messages else "对比分析完成"
 
-    return {
-        "status": "success",
-        "stock_symbols": request.stock_symbols,
-        "comparison_report": content
-    }
+@api.post("/compare/stream")
+async def compare_stream(request: CompareStreamRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import stream_analysis_events
+
+    message = f"请对比分析以下股票: {', '.join(request.stock_symbols)}"
+
+    def event_generator():
+        for event in stream_analysis_events(
+            user_message=message,
+            stock_symbol=request.stock_symbols[0],
+            user_id=str(current_user["id"]),
+            thread_id=f"compare_{current_user['id']}",
+            session_id="",
+        ):
+            yield event
+
+    headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 @api.post("/backtest")
-async def backtest(request: BacktestRequest):
+async def backtest(request: BacktestRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import run_backtest_once
+
+    result = run_backtest_once(request.stock_symbol, request.strategy_desc or "", str(current_user["id"]))
+    return success(result)
+
+
+@api.post("/backtest/stream")
+async def backtest_stream(request: BacktestRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import stream_analysis_events
+
     desc = request.strategy_desc or f"对 {request.stock_symbol} 的策略进行历史回测"
-    message = f"请对 {request.stock_symbol} 进行历史回测分析。策略描述: {desc}。请输出总收益、年化收益、夏普比率、最大回撤、胜率等关键指标"
+    message = f"请对 {request.stock_symbol} 进行历史回测分析。策略描述: {desc}"
 
-    initial_state: GraphState = {
-        "stock_symbol": request.stock_symbol,
-        "messages": [{"role": "user", "content": message}],
-    }
+    def event_generator():
+        for event in stream_analysis_events(
+            user_message=message,
+            stock_symbol=request.stock_symbol,
+            user_id=str(current_user["id"]),
+            thread_id=f"backtest_{current_user['id']}",
+            session_id="",
+        ):
+            yield event
 
-    result = backtesting_agent(initial_state)
-    messages = result.get("messages", [])
-    content = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1]) if messages else "回测分析完成"
-
-    return {
-        "status": "success",
-        "stock_symbol": request.stock_symbol,
-        "backtest_report": content
-    }
+    headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 @api.post("/alert")
-async def alert(request: AlertRequest):
-    cond = request.condition or f"监控 {request.stock_symbol} 的价格、RSI、MACD 等关键技术指标，如有异常请触发警报"
+async def alert(request: AlertRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import run_alert_once
+
+    result = run_alert_once(request.stock_symbol, request.condition or "", str(current_user["id"]))
+    return success(result)
+
+
+@api.post("/alert/stream")
+async def alert_stream(request: AlertRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import stream_analysis_events
+
+    cond = request.condition or f"监控 {request.stock_symbol} 的价格、RSI、MACD 等关键技术指标"
     message = f"请对 {request.stock_symbol} 进行实时监控。触发条件: {cond}"
 
-    initial_state: GraphState = {
-        "stock_symbol": request.stock_symbol,
-        "messages": [{"role": "user", "content": message}],
-    }
+    def event_generator():
+        for event in stream_analysis_events(
+            user_message=message,
+            stock_symbol=request.stock_symbol,
+            user_id=str(current_user["id"]),
+            thread_id=f"alert_{current_user['id']}",
+            session_id="",
+        ):
+            yield event
 
-    result = alert_agent(initial_state)
-    messages = result.get("messages", [])
-    content = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1]) if messages else "警报分析完成"
-
-    return {
-        "status": "success",
-        "stock_symbol": request.stock_symbol,
-        "alert_report": content
-    }
+    headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 @api.post("/optimize")
-async def optimize(request: OptimizeRequest):
+async def optimize(request: OptimizeRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import run_optimize_once
+
+    result = run_optimize_once(request.stock_symbols, request.risk_preference or "medium", str(current_user["id"]))
+    return success(result)
+
+
+@api.post("/optimize/stream")
+async def optimize_stream(request: OptimizeRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    from services.analysis_service import stream_analysis_events
+
     symbols_str = ", ".join(request.stock_symbols)
-    message = f"请对以下投资组合进行优化: {symbols_str}。风险偏好: {request.risk_preference}"
+    message = f"请对以下投资组合进行优化: {symbols_str}。风险偏好: {request.risk_preference or 'medium'}"
 
-    user_profile = load_user_profile(request.user_id)
-    user_profile["risk_preference"] = request.risk_preference
+    def event_generator():
+        for event in stream_analysis_events(
+            user_message=message,
+            stock_symbol=request.stock_symbols[0],
+            user_id=str(current_user["id"]),
+            thread_id=f"optimize_{current_user['id']}",
+            session_id="",
+        ):
+            yield event
 
-    initial_state: GraphState = {
-        "stock_symbol": request.stock_symbols[0],
-        "messages": [{"role": "user", "content": message}],
-        "user_profile": user_profile,
-    }
+    headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
-    result = portfolio_optimization_agent(initial_state)
-    messages = result.get("messages", [])
-    content = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1]) if messages else "组合优化完成"
+@api.get("/history")
+async def get_history(
+    page: int = 1,
+    page_size: int = 20,
+    stock_symbol: Optional[str] = None,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    items, total = list_analysis_history(
+        current_user["id"],
+        page=page,
+        page_size=page_size,
+        stock_symbol=stock_symbol,
+    )
+    return success({"items": items, "total": total, "page": page, "page_size": page_size})
 
-    return {
-        "status": "success",
-        "stock_symbols": request.stock_symbols,
-        "risk_preference": request.risk_preference,
-        "optimization_report": content
-    }
+
+@api.get("/history/{analysis_id}")
+async def get_history_detail(analysis_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    record = get_analysis_detail(analysis_id, current_user["id"])
+    if not record:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    events = get_analysis_events(analysis_id)
+    return success({"id": analysis_id, **record, "events": events})
+
+
+@api.delete("/history/{analysis_id}")
+async def delete_history(analysis_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    if not delete_analysis_record(analysis_id, current_user["id"]):
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return success(message="deleted")
+
+
+@api.get("/profile")
+async def get_profile(current_user: dict[str, Any] = Depends(get_current_user)):
+    profile = load_user_profile(str(current_user["id"]))
+    return success({"user_id": current_user["id"], **profile})
+
+@api.put("/profile")
+async def update_profile(
+    request: ProfileUpdateRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    profile = load_user_profile(str(current_user["id"]))
+    if request.risk_preference is not None:
+        profile["risk_preference"] = request.risk_preference
+    if request.horizon is not None:
+        profile["horizon"] = request.horizon
+    if request.display_name is not None:
+        profile["display_name"] = request.display_name
+    save_user_profile(str(current_user["id"]), profile)
+    return success({"user_id": current_user["id"], **profile})
+
+@api.get("/dashboard/stats")
+async def dashboard_stats(current_user: dict[str, Any] = Depends(get_current_user)):
+    stats = get_user_stats(current_user["id"])
+    recent_items, _ = list_analysis_history(current_user["id"], page=1, page_size=5)
+    return success({"stats": stats, "recent_analyses": recent_items})
+
+
+@api.get("/analyze/stream")
+async def analyze_stream_get(
+    message: str,
+    stock_symbol: str = "TSLA",
+    session_id: Optional[str] = None,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from services.analysis_service import stream_analysis_events
+
+    if session_id:
+        session = get_session(session_id, current_user["id"])
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+    else:
+        session = create_session(current_user["id"], title=message[:60] or "New Session")
+        session_id = session["id"]
+
+    def event_generator():
+        for event in stream_analysis_events(
+            user_message=message,
+            stock_symbol=stock_symbol,
+            user_id=str(current_user["id"]),
+            thread_id=f"user_{current_user['id']}_{session_id}",
+            session_id=session_id,
+        ):
+            yield event
+
+    headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+
 
 @api.get("/")
 async def root():
@@ -179,7 +499,12 @@ async def root():
         "description": "多智能体股票投资分析平台 API",
         "endpoints": {
             "health": "GET /health",
+            "register": "POST /auth/register",
+            "login": "POST /auth/login",
+            "sessions": "GET/POST /sessions",
+            "session_messages": "GET /sessions/{session_id}/messages",
             "analyze": "POST /analyze",
+            "analyze_stream": "POST /analyze/stream",
             "compare": "POST /compare",
             "backtest": "POST /backtest",
             "alert": "POST /alert",

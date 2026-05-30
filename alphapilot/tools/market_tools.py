@@ -1,7 +1,8 @@
 import yfinance as yf
 import pandas as pd
 import time
-from yfinance.exceptions import YFRateLimitError   # 新增
+import random
+from yfinance.exceptions import YFRateLimitError
 from config.proxy import get_proxy_for_agent
 # from tools.rag_tools import retrieve_knowledge
 # import time
@@ -14,8 +15,8 @@ from config.proxy import get_proxy_for_agent
 def _download_price_frame(symbol: str):
     """增强版下载函数：更长的指数退避 + jitter + 最终兜底"""
     proxy = get_proxy_for_agent("market")
-    max_retries = 6                    # 增加到 6 次
-    base_backoff = 8                   # 从 8 秒开始（关键！）
+    max_retries = 6
+    base_backoff = 30
 
     for attempt in range(max_retries):
         try:
@@ -62,7 +63,7 @@ def _download_price_frame(symbol: str):
                 return df, ""
         except Exception as exc:
             print(f"   ❌ 最终尝试 {attempt+1} 失败: {exc}")
-            time.sleep(5)
+            time.sleep(10)
 
     return None, "all_attempts_failed"
 

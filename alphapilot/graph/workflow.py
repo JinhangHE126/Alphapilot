@@ -19,9 +19,12 @@ from agents.comparison_agent import comparison_agent
 from agents.recommendation_agent import recommendation_agent
 from agents.portfolio_optimization_agent import portfolio_optimization_agent
 from agents.alert_agent import alert_agent
+from agents.guard_agent import guard_agent
 
 load_dotenv()
 checkpointer = get_checkpointer()
+
+GUARD_MAX_RETRIES = 2
 
 def orchestrator_node(state: GraphState) -> dict:
     """智能 Orchestrator - 支持实时警报模式"""
@@ -59,10 +62,18 @@ def orchestrator_node(state: GraphState) -> dict:
         ]
     )
 
+    is_comprehensive = any(
+        keyword in lower_instruction
+        for keyword in [
+            "全面", "完整", "complete", "comprehensive",
+            "full analysis", "全方位", "全部", "所有"
+        ]
+    )
+
     is_personalized = any(
         keyword in lower_instruction
         for keyword in [
-            "个性化", "personalized", "我的", "给出", "为我",
+            "个性化", "personalized", "我的", "向我", "为我",
             "投资计划", "投资建议", "仓位建议", "风险偏好",
             "保守型", "中线持有", "我的偏好"
         ]
@@ -84,7 +95,19 @@ def orchestrator_node(state: GraphState) -> dict:
         if not isinstance(m, dict)
     )
 
-    if is_alert:
+    guard_check = state.get("guard_check", {})
+    guard_retry = state.get("guard_retry_count", 0)
+    guard_failed = bool(guard_check) and not guard_check.get("is_valid") and guard_retry < GUARD_MAX_RETRIES
+
+    if guard_failed:
+        corrections = guard_check.get("corrections", [])
+        correction_msg = "\n".join(f"- {c}" for c in corrections) if corrections else "Address the identified issues."
+        guard_msg = {"role": "user", "content": f"Guard Agent identified issues:\n{correction_msg}\nPlease fix these and regenerate your analysis."}
+        messages.append(guard_msg)
+        next_agents = ["strategy_expert"]
+        executed = [a for a in executed if a not in ("strategy_expert", "risk_expert", "recommendation_agent", "guard_agent")]
+        reasoning = f"Guard check failed (retry {guard_retry}/{GUARD_MAX_RETRIES}). Re-running strategy → risk → recommendation."
+    elif is_alert:
         if _alert_done:
             next_agents = []
             reasoning = "Alert agent completed. Ending workflow."
@@ -98,7 +121,7 @@ def orchestrator_node(state: GraphState) -> dict:
         else:
             next_agents = ["portfolio_optimization_agent"]
             reasoning = "User requested portfolio optimization → route to portfolio_optimization_agent"
-    elif is_personalized:
+    elif is_personalized and not is_comprehensive:
         if _recommendation_done:
             next_agents = []
             reasoning = "Recommendation agent completed. Ending workflow."
@@ -120,7 +143,17 @@ def orchestrator_node(state: GraphState) -> dict:
             if missing:
                 next_agents = missing
                 break
-        reasoning = "Deterministic full-analysis route."
+
+        if not next_agents and "recommendation_agent" not in executed_set:
+            next_agents = ["recommendation_agent"]
+            reasoning = "Full analysis done. Routing to recommendation for personalized advice."
+        elif not next_agents and "recommendation_agent" in executed_set and "guard_agent" not in executed_set:
+            next_agents = ["guard_agent"]
+            reasoning = "Recommendation complete. Routing to Guard Agent for fact-check verification."
+        elif not next_agents:
+            reasoning = "Guard verification passed. Analysis pipeline complete."
+        else:
+            reasoning = "Deterministic full-analysis route."
 
     print("\n🎛️ Orchestrator Decision:")
     print(f"   User Instruction: {user_instruction[:80]}...")
@@ -131,11 +164,14 @@ def orchestrator_node(state: GraphState) -> dict:
     if not next_agents:
         return {"next": "__end__", "orchestrator_reasoning": reasoning}
 
-    return {
+    result = {
         "next": next_agents,
         "executed_agents": executed + next_agents,
         "orchestrator_reasoning": reasoning,
     }
+    if guard_failed:
+        result["guard_check"] = {}
+    return result
 # ====================== StateGraph ======================
 workflow = StateGraph(GraphState)
 
@@ -150,7 +186,8 @@ workflow.add_node("comparison_agent", comparison_agent)
 workflow.add_node("alert_agent", alert_agent)
 workflow.add_node("recommendation_agent", recommendation_agent)
 workflow.add_node("orchestrator", orchestrator_node)
-workflow.add_node("portfolio_optimization_agent", portfolio_optimization_agent)   # 新增：Portfolio优化Agent
+workflow.add_node("portfolio_optimization_agent", portfolio_optimization_agent)
+workflow.add_node("guard_agent", guard_agent)
 
 workflow.add_edge(START, "orchestrator")
 
@@ -169,6 +206,7 @@ workflow.add_conditional_edges(
         "alert_agent": "alert_agent",
         "recommendation_agent": "recommendation_agent",
         "portfolio_optimization_agent": "portfolio_optimization_agent",
+        "guard_agent": "guard_agent",
         "__end__": END,
     },
 )
@@ -183,10 +221,24 @@ for agent in [
     "backtesting_agent",
     "alert_agent",
     "comparison_agent",
-    "portfolio_optimization_agent",   # 新增：Portfolio优化Agent
+    "portfolio_optimization_agent",
     "recommendation_agent",
 ]:
     workflow.add_edge(agent, "orchestrator")
+
+workflow.add_conditional_edges(
+    "guard_agent",
+    lambda state: (
+        "__end__"
+        if state.get("guard_check", {}).get("is_valid")
+        or state.get("guard_retry_count", 0) >= GUARD_MAX_RETRIES
+        else "orchestrator"
+    ),
+    {
+        "orchestrator": "orchestrator",
+        "__end__": END,
+    },
+)
 
 app = workflow.compile(checkpointer=checkpointer)
 

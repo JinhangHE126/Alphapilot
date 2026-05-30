@@ -1,0 +1,37 @@
+services:
+  api:
+    image: ${BACKEND_IMAGE}
+    container_name: alphapilot-api
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/app/hf_cache
+      - JWT_SECRET=${JWT_SECRET}
+      - APP_DB_PATH=/app/checkpoints/app.db
+    volumes:
+      - ./runtime/rag_data:/app/rag_data
+      - ./runtime/data:/app/data
+      - ./runtime/checkpoints:/app/checkpoints
+      - ./runtime/hf_cache:/app/hf_cache
+      - ./runtime/backups:/app/backups
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    container_name: alphapilot-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+
