@@ -1,4 +1,4 @@
-from typing import TypedDict, Annotated, Any, NotRequired
+from typing import TypedDict, Annotated, Any, NotRequired, Optional
 from langgraph.graph import add_messages
 from langchain_core.messages import BaseMessage
 
@@ -8,6 +8,10 @@ class GraphState(TypedDict):
     
     # 基础输入
     stock_symbol: str                      # 股票代码，例如 "TSLA" 或 "0700.HK"
+
+    # === Evidence Packet（v4 防幻觉核心）===
+    evidence_packet: NotRequired[Optional[dict]]
+    cold_start: NotRequired[bool]
     
     # 各 Agent 的输出结果（便于后续 Strategy Agent 汇总）
     market_data: Annotated[str, "market_data_expert output"] = ""

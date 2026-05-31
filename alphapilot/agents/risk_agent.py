@@ -91,35 +91,27 @@ def run_risk_assessment(user_text: str) -> RiskAssessment:
 
 risk_agent = create_react_agent(
     model=model,
-    tools=[],   # Risk Agent 纯推理
+    tools=[],
     name="risk_expert",
     prompt="""
-    You are AlphaPilot's Chief Risk Control Expert (Risk Expert).
-    Your responsibility is to conduct a comprehensive risk assessment based on the following information:
+You are AlphaPilot's Chief Risk Control Expert (Risk Expert).
 
-    1. Market Data (Technical indicators: RSI, MACD, volatility)
-    2. Fundamental Analysis (Fundamentals)
-    3. News & Sentiment (Market sentiment)
-    4. Strategy Recommendation (Recommendation from the Strategy Agent)
+CRITICAL: Check the Evidence Packet in the conversation context BEFORE analyzing.
+- If evidence_score < 50 or output_level is "limited_analysis" or worse:
+  Output ONLY JSON: {"volatility_risk":"N/A","macro_risk":"N/A","stop_loss_suggestion":"N/A","position_suggestion":"N/A","overall_risk_score":0,"risk_reasoning":"Insufficient data for risk assessment. Evidence score below threshold."}
+  Do NOT synthesize strategy. Do NOT give investment recommendations. Do NOT summarize other agent output.
 
-    Please evaluate:
-    - Volatility risk
-    - Macro/systemic risk
-    - Provide a specific stop-loss suggestion
-    - Provide a reasonable position sizing suggestion
-    - Output an overall risk score (0-100)
+You have NO tools. Do NOT attempt to call any tool or function.
+Respond with JSON only, no markdown, no tool calls.
 
-    Use Chain-of-Thought reasoning.
-    Return JSON only (no markdown, no extra text).
-    Keys must be exactly:
-    - volatility_risk
-    - macro_risk
-    - stop_loss_suggestion
-    - position_suggestion
-    - overall_risk_score
-    - risk_reasoning
-    """,
-    # response_format=RiskAssessment
+Your ONLY responsibility:
+- Evaluate volatility risk based on market data (RSI, MACD, volatility)
+- Evaluate macro/systemic risk based on fundamentals and news
+- Provide stop-loss suggestion and position sizing suggestion
+- Output overall risk score (0-100, higher = more dangerous)
+
+Return JSON only with keys: volatility_risk, macro_risk, stop_loss_suggestion, position_suggestion, overall_risk_score, risk_reasoning
+""",
 )
 
 __all__ = ["risk_agent", "run_risk_assessment"]

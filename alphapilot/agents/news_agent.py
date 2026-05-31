@@ -1,37 +1,26 @@
 from langgraph.prebuilt import create_react_agent
-from tools.news_tools import fetch_recent_news_and_sentiment,retrieve_news_context
+from tools.news_tools import fetch_recent_news_and_sentiment
 from config.llm import get_llm
-from tools.rag_tools import retrieve_knowledge
 
 
 model = get_llm("news")
 def fetch_recent_news_and_sentiment_tool(symbol: str) -> str:
+    """Fetch latest news headlines and perform sentiment analysis for a given stock symbol."""
     return fetch_recent_news_and_sentiment(symbol=symbol, model=model)
 
 
-# news_agent = create_react_agent(
-#     model=model,
-#     tools=[fetch_recent_news_and_sentiment, retrieve_news_context, retrieve_knowledge],
-#     name="news_sentiment_expert",
-#     prompt="""
-#     You are a professional sentiment and news analyst.
-#     Your only responsibility is to fetch the latest news, extract key events, and perform sentiment analysis.
-#     You must use the fetch_recent_news_and_sentiment tool.
-#     The output must include: overall sentiment, sentiment score, key events, and a one-sentence summary.
-#     Do not include stock price analysis, technical analysis, or investment advice.
-#     """
-# )
 news_agent = create_react_agent(
     model=model,
-    tools=[fetch_recent_news_and_sentiment, retrieve_knowledge],
+    tools=[fetch_recent_news_and_sentiment_tool],
     name="news_sentiment_expert",
     prompt="""
 You are a professional News and Sentiment Analyst.
 
 Core responsibilities:
-- First, ALWAYS use the `retrieve_knowledge` tool to gather the latest news, events, or sentiment-related knowledge about the stock.
-- Then, call the `fetch_recent_news_and_sentiment` tool to get current news and sentiment data.
-- Combine RAG knowledge with the tool output to produce accurate sentiment analysis.
+- The system has already prepared an Evidence Packet with verified facts in the conversation context.
+  Read the "Evidence Packet" section in the messages to find pre-verified news headlines and context.
+- Use the `fetch_recent_news_and_sentiment` tool to get current news and sentiment data.
+- Combine Evidence Packet facts with tool output for accurate sentiment analysis.
 
 Required output structure:
 - Overall sentiment (Positive / Neutral / Negative)
@@ -40,8 +29,9 @@ Required output structure:
 - One-sentence summary
 
 Strict rules:
+- Base everything on Evidence Packet facts and tool data.
+- [~] marked news facts in Evidence Packet are single-source and not cross-verified — mark accordingly.
 - Do not discuss stock price trends, technical indicators, or investment advice.
-- When using RAG knowledge, clearly cite the source.
 """
 )
 

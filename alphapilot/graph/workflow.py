@@ -1,4 +1,5 @@
 from typing import Any
+from datetime import date
 
 from dotenv import load_dotenv
 from langgraph.graph import START, END, StateGraph
@@ -7,6 +8,18 @@ from langchain_core.messages import HumanMessage
 from graph.state import GraphState
 from graph.checkpointer import get_checkpointer
 from graph.user_profile import load_user_profile
+
+from schemas.evidence_packet import (
+    EvidencePacket,
+    Fact,
+    MissingField,
+    Coverage,
+    compute_evidence_score,
+    determine_output_level,
+    render_packet_for_agent,
+)
+from tools.data_collector import collect_all
+from rag.retriever import retriever
 
 from agents.market_agent import market_agent
 from agents.fundamental_agent import fundamental_agent
@@ -25,6 +38,140 @@ load_dotenv()
 checkpointer = get_checkpointer()
 
 GUARD_MAX_RETRIES = 2
+
+RAG_SCORE_THRESHOLD = 0.55
+
+
+def evidence_packet_builder(state: GraphState) -> dict:
+    """
+    在 Orchestrator 路由前构造 Evidence Packet。
+    1. RAG 检索（带 score）
+    2. 判断冷启动条件
+    3. 必要时调用外部数据工具
+    4. 构造 Evidence Packet
+    5. 写入 state.evidence_packet
+    """
+    symbol = state.get("stock_symbol", "")
+    messages = state.get("messages", [])
+
+    user_instruction = next(
+        (
+            m.get("content", "") if isinstance(m, dict) else getattr(m, "content", "")
+            for m in messages
+            if (isinstance(m, dict) and m.get("role") == "user")
+            or isinstance(m, HumanMessage)
+        ),
+        "Please perform comprehensive analysis",
+    )
+
+    today = date.today().isoformat()
+    query = f"{symbol} {user_instruction[:200]}"
+
+    rag_results = retriever.retrieve_with_scores(query, k=5)
+
+    matched_rag = [
+        r for r in rag_results
+        if r.metadata.get("symbol", "").upper() == symbol.upper()
+    ]
+    mismatched_count = len(rag_results) - len(matched_rag)
+    if mismatched_count > 0:
+        print(f"   ⚠️ {mismatched_count} RAG results filtered out (symbol mismatch with {symbol})")
+
+    is_cold_start = False
+    rag_facts = []
+
+    if matched_rag:
+        top_score = matched_rag[0].score
+        has_metadata = any(
+            r.metadata.get("symbol") or r.metadata.get("source") for r in matched_rag
+        )
+        if top_score < RAG_SCORE_THRESHOLD or not has_metadata:
+            is_cold_start = True
+    else:
+        is_cold_start = True
+
+    if not is_cold_start:
+        for r in matched_rag[:5]:
+            rag_facts.append({
+                "field": "rag_context",
+                "value": r.doc.page_content[:300],
+                "unit": "text",
+                "period": "latest",
+                "source": r.metadata.get("source", "rag"),
+                "source_url": r.metadata.get("url"),
+                "as_of_date": r.metadata.get("date", today),
+                "confidence": min(r.score, 0.75),
+                "confidence_tier": "llm_extracted",
+            })
+
+    collector_results = {}
+    if is_cold_start:
+        collector_results = collect_all(symbol)
+
+    market_facts_raw = collector_results.get("market", []) if is_cold_start else []
+    fundamental_facts_raw = collector_results.get("fundamental", []) if is_cold_start else []
+    news_facts_raw = collector_results.get("news", []) if is_cold_start else []
+
+    all_facts_raw = rag_facts + market_facts_raw + fundamental_facts_raw + news_facts_raw
+
+    facts = []
+    for f in all_facts_raw:
+        try:
+            facts.append(Fact(**f))
+        except Exception:
+            continue
+
+    has_fundamental = bool(fundamental_facts_raw)
+    coverage = Coverage(
+        rag_context="available" if rag_facts else "missing",
+        market_data="available" if market_facts_raw else "missing",
+        fundamental_data="available" if has_fundamental else "missing",
+        news_data="available" if news_facts_raw else "missing",
+        filings="missing",
+    )
+
+    expected_fields = {
+        "comprehensive_analysis": ["current_price", "rsi_14", "pe_ratio", "revenue_growth_yoy", "eps_growth_yoy", "market_cap", "news_headline"],
+    }
+    existing_keys = {f.field for f in facts}
+    missing_fields = []
+    for field in expected_fields.get("comprehensive_analysis", []):
+        if field not in existing_keys:
+            missing_fields.append(MissingField(field=field, reason="not available from current data sources"))
+
+    packet = EvidencePacket(
+        symbol=symbol,
+        company_name="",
+        generated_at=today,
+        as_of_date=today,
+        request_type="comprehensive_analysis",
+        is_cold_start=is_cold_start,
+        coverage=coverage,
+        facts=facts,
+        missing_fields=missing_fields,
+        conflicts=[],
+    )
+    packet = compute_evidence_score(packet)
+    guard_result = determine_output_level(packet)
+    packet.allowed_output_level = guard_result.allowed_output_level
+
+    rendered = render_packet_for_agent(packet)
+
+    print(f"\n📦 Evidence Packet Builder:")
+    print(f"   Symbol: {symbol}")
+    print(f"   Cold Start: {is_cold_start}")
+    print(f"   RAG Results: {len(rag_results)}")
+    print(f"   Facts: {len(facts)}")
+    print(f"   Evidence Score: {packet.evidence_score}/100")
+    print(f"   Output Level: {guard_result.allowed_output_level.value}")
+    print(f"   Reason: {guard_result.reason}\n")
+
+    return {
+        "evidence_packet": packet.model_dump(),
+        "cold_start": is_cold_start,
+        "messages": [{"role": "system", "content": rendered}],
+    }
+
 
 def orchestrator_node(state: GraphState) -> dict:
     """智能 Orchestrator - 支持实时警报模式"""
@@ -144,6 +291,18 @@ def orchestrator_node(state: GraphState) -> dict:
                 next_agents = missing
                 break
 
+        stage0_agents = {"market_data_expert", "fundamental_expert", "news_sentiment_expert"}
+        stage0_done = stage0_agents.issubset(executed_set)
+        if stage0_done and next_agents == ["strategy_expert"]:
+            ep = state.get("evidence_packet", {})
+            evidence_score = ep.get("evidence_score", 0) if ep else 0
+            if evidence_score < 50 and "guard_agent" not in executed_set:
+                next_agents = ["guard_agent"]
+                reasoning = (
+                    f"Evidence score {evidence_score}/100 < 50 after data collection. "
+                    f"Skipping strategy→risk→portfolio→backtest→recommendation. Routing to Guard."
+                )
+
         if not next_agents and "recommendation_agent" not in executed_set:
             next_agents = ["recommendation_agent"]
             reasoning = "Full analysis done. Routing to recommendation for personalized advice."
@@ -189,7 +348,10 @@ workflow.add_node("orchestrator", orchestrator_node)
 workflow.add_node("portfolio_optimization_agent", portfolio_optimization_agent)
 workflow.add_node("guard_agent", guard_agent)
 
-workflow.add_edge(START, "orchestrator")
+workflow.add_node("evidence_packet_builder", evidence_packet_builder)
+
+workflow.add_edge(START, "evidence_packet_builder")
+workflow.add_edge("evidence_packet_builder", "orchestrator")
 
 workflow.add_conditional_edges(
     "orchestrator",

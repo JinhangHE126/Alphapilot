@@ -4,6 +4,15 @@ from typing import List, Dict, Any
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
+from dataclasses import dataclass, field
+
+
+@dataclass
+class FactDocument:
+    doc: Document
+    score: float
+    metadata: dict = field(default_factory=dict)
+
 
 # ====================== 配置 ======================
 EMBEDDING_MODEL_NAME = os.getenv(
@@ -104,6 +113,26 @@ class RagRetriever:
         if not self.vectorstore:
             return []
         return self.vectorstore.similarity_search(query, k=k)
+
+    def retrieve_with_scores(self, query: str, k: int = 5) -> List[FactDocument]:
+        """返回带相似度分数的检索结果。"""
+        if not self.vectorstore:
+            return []
+        docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k)
+        results = []
+        for doc, score in docs_with_scores:
+            fact = FactDocument(
+                doc=doc,
+                score=round(float(score), 4),
+                metadata={
+                    "symbol": doc.metadata.get("symbol", ""),
+                    "source": doc.metadata.get("source", "unknown"),
+                    "date": doc.metadata.get("date", ""),
+                    "type": doc.metadata.get("type", ""),
+                },
+            )
+            results.append(fact)
+        return results
 
     def query(self, query_text: str, n_results: int = 3) -> List[str]:
         """返回纯文本列表（兼容原有 tools/rag_tools.py）"""

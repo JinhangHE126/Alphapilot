@@ -5,19 +5,14 @@ load_dotenv()
 from langgraph.prebuilt import create_react_agent
 from tools.fundamental_tools import analyze_fundamental_request
 from config.llm import get_llm
-from tools.rag_tools import retrieve_knowledge
 
 model = get_llm('fundamental')
-
-# def analyze_fundamental_request_tool(symbol: str, user_query: str = ""):
-#     """Analyze a company's fundamental data from report PDF."""
-#     return analyze_fundamental_request(symbol=symbol, user_query=user_query, model=model)
 
 def analyze_fundamental_request_tool(
     symbol: str, 
     user_query: str = "", 
     model=None
-) -> str:                                      # ← 改成 str（最稳）
+) -> str:
     """Tool wrapper for fundamental analysis"""
     try:
         return analyze_fundamental_request(
@@ -28,37 +23,18 @@ def analyze_fundamental_request_tool(
     except Exception as e:
         return f"Fundamental analysis failed: {str(e)}"
 
-# fundamental_agent = create_react_agent(
-#     model=model,
-#     tools=[analyze_fundamental_request_tool, retrieve_knowledge],
-#     name="fundamental_expert",
-#     prompt="""
-#     You are a professional fundamental analyst.
-#     Your only responsibility is to parse the company's latest financial report PDF and provide a clear, professional, structured fundamental analysis.
-#     You must use the analyze_fundamental_request tool.
-#     Always call the tool first, never ask the user for a PDF path.
-#     Pass:
-#     - symbol: inferred stock ticker (e.g., TSLA)
-#     - user_query: full original user message (so tool can auto-detect PDF URL/local path)
-#     The tool already supports:
-#     - PDF URL in user text
-#     - local PDF path in user text
-#     - automatic fallback to local data/reports/{symbol}*.pdf
-#     The output must include: revenue growth, EPS growth, gross margin, net profit margin, key highlights, and a one-sentence summary.
-#     Do not include stock price trends, technical indicators, news, or investment advice.
-#     """
-# )
 fundamental_agent = create_react_agent(
     model=model,
-    tools=[analyze_fundamental_request_tool, retrieve_knowledge],
+    tools=[analyze_fundamental_request_tool],
     name="fundamental_expert",
     prompt="""
 You are a professional Fundamental Analyst.
 
 Core responsibilities:
-- First, ALWAYS use the `retrieve_knowledge` tool to retrieve the latest earnings reports, financial highlights, or analyst notes about the company.
-- Then, call the `analyze_fundamental_request_tool` to get structured fundamental data.
-- Combine RAG knowledge with the tool output for a complete analysis.
+- The system has already prepared an Evidence Packet with verified facts in the conversation context.
+  Read the "Evidence Packet" section in the messages to find pre-verified fundamental data (revenue_growth_yoy, eps_growth_yoy, pe_ratio, market_cap, etc.).
+- Use the `analyze_fundamental_request_tool` ONLY if detailed PDF-based financial report extraction is needed.
+- Combine Evidence Packet facts with tool output for a complete analysis.
 
 Required output elements:
 - Revenue growth (YoY)
@@ -68,9 +44,10 @@ Required output elements:
 - One-sentence fundamental summary
 
 Strict rules:
+- Base everything on Evidence Packet facts and tool data.
+- NEVER fabricate or assume data points not in the Evidence Packet.
+- [~] and [?] marked facts are lower confidence — treat with caution.
 - Do not discuss stock price movement, technical indicators, news, or investment recommendations.
-- Only analyze based on financial data and retrieved RAG knowledge.
-- When using RAG knowledge, clearly cite the source.
 """
 )
 

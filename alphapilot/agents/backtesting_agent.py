@@ -1,28 +1,41 @@
 from langgraph.prebuilt import create_react_agent
 from langchain_core.prompts import ChatPromptTemplate
 from config.llm import get_llm
-from tools.market_tools import fetch_market_data  # 复用已有工具
+from tools.market_tools import fetch_market_data
 
 def backtesting_agent(state):
     """
-    Backtesting Agent - 历史回测与策略表现评估
+    Backtesting Agent - v4 硬拦截版
     """
+    ep = state.get("evidence_packet", {})
+    ep_facts = ep.get("facts", []) if ep else []
+    has_price_data = any(
+        f.get("field") in ("current_price", "price_change_pct") for f in ep_facts
+    )
+    ep_score = ep.get("evidence_score", 0) if ep else 0
+
+    if not has_price_data or ep_score < 50:
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": (
+                    "## Backtesting Report: NOT AVAILABLE\n"
+                    "- Reason: Insufficient historical price data\n"
+                    "- Required: 60+ days of daily OHLCV data"
+                ),
+            }],
+        }
+
     system_prompt = """
 You are Backtesting Agent - AlphaPilot's professional historical backtesting expert.
 
 Your core responsibilities:
-- Conduct historical backtesting based on the investment advice (Buy/Hold/Sell) from the Strategy Agent.
-- Perform simulated trading using real historical price data.
-- Calculate and output the following key metrics:
-  - Total Return / Annualized Return
-  - Sharpe Ratio
-  - Max Drawdown
-  - Win Rate / Profit-to-Loss Ratio
-  - Excess return relative to the benchmark (SPY or the stock itself)
+- Use `fetch_market_data` to retrieve historical price data.
+- Simulate trading based on the Strategy Agent's Buy/Hold/Sell signal.
+- Calculate: Total Return, Annualized Return, Sharpe Ratio, Max Drawdown, Win Rate.
+- Compare against benchmark (SPY or buy-and-hold).
 
-The output format must be clear and structured, and include a brief backtesting conclusion and recommendations.
-
-Use the tool `fetch_market_data` to retrieve historical data.
+Output a structured report. If data insufficient, state clearly.
 """
 
     prompt = ChatPromptTemplate.from_messages([
@@ -31,7 +44,7 @@ Use the tool `fetch_market_data` to retrieve historical data.
     ])
 
     agent = create_react_agent(
-        model=get_llm("backtesting"),   # 你可以先复用 "strategy" 配置
+        model=get_llm("backtesting"),
         tools=[fetch_market_data],
         prompt=prompt,
         name="backtesting_agent"

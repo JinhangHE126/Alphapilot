@@ -1,154 +1,148 @@
 from langgraph.prebuilt import create_react_agent
 from langchain_core.prompts import ChatPromptTemplate
-from tools.rag_tools import retrieve_knowledge
 from config.llm import get_llm
-import json
+from schemas.evidence_packet import (
+    EvidencePacket,
+    determine_output_level,
+    OutputLevel,
+)
 import re
 
 
-def _extract_guard_json(content: str):
-    """Extract JSON from raw LLM output with a couple of robust fallbacks."""
-    if not content:
-        return None
+def _detect_symbol_mismatch(packet_symbol: str, state_symbol: str, facts: list) -> list[str]:
+    """检测标的错配：packet symbol 不一致 或 rag 内容引用其他股票。"""
+    issues = []
+    if packet_symbol.upper() != state_symbol.upper():
+        issues.append(
+            f"Symbol mismatch: evidence packet symbol={packet_symbol} "
+            f"but state stock_symbol={state_symbol}"
+        )
 
-    # 1) Best case: model returns plain JSON directly
+    ticker_pattern = re.compile(r'\b[A-Z]{1,5}\b')
+    for f in facts:
+        if f.field == "rag_context" and isinstance(f.value, str):
+            found_tickers = set(ticker_pattern.findall(f.value))
+            found_tickers.discard(packet_symbol.upper())
+            common_tickers = {"TSLA", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META"}
+            foreign = found_tickers & common_tickers
+            if foreign:
+                issues.append(
+                    f"Symbol mismatch: rag_context contains references to {foreign} "
+                    f"but requested symbol is {state_symbol}"
+                )
+                break
+    return issues
+
+
+def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = "") -> dict:
+    """
+    硬规则校验：不经过 LLM，确定性判定输出是否可以接受。
+    基于 Evidence Packet 中的事实和输出等级做熔断。
+    """
+    if not packet:
+        return {
+            "is_valid": False,
+            "confidence_score": 0,
+            "issues": ["no evidence packet available for verification"],
+            "corrections": ["rebuild evidence packet before analysis"],
+            "sources": [],
+            "final_reasoning": "No evidence packet in state.",
+        }
+
     try:
-        parsed = json.loads(content.strip())
-        if isinstance(parsed, dict):
-            return parsed
+        ep = EvidencePacket(**packet)
     except Exception:
-        pass
+        return {
+            "is_valid": False,
+            "confidence_score": 0,
+            "issues": ["evidence packet corrupted"],
+            "corrections": [],
+            "sources": [],
+            "final_reasoning": "Evidence packet failed schema validation.",
+        }
 
-    # 2) JSON fenced code block
-    fenced_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", content, re.IGNORECASE)
-    if fenced_match:
-        try:
-            parsed = json.loads(fenced_match.group(1).strip())
-            if isinstance(parsed, dict):
-                return parsed
-        except Exception:
-            pass
+    guard_result = determine_output_level(ep)
 
-    # 3) First object-like substring
-    json_match = re.search(r"\{[\s\S]*\}", content, re.DOTALL)
-    if json_match:
-        try:
-            parsed = json.loads(json_match.group(0).strip())
-            if isinstance(parsed, dict):
-                return parsed
-        except Exception:
-            return None
+    symbol_issues = _detect_symbol_mismatch(
+        ep.symbol, symbol, list(ep.facts)
+    )
 
-    return None
+    if symbol_issues:
+        return {
+            "is_valid": False,
+            "confidence_score": 0,
+            "issues": symbol_issues,
+            "corrections": ["rebuild evidence packet with correct symbol data"],
+            "sources": [f.source for f in ep.facts],
+            "final_reasoning": f"Symbol mismatch detected: {symbol_issues[0]}",
+        }
 
+    if guard_result.allowed_output_level == OutputLevel.INSUFFICIENT_EVIDENCE:
+        return {
+            "is_valid": False,
+            "confidence_score": ep.evidence_score,
+            "issues": [f"INSUFFICIENT_EVIDENCE: {guard_result.reason}"],
+            "corrections": ["cannot produce analysis with current data"],
+            "sources": [f.source for f in ep.facts],
+            "final_reasoning": guard_result.reason,
+        }
 
-def _normalize_guard_result(raw: dict) -> dict:
-    """Normalize guard payload shape to a predictable schema."""
-    normalized = {
-        "is_valid": bool(raw.get("is_valid", False)),
-        "confidence_score": int(raw.get("confidence_score", 0) or 0),
-        "issues": raw.get("issues", []),
-        "corrections": raw.get("corrections", []),
-        "sources": raw.get("sources", []),
-        "final_reasoning": raw.get("final_reasoning", "N/A"),
+    facts_text = {f.field: str(f.value) for f in ep.facts}
+    issues = []
+
+    if guard_result.allowed_output_level in (OutputLevel.DATA_SUMMARY_ONLY, OutputLevel.LIMITED_ANALYSIS):
+        prohibited_keywords = [
+            "建议买入", "建议卖出", "强烈推荐", "目标价",
+            "buy recommendation", "sell recommendation", "strong buy",
+            "target price", "price target",
+        ]
+        output_lower = final_output_text.lower()
+        for kw in prohibited_keywords:
+            if kw.lower() in output_lower:
+                issues.append(
+                    f"Output contains '{kw}' but output_level={guard_result.allowed_output_level.value} "
+                    f"(investment recommendations not allowed at this level)"
+                )
+
+    is_valid = len(issues) == 0
+
+    return {
+        "is_valid": is_valid,
+        "confidence_score": ep.evidence_score,
+        "issues": issues,
+        "corrections": issues if not is_valid else [],
+        "sources": [f.source for f in ep.facts],
+        "final_reasoning": guard_result.reason,
     }
-    if not isinstance(normalized["issues"], list):
-        normalized["issues"] = [str(normalized["issues"])]
-    if not isinstance(normalized["corrections"], list):
-        normalized["corrections"] = [str(normalized["corrections"])]
-    if not isinstance(normalized["sources"], list):
-        normalized["sources"] = [str(normalized["sources"])]
-    return normalized
 
 
 def guard_agent(state):
     """
-    Guard Agent - 最终强化版（JSON 提取更稳健 + Prompt 正确转义）
+    Guard Agent - v4 硬规则校验版。
+    不再独立调用 RAG，改为基于 Evidence Packet 做确定性熔断。
+    LLM 仅用于对校验结果做自然语言润色。
     """
-    system_prompt = """
-You are the Guard Agent, the final fact-checking and quality gatekeeper of AlphaPilot.
+    evidence_packet = state.get("evidence_packet")
+    stock_symbol = state.get("stock_symbol", "")
 
-Your ONLY job is to verify the accuracy of the final analysis (especially Strategy and Risk outputs).
+    messages = state.get("messages", [])
+    final_output_text = ""
+    for m in reversed(messages):
+        content = m.get("content", "") if isinstance(m, dict) else getattr(m, "content", "")
+        if content and not isinstance(content, list):
+            final_output_text = str(content)
+            break
 
-You MUST:
-1. Use the retrieve_knowledge tool to double-check any numbers, dates, events, or financial claims.
-2. Check for hallucinations or unsupported statements.
-3. Assign an overall confidence score (0-100).
-4. Return **ONLY valid JSON**, no extra text, no markdown, no explanation.
+    guard_result = _hard_rule_guard(evidence_packet, final_output_text, symbol=stock_symbol)
 
-Strict JSON format:
-{{
-  "is_valid": true or false,
-  "confidence_score": 85,
-  "issues": ["list of problems found, or empty list"],
-  "corrections": ["list of suggested corrections, or empty list"],
-  "sources": ["list of RAG sources used"],
-  "final_reasoning": "short summary of verification"
-}}
-
-Always call retrieve_knowledge first when checking facts.
-"""
-
-    tools = [retrieve_knowledge]
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("placeholder", "{messages}"),
-    ])
-
-    agent = create_react_agent(
-        model=get_llm("guard"),
-        tools=tools,
-        prompt=prompt,
-        name="guard_agent"
-    )
-
-    result = agent.invoke(state)
-
-    # === 强化 JSON 提取 ===
-    last_message = result["messages"][-1]
-    content = getattr(last_message, "content", str(last_message))
-
-    guard_result = _extract_guard_json(content)
-
-    # JSON 解析失败时，进行一次严格格式重试，避免直接进入兜底失败
-    if not guard_result:
-        retry_prompt = (
-            "Return ONLY valid JSON following the required schema. "
-            "No markdown, no prose, no tool trace."
-        )
-        retry_state = {
-            **state,
-            "messages": list(state.get("messages", [])) + [{"role": "user", "content": retry_prompt}],
-        }
-        retry_result = agent.invoke(retry_state)
-        retry_message = retry_result["messages"][-1]
-        retry_content = getattr(retry_message, "content", str(retry_message))
-        guard_result = _extract_guard_json(retry_content)
-
-    # 兜底结构
-    if not guard_result or not isinstance(guard_result, dict):
-        guard_result = {
-            "is_valid": False,
-            "confidence_score": 50,
-            "issues": ["JSON parsing failed"],
-            "corrections": [],
-            "sources": [],
-            "final_reasoning": "Guard output could not be parsed"
-        }
-    else:
-        guard_result = _normalize_guard_result(guard_result)
-
-    # 打印清晰结果（调试友好）
     retry_count = state.get("guard_retry_count", 0)
     next_retry_count = retry_count + 1 if not guard_result.get("is_valid", False) else retry_count
 
-    print(f"\n Guard Agent Check (retry: {next_retry_count}):")
+    print(f"\n🛡️ Guard Agent Check (v4 hard-rule, retry: {next_retry_count}):")
     print(f"   Valid: {guard_result.get('is_valid', 'N/A')}")
     print(f"   Confidence: {guard_result.get('confidence_score', 'N/A')}/100")
     print(f"   Issues: {guard_result.get('issues', [])}")
     print(f"   Corrections: {guard_result.get('corrections', [])}")
-    print(f"   Sources: {guard_result.get('sources', [])}")
     print(f"   Reasoning: {guard_result.get('final_reasoning', 'N/A')}")
 
     return {

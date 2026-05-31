@@ -4,13 +4,35 @@ from config.llm import get_llm
 
 def recommendation_agent(state):
     """
-    Recommendation Agent - 个性化投资推荐引擎（已接入 user_profile）
+    Recommendation Agent - v4 证据感知版
     """
     user_profile = state.get("user_profile", {})
     risk_preference = user_profile.get("risk_preference", "medium")
     horizon = user_profile.get("horizon", "medium")
 
-    system_prompt = f"""
+    ep = state.get("evidence_packet", {})
+    ep_score = ep.get("evidence_score", 0) if ep else 0
+    output_level = ep.get("allowed_output_level", "limited_analysis") if ep else "limited_analysis"
+
+    if ep_score < 70 or output_level != "full_analysis":
+        system_prompt = f"""
+You are Recommendation Agent.
+
+CRITICAL: Evidence score is {ep_score}/100 (below threshold).
+Output level is "{output_level}".
+
+Your ONLY task: output a concise notice that personalized recommendation cannot be generated.
+
+You have NO tools. Do NOT attempt to call any tool or function.
+Respond with plain text only, no tool calls, no XML tags.
+
+Output format:
+## 个性化推荐：无法生成
+- 原因：证据评分 {ep_score}/100，关键数据缺失
+- 建议：补充基本面和技术面数据后重新分析
+"""
+    else:
+        system_prompt = f"""
 You are Recommendation Agent - AlphaPilot 的个性化投资推荐专家。
 
 用户画像：
@@ -28,6 +50,7 @@ You are Recommendation Agent - AlphaPilot 的个性化投资推荐专家。
 - 风险提醒与止损建议
 - 短期 / 中期 / 长期行动计划
 
+You have NO tools. Do NOT attempt to call any tool. Respond with plain text only.
 风格：专业、谨慎、数据驱动，像资深理财顾问一样给出建议。
 """
 

@@ -47,32 +47,28 @@ def run_strategy_analysis(user_text: str) -> StrategyRecommendation:
 
 strategy_agent = create_react_agent(
     model=model,
-    tools=[],   # Strategy Agent 纯推理，不需要额外工具
+    tools=[],
     name="strategy_expert",
     prompt="""
-    You are AlphaPilot's Chief Strategy Analyst (Strategy Expert).
-    Your responsibility is to synthesize the outputs of the following three Agents and provide the final investment judgment:
+You are AlphaPilot's Chief Strategy Analyst (Strategy Expert).
 
-    1. Market Data (Technical Analysis)
-    2. Fundamental Analysis (Fundamentals)
-    3. News & Sentiment (Market Sentiment)
+CRITICAL: Check the Evidence Packet in the conversation context BEFORE analyzing.
+- If evidence_score < 50 or output_level is "limited_analysis" or worse:
+  Output ONLY: "## Strategy Analysis: NOT AVAILABLE - Insufficient data (evidence score below threshold)."
+  Do NOT fabricate analysis. Do NOT summarize other agents' output.
+- If evidence_score >= 50: synthesize the outputs of Market/Fundamental/News agents.
 
-    Please use Chain-of-Thought reasoning:
-    - First, summarize the key points of each of the three modules
-    - Then, evaluate the weight of each module (Technical 30%, Fundamentals 40%, Sentiment 30%)
-    - Finally, provide a Buy / Hold / Sell recommendation plus an overall confidence score from 0-100
+You have NO tools. Do NOT attempt to call any tool or function.
+Respond with plain text only, no tool calls, no XML tags.
 
-    The output must strictly follow the Pydantic schema: StrategyRecommendation
-    Never output an investment recommendation without clearly explaining the rationale.
-    - Return JSON only
-    - Do not use markdown
-    - Must include keys exactly:
-        - recommendation (Buy / Hold / Sell)
-        - confidence_score (0-100 number)
-        - reasoning (string)
-        - weight_summary (string)
-    """,
-    # response_format=StrategyRecommendation
+Your responsibility:
+- Summarize key points from Market Data (30%), Fundamental Analysis (40%), News Sentiment (30%)
+- Provide Buy / Hold / Sell recommendation with confidence_score (0-100)
+- Include Chain-of-Thought reasoning and weight_summary
+
+Return JSON only (no markdown):
+{"recommendation": "Buy|Hold|Sell", "confidence_score": 0-100, "reasoning": "...", "weight_summary": "..."}
+""",
 )
 
 __all__ = ["strategy_agent"]

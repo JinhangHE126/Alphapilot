@@ -13,57 +13,49 @@ from config.proxy import get_proxy_for_agent
 
 
 def _download_price_frame(symbol: str):
-    """增强版下载函数：更长的指数退避 + jitter + 最终兜底"""
+    """下载价格数据：港股自动去前导零，较少重试，快速失败。"""
+    if symbol.endswith('.HK'):
+        core = symbol.split('.')[0].lstrip('0') or '0'
+        symbol = f"{core}.HK"
+
     proxy = get_proxy_for_agent("market")
-    max_retries = 6
-    base_backoff = 30
+    max_retries = 2
+    base_backoff = 5
 
     for attempt in range(max_retries):
         try:
             print(f"📥 [Attempt {attempt+1}/{max_retries}] Downloading {symbol} "
                   f"(proxy: {'启用' if proxy else '直连'})...")
 
+            kwargs = {"period": "60d", "progress": False, "timeout": 30}
             if proxy:
-                df = yf.download(
-                    symbol,
-                    period="60d",
-                    progress=False,
-                    proxy=proxy,
-                    timeout=45,           # 适当增加超时
-                )
-            else:
-                df = yf.download(
-                    symbol,
-                    period="60d",
-                    progress=False,
-                    timeout=45,
-                )
+                kwargs["proxy"] = proxy
+            df = yf.download(symbol, **kwargs)
 
             if df is not None and not df.empty:
                 print(f"✅ 下载成功！共 {len(df)} 条记录")
                 return df, ""
 
         except YFRateLimitError:
-            backoff = base_backoff * (2 ** attempt) + random.uniform(0, 3)  # 指数退避 + jitter
+            backoff = base_backoff * (2 ** attempt) + random.uniform(0, 2)
             print(f"⚠️ [Attempt {attempt+1}] Yahoo Finance Rate Limit 触发，等待 {backoff:.1f} 秒后重试...")
             time.sleep(backoff)
 
         except Exception as exc:
             print(f"❌ [Attempt {attempt+1}] 其他错误: {exc}")
-            time.sleep(3)
+            time.sleep(2)
 
-    # ==================== 最终兜底直连重试（更保守） ====================
-    print("🔄 所有代理尝试失败，执行最终直连兜底重试...")
-    for attempt in range(3):
+    print(f"🔄 最终直连兜底重试...")
+    for attempt in range(1):
         try:
-            print(f"   → 最终尝试 {attempt+1}/3（直连）")
-            df = yf.download(symbol, period="60d", progress=False, timeout=60)
+            print(f"   → 最终尝试 {attempt+1}/1（直连）")
+            df = yf.download(symbol, period="60d", progress=False, timeout=30)
             if df is not None and not df.empty:
                 print(f"✅ 最终直连下载成功！共 {len(df)} 条记录")
                 return df, ""
         except Exception as exc:
             print(f"   ❌ 最终尝试 {attempt+1} 失败: {exc}")
-            time.sleep(10)
+            time.sleep(3)
 
     return None, "all_attempts_failed"
 
