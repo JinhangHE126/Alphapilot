@@ -1,52 +1,117 @@
-from langgraph.prebuilt import create_react_agent
-from langchain_core.prompts import ChatPromptTemplate
+import numpy as np
 from config.llm import get_llm
-from tools.market_tools import fetch_market_data
+from tools.market_tools import _download_price_frame
+
+
+def _compute_backtest_metrics(close_prices, benchmark_close=None):
+    returns = close_prices.pct_change().dropna()
+    if len(returns) < 20:
+        return None
+
+    total_return = float((close_prices.iloc[-1] / close_prices.iloc[0] - 1) * 100)
+    ann_return = float(((1 + total_return / 100) ** (252 / len(returns)) - 1) * 100)
+    ann_vol = float(returns.std() * np.sqrt(252) * 100)
+    sharpe = round(ann_return / ann_vol, 2) if ann_vol > 0 else 0.0
+
+    cumulative = (1 + returns).cumprod()
+    running_max = cumulative.cummax()
+    drawdown = (cumulative - running_max) / running_max
+    max_dd = float(drawdown.min() * 100)
+
+    win_rate = float((returns > 0).sum() / len(returns) * 100)
+
+    return {
+        "total_return_pct": round(total_return, 2),
+        "annualized_return_pct": round(ann_return, 2),
+        "annualized_volatility_pct": round(ann_vol, 2),
+        "sharpe_ratio": sharpe,
+        "max_drawdown_pct": round(max_dd, 2),
+        "win_rate_pct": round(win_rate, 2),
+        "data_points": len(returns),
+    }
+
 
 def backtesting_agent(state):
     """
-    Backtesting Agent - v4 硬拦截版
+    Backtesting Agent - v4 程序化计算版
+    回测指标由 Python 确定性计算，LLM 仅做文字解读。
     """
     ep = state.get("evidence_packet", {})
-    ep_facts = ep.get("facts", []) if ep else []
-    has_price_data = any(
-        f.get("field") in ("current_price", "price_change_pct") for f in ep_facts
-    )
     ep_score = ep.get("evidence_score", 0) if ep else 0
+    symbol = state.get("stock_symbol", "")
 
-    if not has_price_data or ep_score < 50:
+    if ep_score < 50:
         return {
             "messages": [{
                 "role": "assistant",
                 "content": (
                     "## Backtesting Report: NOT AVAILABLE\n"
-                    "- Reason: Insufficient historical price data\n"
-                    "- Required: 60+ days of daily OHLCV data"
+                    f"- Reason: Evidence score {ep_score}/100 insufficient for backtesting\n"
+                    "- Required: evidence_score >= 50"
                 ),
             }],
         }
 
-    system_prompt = """
-You are Backtesting Agent - AlphaPilot's professional historical backtesting expert.
+    try:
+        df, err = _download_price_frame(symbol)
+    except Exception:
+        df, err = None, "exception"
 
-Your core responsibilities:
-- Use `fetch_market_data` to retrieve historical price data.
-- Simulate trading based on the Strategy Agent's Buy/Hold/Sell signal.
-- Calculate: Total Return, Annualized Return, Sharpe Ratio, Max Drawdown, Win Rate.
-- Compare against benchmark (SPY or buy-and-hold).
+    if df is None or df.empty or len(df) < 20:
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": (
+                    "## Backtesting Report: NOT AVAILABLE\n"
+                    f"- Reason: Insufficient price data for {symbol}\n"
+                    "- Required: 20+ trading days of OHLCV data"
+                ),
+            }],
+        }
 
-Output a structured report. If data insufficient, state clearly.
-"""
+    import pandas as pd
+    close = df["Close"]
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+    close = close.dropna()
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("placeholder", "{messages}"),
-    ])
+    metrics = _compute_backtest_metrics(close)
+    if metrics is None:
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": (
+                    "## Backtesting Report: NOT AVAILABLE\n"
+                    f"- Reason: Insufficient valid returns for {symbol}\n"
+                    "- Required: 20+ valid daily returns"
+                ),
+            }],
+        }
 
-    agent = create_react_agent(
-        model=get_llm("backtesting"),
-        tools=[fetch_market_data],
-        prompt=prompt,
-        name="backtesting_agent"
+    metrics_text = (
+        f"- Total Return: {metrics['total_return_pct']}%\n"
+        f"- Annualized Return: {metrics['annualized_return_pct']}%\n"
+        f"- Annualized Volatility: {metrics['annualized_volatility_pct']}%\n"
+        f"- Sharpe Ratio: {metrics['sharpe_ratio']}\n"
+        f"- Max Drawdown: {metrics['max_drawdown_pct']}%\n"
+        f"- Win Rate: {metrics['win_rate_pct']}%\n"
+        f"- Data Points: {metrics['data_points']} trading days"
     )
-    return agent.invoke(state)
+
+    llm = get_llm("backtesting")
+    prompt = (
+        f"You are a backtesting report writer. Below are PROGRAMMATICALLY COMPUTED metrics for {symbol}. "
+        f"Do NOT recalculate or change any numbers. Write a concise report interpreting these results.\n\n"
+        f"{metrics_text}\n\n"
+        f"Output a structured backtesting report with these exact numbers, "
+        f"adding brief commentary on what each metric means for a trader. "
+        f"Do NOT invent additional metrics or make investment recommendations."
+    )
+
+    try:
+        response = llm.invoke(prompt)
+        content = response.content if hasattr(response, "content") else str(response)
+    except Exception:
+        content = f"## Backtesting Report: {symbol}\n\n{metrics_text}\n\n*(LLM commentary unavailable)*"
+
+    return {"messages": [{"role": "assistant", "content": content}]}

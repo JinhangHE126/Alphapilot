@@ -9,6 +9,19 @@ from tools.news_tools import _fetch_news_list, _extract_news_item
 COLLECTOR_TIMEOUT = 15
 
 
+def _currency_for(symbol: str) -> str:
+    upper = symbol.upper()
+    if upper.endswith(".HK"):
+        return "HKD"
+    if upper.endswith(".SZ") or upper.endswith(".SS"):
+        return "CNY"
+    if upper.endswith(".T"):
+        return "JPY"
+    if upper.endswith(".L"):
+        return "GBP"
+    return "USD"
+
+
 def collect_market_facts(symbol: str) -> list[dict]:
     today = date.today().isoformat()
 
@@ -74,7 +87,7 @@ def collect_market_facts(symbol: str) -> list[dict]:
         {
             "field": "current_price",
             "value": latest,
-            "unit": "USD",
+            "unit": _currency_for(symbol),
             "period": "latest",
             "source": "yfinance",
             "source_url": None,
@@ -176,7 +189,7 @@ def collect_fundamental_facts(symbol: str) -> list[dict]:
                 "confidence_tier": "machine",
             })
 
-    _add("market_cap", info.get("marketCap"), "USD")
+    _add("market_cap", info.get("marketCap"), _currency_for(symbol))
     _add("pe_ratio", info.get("trailingPE"), "ratio")
     _add("forward_pe", info.get("forwardPE"), "ratio")
     _add("pb_ratio", info.get("priceToBook"), "ratio")
