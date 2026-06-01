@@ -215,24 +215,37 @@ def collect_news_facts(symbol: str) -> list[dict]:
     if not news_list:
         return []
 
+    clean_symbol = symbol.replace('.HK', '').replace('.SZ', '').replace('.SS', '').replace('.L', '')
     facts = []
     for item in news_list[:5]:
         n = _extract_news_item(item) if callable(_extract_news_item) else item
         title = n.get("title", "") if isinstance(n, dict) else ""
         publisher = n.get("publisher", "") if isinstance(n, dict) else ""
         link = n.get("link", "") if isinstance(n, dict) else ""
-        if title:
-            facts.append({
-                "field": "news_headline",
-                "value": title,
-                "unit": "text",
-                "period": "latest",
-                "source": publisher or "yfinance_news",
-                "source_url": link or None,
-                "as_of_date": today,
-                "confidence": 0.55,
-                "confidence_tier": "llm_extracted",
-            })
+        if not title:
+            continue
+
+        title_upper = title.upper()
+        symbol_in_title = (
+            clean_symbol.upper() in title_upper
+            or symbol.upper() in title_upper
+        )
+        confidence = 0.65 if symbol_in_title else 0.40
+
+        if not symbol_in_title:
+            continue
+
+        facts.append({
+            "field": "news_headline",
+            "value": title,
+            "unit": "text",
+            "period": "latest",
+            "source": publisher or "yfinance_news",
+            "source_url": link or None,
+            "as_of_date": today,
+            "confidence": confidence,
+            "confidence_tier": "llm_extracted",
+        })
 
     return facts
 

@@ -245,6 +245,59 @@ TIER_MARKS: dict[ConfidenceTier, str] = {
     ConfidenceTier.LLM_INFERRED: "[?]",
 }
 
+_CONFLICT_THRESHOLDS: dict[str, float] = {
+    "current_price": 0.02,
+    "pe_ratio": 0.10,
+    "pb_ratio": 0.10,
+    "market_cap": 0.10,
+    "revenue_growth_yoy": 0.05,
+    "eps_growth_yoy": 0.05,
+}
+
+
+def detect_conflicts(packet: EvidencePacket) -> EvidencePacket:
+    """
+    字段级冲突检测。同一 field 有多个数值型 fact 且来源不同时，
+    若偏差超过对应阈值，则标记为冲突。
+    官方来源（SEC_EDGAR、HKEX）优先于第三方。
+    """
+    from collections import defaultdict
+    field_groups = defaultdict(list)
+    for f in packet.facts:
+        if isinstance(f.value, (int, float)):
+            field_groups[f.field].append(f)
+
+    conflicts = []
+    for field_name, group in field_groups.items():
+        if len(group) < 2:
+            continue
+        sources = {f.source for f in group}
+        if len(sources) < 2:
+            continue
+
+        official_sources = {"SEC_EDGAR", "HKEX", "SSE", "SZSE"}
+        has_official = bool(sources & official_sources)
+
+        values = [float(f.value) for f in group]
+        v_min, v_max = min(values), max(values)
+        if v_max == 0:
+            continue
+        deviation = (v_max - v_min) / abs(v_max)
+
+        threshold = _CONFLICT_THRESHOLDS.get(field_name, 0.10)
+        if deviation > threshold:
+            resolution = "official_source_preferred" if has_official else "marked_unresolved"
+            conflicts.append(Conflict(
+                field=field_name,
+                values=values,
+                sources=list(sources),
+                resolution=resolution,
+            ))
+
+    if conflicts:
+        packet.conflicts = list(packet.conflicts) + conflicts
+    return packet
+
 
 def render_packet_for_agent(packet: EvidencePacket) -> str:
     guard_result = determine_output_level(packet)
@@ -299,5 +352,6 @@ __all__ = [
     "GuardResult",
     "compute_evidence_score",
     "determine_output_level",
+    "detect_conflicts",
     "render_packet_for_agent",
 ]

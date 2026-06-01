@@ -13,49 +13,79 @@ from config.proxy import get_proxy_for_agent
 
 
 def _download_price_frame(symbol: str):
-    """下载价格数据：港股自动去前导零，较少重试，快速失败。"""
-    if symbol.endswith('.HK'):
-        core = symbol.split('.')[0].lstrip('0') or '0'
-        symbol = f"{core}.HK"
-
+    """下载价格数据：港股尝试多种 symbol 格式，较少重试，快速失败。"""
     proxy = get_proxy_for_agent("market")
     max_retries = 2
     base_backoff = 5
 
-    for attempt in range(max_retries):
-        try:
-            print(f"📥 [Attempt {attempt+1}/{max_retries}] Downloading {symbol} "
-                  f"(proxy: {'启用' if proxy else '直连'})...")
+    is_hk = symbol.endswith('.HK')
+    candidates = [symbol]
+    if is_hk:
+        core = symbol.split('.')[0].lstrip('0') or '0'
+        stripped = f"{core}.HK"
+        if stripped != symbol:
+            candidates.append(stripped)
 
-            kwargs = {"period": "60d", "progress": False, "timeout": 30}
-            if proxy:
-                kwargs["proxy"] = proxy
-            df = yf.download(symbol, **kwargs)
+    def _try_download(sym: str, use_proxy: bool) -> tuple:
+        for attempt in range(max_retries):
+            try:
+                print(f"📥 [Attempt {attempt+1}/{max_retries}] Downloading {sym} "
+                      f"(proxy: {'启用' if use_proxy else '直连'})...")
 
+                kwargs = {"period": "60d", "progress": False, "timeout": 30}
+                if use_proxy:
+                    kwargs["proxy"] = use_proxy
+                df = yf.download(sym, **kwargs)
+
+                if df is not None and not df.empty:
+                    print(f"✅ 下载成功！共 {len(df)} 条记录")
+                    return df, ""
+
+            except YFRateLimitError:
+                backoff = base_backoff * (2 ** attempt) + random.uniform(0, 2)
+                print(f"⚠️ [Attempt {attempt+1}] Rate Limit，等待 {backoff:.1f}s...")
+                time.sleep(backoff)
+            except Exception as exc:
+                print(f"❌ [Attempt {attempt+1}] 错误: {exc}")
+                time.sleep(2)
+        return None, ""
+
+    for sym in candidates:
+        if sym != candidates[0]:
+            print(f"   🔄 尝试替代格式: {sym}")
+
+        df, err = _try_download(sym, proxy)
+        if df is not None and not df.empty:
+            return df, ""
+
+        if proxy:
+            df, err = _try_download(sym, None)
             if df is not None and not df.empty:
-                print(f"✅ 下载成功！共 {len(df)} 条记录")
                 return df, ""
 
-        except YFRateLimitError:
-            backoff = base_backoff * (2 ** attempt) + random.uniform(0, 2)
-            print(f"⚠️ [Attempt {attempt+1}] Yahoo Finance Rate Limit 触发，等待 {backoff:.1f} 秒后重试...")
-            time.sleep(backoff)
-
-        except Exception as exc:
-            print(f"❌ [Attempt {attempt+1}] 其他错误: {exc}")
-            time.sleep(2)
+        if is_hk:
+            try:
+                print(f"   🔄 港股 {sym} 尝试 1y 周期...")
+                kwargs = {"period": "1y", "progress": False, "timeout": 30}
+                df = yf.download(sym, **kwargs)
+                if df is not None and not df.empty:
+                    print(f"✅ 1y 周期下载成功！共 {len(df)} 条记录")
+                    return df, ""
+            except Exception:
+                pass
 
     print(f"🔄 最终直连兜底重试...")
     for attempt in range(1):
-        try:
-            print(f"   → 最终尝试 {attempt+1}/1（直连）")
-            df = yf.download(symbol, period="60d", progress=False, timeout=30)
-            if df is not None and not df.empty:
-                print(f"✅ 最终直连下载成功！共 {len(df)} 条记录")
-                return df, ""
-        except Exception as exc:
-            print(f"   ❌ 最终尝试 {attempt+1} 失败: {exc}")
-            time.sleep(3)
+        for sym in candidates[:1]:
+            try:
+                print(f"   → 最终尝试 (直连) {sym}")
+                df = yf.download(sym, period="60d", progress=False, timeout=30)
+                if df is not None and not df.empty:
+                    print(f"✅ 直连下载成功！共 {len(df)} 条记录")
+                    return df, ""
+            except Exception as exc:
+                print(f"   ❌ 失败: {exc}")
+                time.sleep(3)
 
     return None, "all_attempts_failed"
 

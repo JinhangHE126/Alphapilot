@@ -16,6 +16,7 @@ from schemas.evidence_packet import (
     Coverage,
     compute_evidence_score,
     determine_output_level,
+    detect_conflicts,
     render_packet_for_agent,
 )
 from tools.data_collector import collect_all
@@ -151,6 +152,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
         missing_fields=missing_fields,
         conflicts=[],
     )
+    packet = detect_conflicts(packet)
     packet = compute_evidence_score(packet)
     guard_result = determine_output_level(packet)
     packet.allowed_output_level = guard_result.allowed_output_level

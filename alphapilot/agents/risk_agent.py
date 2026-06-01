@@ -89,20 +89,13 @@ def run_risk_assessment(user_text: str) -> RiskAssessment:
     return RiskAssessment.model_validate(payload)
 
 
-risk_agent = create_react_agent(
-    model=model,
-    tools=[],
-    name="risk_expert",
-    prompt="""
+def _create_risk_agent():
+    return create_react_agent(
+        model=model,
+        tools=[],
+        name="risk_expert",
+        prompt="""
 You are AlphaPilot's Chief Risk Control Expert (Risk Expert).
-
-CRITICAL: Check the Evidence Packet in the conversation context BEFORE analyzing.
-- If evidence_score < 50 or output_level is "limited_analysis" or worse:
-  Output ONLY JSON: {"volatility_risk":"N/A","macro_risk":"N/A","stop_loss_suggestion":"N/A","position_suggestion":"N/A","overall_risk_score":0,"risk_reasoning":"Insufficient data for risk assessment. Evidence score below threshold."}
-  Do NOT synthesize strategy. Do NOT give investment recommendations. Do NOT summarize other agent output.
-
-You have NO tools. Do NOT attempt to call any tool or function.
-Respond with JSON only, no markdown, no tool calls.
 
 Your ONLY responsibility:
 - Evaluate volatility risk based on market data (RSI, MACD, volatility)
@@ -110,8 +103,31 @@ Your ONLY responsibility:
 - Provide stop-loss suggestion and position sizing suggestion
 - Output overall risk score (0-100, higher = more dangerous)
 
+You have NO tools. Do NOT attempt to call any tool or function.
+Respond with JSON only, no markdown, no tool calls, no preamble.
+
 Return JSON only with keys: volatility_risk, macro_risk, stop_loss_suggestion, position_suggestion, overall_risk_score, risk_reasoning
 """,
-)
+    )
+
+
+NA_RISK_JSON = '{"volatility_risk":"N/A","macro_risk":"N/A","stop_loss_suggestion":"N/A","position_suggestion":"N/A","overall_risk_score":0,"risk_reasoning":"Insufficient data for risk assessment. Evidence score below threshold."}'
+
+
+def risk_agent(state):
+    """
+    Risk Agent - v4 硬拦截版
+    """
+    ep = state.get("evidence_packet", {}) or {}
+    ep_score = ep.get("evidence_score", 0)
+    output_level = ep.get("allowed_output_level", "")
+
+    if ep_score < 50 or output_level in ("limited_analysis", "data_summary_only", "insufficient_evidence"):
+        return {
+            "messages": [{"role": "assistant", "content": NA_RISK_JSON}],
+        }
+
+    agent = _create_risk_agent()
+    return agent.invoke(state)
 
 __all__ = ["risk_agent", "run_risk_assessment"]
