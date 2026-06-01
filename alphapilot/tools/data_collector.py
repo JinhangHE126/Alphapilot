@@ -203,18 +203,33 @@ def collect_fundamental_facts(symbol: str) -> list[dict]:
                 "confidence_tier": "machine",
             })
 
+    def _add_ratio(field: str, value):
+        if value is not None:
+            v = float(value)
+            facts.append({
+                "field": field,
+                "value": round(v, 2) if abs(v) < 10000 else round(v, 0),
+                "unit": "ratio",
+                "period": "latest",
+                "source": "yfinance",
+                "source_url": None,
+                "as_of_date": today,
+                "confidence": 0.85,
+                "confidence_tier": "machine",
+            })
+
     _add("market_cap", info.get("marketCap"), _currency_for(symbol))
-    _add("pe_ratio", info.get("trailingPE"), "ratio")
-    _add("forward_pe", info.get("forwardPE"), "ratio")
-    _add("pb_ratio", info.get("priceToBook"), "ratio")
-    _add_pct("dividend_yield", info.get("dividendYield"))
-    _add("beta", info.get("beta"), "ratio")
+    _add_ratio("pe_ratio", info.get("trailingPE"))
+    _add_ratio("forward_pe", info.get("forwardPE"))
+    _add_ratio("pb_ratio", info.get("priceToBook"))
+    _add("dividend_yield", info.get("dividendYield"), "percent")
+    _add_ratio("beta", info.get("beta"))
     _add("sector", info.get("sector"), "text")
     _add("industry", info.get("industry"), "text")
     _add_pct("revenue_growth_yoy", info.get("revenueGrowth"))
     _add_pct("eps_growth_yoy", info.get("earningsGrowth"))
     _add_pct("return_on_equity", info.get("returnOnEquity"))
-    _add("debt_to_equity", info.get("debtToEquity"), "ratio")
+    _add_ratio("debt_to_equity", info.get("debtToEquity"))
 
     if info.get("longName"):
         facts.append({

@@ -66,8 +66,12 @@ Your responsibility:
 - Provide Buy / Hold / Sell recommendation with confidence_score (0-100)
 - Include Chain-of-Thought reasoning and weight_summary
 
-Return JSON only (no markdown):
+Return JSON only (no markdown, no body text):
 {"recommendation": "Buy|Hold|Sell", "confidence_score": 0-100, "reasoning": "...", "weight_summary": "..."}
+
+CRITICAL: Output ONLY the JSON. Do NOT write a prose summary before or after the JSON.
+The recommendation field in the JSON is the single source of truth.
+Do NOT write "Final Recommendation: BUY" or similar text outside the JSON.
 """,
 )
 

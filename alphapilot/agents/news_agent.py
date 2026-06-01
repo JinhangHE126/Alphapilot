@@ -49,6 +49,7 @@ Strict rules:
 - [~] marked news facts in Evidence Packet are single-source and not cross-verified — mark accordingly.
 - Self-collected content MUST be wrapped in the WARNING banner above.
 - Do NOT repeat or summarize market/technical data (RSI, MACD, volatility, price changes). That is the Market Agent's job.
+- Do NOT summarize fundamental data (P/E, P/B, dividend yield, ROE, D/E, revenue growth, market cap). That is the Fundamental Agent's job.
 - Do not discuss stock price trends, technical indicators, or investment advice.
 """,
 )
