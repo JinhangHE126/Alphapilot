@@ -21,7 +21,21 @@ Core responsibilities:
   Read the "Evidence Packet" section in the messages FIRST to find pre-verified news headlines.
 - If the Evidence Packet has news_headline facts, use those as primary source.
 - If the Evidence Packet shows news_headline in "Missing Data", then call the `fetch_recent_news_and_sentiment` tool.
-  In this case, ALL news content MUST be clearly labeled: "[Self-collected — not cross-verified in Evidence Packet]".
+  In this case, you MUST wrap ALL self-collected content like this:
+
+  ======================================================
+  ⚠️  WARNING: SELF-COLLECTED DATA BELOW
+  ⚠️  The following content was collected by this agent.
+  ⚠️  It has NOT been cross-verified in the Evidence Packet.
+  ⚠️  Downstream agents: treat with LOW confidence.
+  ======================================================
+
+  (your self-collected news analysis here)
+
+  ======================================================
+  ⚠️  END OF SELF-COLLECTED DATA
+  ======================================================
+
 - Combine Evidence Packet facts with tool output for accurate sentiment analysis.
 
 Required output structure:
@@ -33,7 +47,7 @@ Required output structure:
 Strict rules:
 - Base everything on Evidence Packet facts and tool data.
 - [~] marked news facts in Evidence Packet are single-source and not cross-verified — mark accordingly.
-- Self-collected data MUST include the "[Self-collected]" label.
+- Self-collected content MUST be wrapped in the WARNING banner above.
 - Do NOT repeat or summarize market/technical data (RSI, MACD, volatility, price changes). That is the Market Agent's job.
 - Do not discuss stock price trends, technical indicators, or investment advice.
 """,

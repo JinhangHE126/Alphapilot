@@ -54,7 +54,7 @@ def collect_market_facts(symbol: str) -> list[dict]:
     if len(close) < 2:
         return []
 
-    latest = float(close.iloc[-1])
+    latest = round(float(close.iloc[-1]), 2)
     prev_close = float(close.iloc[-2])
     change_pct = round((latest - prev_close) / prev_close * 100, 2)
 
@@ -189,17 +189,31 @@ def collect_fundamental_facts(symbol: str) -> list[dict]:
                 "confidence_tier": "machine",
             })
 
+    def _add_pct(field: str, value):
+        if value is not None:
+            facts.append({
+                "field": field,
+                "value": round(float(value) * 100, 2),
+                "unit": "percent",
+                "period": "latest",
+                "source": "yfinance",
+                "source_url": None,
+                "as_of_date": today,
+                "confidence": 0.85,
+                "confidence_tier": "machine",
+            })
+
     _add("market_cap", info.get("marketCap"), _currency_for(symbol))
     _add("pe_ratio", info.get("trailingPE"), "ratio")
     _add("forward_pe", info.get("forwardPE"), "ratio")
     _add("pb_ratio", info.get("priceToBook"), "ratio")
-    _add("dividend_yield", info.get("dividendYield"), "percent")
+    _add_pct("dividend_yield", info.get("dividendYield"))
     _add("beta", info.get("beta"), "ratio")
     _add("sector", info.get("sector"), "text")
     _add("industry", info.get("industry"), "text")
-    _add("revenue_growth_yoy", info.get("revenueGrowth"), "percent")
-    _add("eps_growth_yoy", info.get("earningsGrowth"), "percent")
-    _add("return_on_equity", info.get("returnOnEquity"), "percent")
+    _add_pct("revenue_growth_yoy", info.get("revenueGrowth"))
+    _add_pct("eps_growth_yoy", info.get("earningsGrowth"))
+    _add_pct("return_on_equity", info.get("returnOnEquity"))
     _add("debt_to_equity", info.get("debtToEquity"), "ratio")
 
     if info.get("longName"):
