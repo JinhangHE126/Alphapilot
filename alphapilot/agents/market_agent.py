@@ -10,7 +10,7 @@ from config.proxy import get_requests_proxies
 
 model = get_llm("market")
 
-market_agent = create_react_agent(
+_MARKET_AGENT = create_react_agent(
     model=model,
     tools=[fetch_market_data],
     name="market_data_expert",
@@ -36,5 +36,24 @@ Strict rules:
 - [~] and [?] marked facts in Evidence Packet are lower confidence — treat with caution.
 - Do not discuss fundamentals, earnings, news, or macro events.
 - Do not give any investment advice, price targets, or trading recommendations.
-"""
+""",
 )
+
+
+def market_agent(state):
+    ep = state.get("evidence_packet", {}) or {}
+    output_level = ep.get("allowed_output_level", "")
+
+    if output_level in ("insufficient_evidence", "data_summary_only"):
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": (
+                    "## Market Analysis: NOT AVAILABLE\n"
+                    f"- Reason: Evidence insufficient (output level: {output_level})\n"
+                    "- Action: Await verified market data before technical analysis"
+                ),
+            }],
+        }
+
+    return _MARKET_AGENT.invoke(state)

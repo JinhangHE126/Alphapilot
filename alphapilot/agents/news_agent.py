@@ -9,7 +9,7 @@ def fetch_recent_news_and_sentiment_tool(symbol: str) -> str:
     return fetch_recent_news_and_sentiment(symbol=symbol, model=model)
 
 
-news_agent = create_react_agent(
+_NEWS_AGENT = create_react_agent(
     model=model,
     tools=[fetch_recent_news_and_sentiment_tool],
     name="news_sentiment_expert",
@@ -36,7 +36,26 @@ Strict rules:
 - Self-collected data MUST include the "[Self-collected]" label.
 - Do NOT repeat or summarize market/technical data (RSI, MACD, volatility, price changes). That is the Market Agent's job.
 - Do not discuss stock price trends, technical indicators, or investment advice.
-"""
+""",
 )
+
+
+def news_agent(state):
+    ep = state.get("evidence_packet", {}) or {}
+    output_level = ep.get("allowed_output_level", "")
+
+    if output_level in ("insufficient_evidence", "data_summary_only"):
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": (
+                    "## News & Sentiment Analysis: NOT AVAILABLE\n"
+                    f"- Reason: Evidence insufficient (output level: {output_level})\n"
+                    "- Action: Await verified data before sentiment analysis"
+                ),
+            }],
+        }
+
+    return _NEWS_AGENT.invoke(state)
 
 __all__ = ["news_agent"]
