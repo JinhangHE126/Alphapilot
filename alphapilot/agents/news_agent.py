@@ -34,6 +34,7 @@ Strict rules:
 - Base everything on Evidence Packet facts and tool data.
 - [~] marked news facts in Evidence Packet are single-source and not cross-verified — mark accordingly.
 - Self-collected data MUST include the "[Self-collected]" label.
+- Do NOT repeat or summarize market/technical data (RSI, MACD, volatility, price changes). That is the Market Agent's job.
 - Do not discuss stock price trends, technical indicators, or investment advice.
 """
 )

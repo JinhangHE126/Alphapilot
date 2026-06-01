@@ -46,6 +46,8 @@ Required output elements:
 Strict rules:
 - Base everything on Evidence Packet facts and tool data.
 - NEVER fabricate or assume data points not in the Evidence Packet.
+- If critical fundamental fields (revenue_growth_yoy, eps_growth_yoy, pe_ratio, market_cap) are ALL missing:
+  state clearly "Insufficient fundamental data available" and STOP. Do NOT fill the gap with technical indicators (RSI, MACD, volatility, price) or other agents' data.
 - [~] and [?] marked facts are lower confidence — treat with caution.
 - Do not discuss stock price movement, technical indicators, news, or investment recommendations.
 """
