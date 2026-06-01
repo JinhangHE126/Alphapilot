@@ -115,7 +115,60 @@ def evidence_packet_builder(state: GraphState) -> dict:
     filings_raw = collector_results.get("filings", []) if is_cold_start else []
     hkex_raw = collector_results.get("hkex", []) if is_cold_start else []
 
-    all_facts_raw = rag_facts + market_facts_raw + fundamental_facts_raw + news_facts_raw + filings_raw + hkex_raw
+    all_collectors_failed = (
+        is_cold_start
+        and not market_facts_raw
+        and not fundamental_facts_raw
+        and not news_facts_raw
+        and not filings_raw
+        and not hkex_raw
+    )
+
+    if all_collectors_failed:
+        if rag_facts:
+            print(f"   🛟 ESCAPE POD (DEGRADE): All collectors failed, falling back to RAG-only for {symbol}")
+            all_facts_raw = rag_facts
+            is_cold_start = False
+        else:
+            print(f"   🛟 ESCAPE POD (REJECT): All collectors failed + no RAG, rejecting {symbol}")
+            escape_packet = EvidencePacket(
+                symbol=symbol,
+                company_name="",
+                generated_at=today,
+                as_of_date=today,
+                request_type="comprehensive_analysis",
+                is_cold_start=True,
+                coverage=Coverage(
+                    rag_context="missing",
+                    market_data="missing",
+                    fundamental_data="missing",
+                    news_data="missing",
+                    filings="missing",
+                ),
+                facts=[],
+                missing_fields=[
+                    MissingField(field="all", reason="external data sources unavailable, no RAG cache命中")
+                ],
+                conflicts=[],
+                evidence_score=0,
+                allowed_output_level="insufficient_evidence",
+            )
+            return {
+                "evidence_packet": escape_packet.model_dump(),
+                "cold_start": True,
+                "messages": [{
+                    "role": "system",
+                    "content": (
+                        f"## ESCAPE POD: Data Unavailable\n\n"
+                        f"当前无法获取 {symbol} 的任何数据。"
+                        f"所有外部数据源（市场、基本面、新闻、监管披露）均不可用，"
+                        f"且知识库中无历史缓存。\n\n"
+                        f"请稍后重试，或提供本地资料（PDF 财报、公告链接等）。"
+                    ),
+                }],
+            }
+    else:
+        all_facts_raw = rag_facts + market_facts_raw + fundamental_facts_raw + news_facts_raw + filings_raw + hkex_raw
 
     facts = []
     for f in all_facts_raw:

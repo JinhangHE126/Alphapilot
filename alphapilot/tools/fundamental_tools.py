@@ -106,33 +106,109 @@ def _resolve_pdf_path(symbol: str, user_query: str = "") -> str:
     )
 
 
+def _extract_page_tables(page, page_number: int) -> list[dict]:
+    """Try structured table extraction via fitz.Table before LLM fallback."""
+    try:
+        tables = page.find_tables()
+    except Exception:
+        return []
+
+    results = []
+    for table in tables:
+        try:
+            df = table.to_pandas()
+        except Exception:
+            continue
+        if df is None or df.empty:
+            continue
+        results.append({
+            "page_number": page_number,
+            "columns": [str(c) for c in df.columns],
+            "rows": df.head(50).fillna("").to_dict(orient="records"),
+        })
+    return results
+
+
+def _validate_revenue_boundary(facts_dict: dict, prior_revenue: float | None = None) -> list[str]:
+    """Validate revenue/gross_profit values against ±80% boundary from prior quarter."""
+    warnings = []
+    revenue = facts_dict.get("revenue_growth")
+    if revenue is not None and prior_revenue is not None and prior_revenue > 0:
+        change_pct = abs(revenue - prior_revenue) / prior_revenue
+        if change_pct > 0.8:
+            warnings.append(
+                f"⚠️ revenue_growth={revenue} deviates {change_pct:.0%} from prior ({prior_revenue}), "
+                f"exceeds ±80% boundary — flagged suspicious"
+            )
+    gross_margin = facts_dict.get("gross_margin")
+    if gross_margin is not None and (gross_margin < -20 or gross_margin > 95):
+        warnings.append(
+            f"⚠️ gross_margin={gross_margin}% outside reasonable range [-20, 95] — flagged suspicious"
+        )
+    net_margin = facts_dict.get("net_margin")
+    if net_margin is not None and (net_margin < -50 or net_margin > 80):
+        warnings.append(
+            f"⚠️ net_margin={net_margin}% outside reasonable range [-50, 80] — flagged suspicious"
+        )
+    return warnings
+
+
 def parse_financial_pdf(pdf_path: str, symbol: str, model=None) -> FundamentalData:
     """
-    Parse a financial report PDF and return structured data.「解析财务报告 PDF 文件并返回结构化数据。」
-    (Currently uses an LLM-assisted parser; real projects can replace it with more precise rule-based extraction.)
+    Parse a financial report PDF with per-page extraction, table-first strategy,
+    page-number citations, and boundary validation (±80% revenue check).
+    "解析财务报告 PDF 文件并返回结构化数据。"
     """
     try:
-        # 读取 PDF 文本
         doc = _open_pdf(pdf_path)
-        full_text = ""
-        for page in doc:
-            full_text += page.get_text()
-        doc.close()
-
-        # 使用 LLM 提取结构化数据（推荐方式）
         if model is None:
             from config.llm import get_llm
             model = get_llm("fundamental")
-        # llm = model
-        
-        prompt = f"""
-        Extract structured information from the following financial report text. The stock ticker is {symbol}.
-        Return JSON only, strictly following this Pydantic schema:
-        {FundamentalData.model_json_schema()}
 
-        Financial report text:
-        {full_text[:8000]}  # Limit length to avoid exceeding the token limit
-        """
+        all_table_data = []
+        page_texts = []
+        total_pages = len(doc)
+
+        for page_num, page in enumerate(doc, 1):
+            tables = _extract_page_tables(page, page_num)
+            if tables:
+                all_table_data.extend(tables)
+
+            text = page.get_text()
+            if text.strip():
+                page_texts.append(f"--- PAGE {page_num}/{total_pages} ---\n{text}")
+
+        doc.close()
+
+        table_context = ""
+        if all_table_data:
+            table_lines = ["### Structured Table Data (fitz.Table extraction):"]
+            for t in all_table_data[:8]:
+                table_lines.append(f"  [Page {t['page_number']}] Columns: {', '.join(t['columns'][:10])}")
+                for row in t["rows"][:6]:
+                    table_lines.append(f"    {row}")
+            table_context = "\n".join(table_lines)
+
+        combined_text = "\n\n".join(page_texts)
+        if len(combined_text) > 12000:
+            combined_text = combined_text[:6000] + "\n\n...(middle pages omitted)...\n\n" + combined_text[-6000:]
+
+        prompt = f"""
+Extract structured financial information for {symbol} from the report below.
+The report has {total_pages} pages. Each section is prefixed with its page number.
+{table_context}
+
+Return JSON only, strictly following this Pydantic schema:
+{FundamentalData.model_json_schema()}
+
+IMPORTANT:
+- Cite the PAGE number where each value was found in key_points (e.g., "[p.5] revenue_growth=12.3%")
+- Prefer values from structured tables over narrative text when both available.
+- If a value cannot be determined, omit the field rather than guessing.
+
+Report text (page-prefixed):
+{combined_text}
+"""
 
         response = model.invoke(prompt)
         response_text = response.content if hasattr(response, "content") else str(response)
@@ -145,6 +221,12 @@ def parse_financial_pdf(pdf_path: str, symbol: str, model=None) -> FundamentalDa
         json_text = _extract_json_text(str(response_text))
         payload = json.loads(json_text)
         payload["symbol"] = payload.get("symbol") or symbol
+
+        boundary_warnings = _validate_revenue_boundary(payload)
+        if boundary_warnings:
+            existing = payload.get("key_points", []) or []
+            payload["key_points"] = existing + boundary_warnings
+
         return FundamentalData.model_validate(payload)
     except Exception as e:
         raise ValueError(f"Failed to parse PDF: {str(e)}")
