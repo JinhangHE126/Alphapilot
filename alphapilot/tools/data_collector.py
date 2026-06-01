@@ -255,27 +255,58 @@ def collect_all(symbol: str) -> dict:
 
     results = {"market": [], "fundamental": [], "news": [], "errors": []}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
         future_market = pool.submit(collect_market_facts, symbol)
         future_fundamental = pool.submit(collect_fundamental_facts, symbol)
         future_news = pool.submit(collect_news_facts, symbol)
 
-        try:
-            results["market"] = future_market.result(timeout=COLLECTOR_TIMEOUT)
-        except Exception as e:
-            results["errors"].append(f"market collector failed: {e}")
+        is_hk = symbol.endswith('.HK')
+        is_us = not is_hk and not symbol.endswith('.SZ') and not symbol.endswith('.SS')
 
-        try:
-            results["fundamental"] = future_fundamental.result(timeout=COLLECTOR_TIMEOUT)
-        except Exception as e:
-            results["errors"].append(f"fundamental collector failed: {e}")
+        future_sec = None
+        future_hkex = None
+        if is_us:
+            future_sec = pool.submit(_collect_sec, symbol)
+        if is_hk:
+            future_hkex = pool.submit(_collect_hkex, symbol)
 
-        try:
-            results["news"] = future_news.result(timeout=COLLECTOR_TIMEOUT)
-        except Exception as e:
-            results["errors"].append(f"news collector failed: {e}")
+        for name, fut in [
+            ("market", future_market),
+            ("fundamental", future_fundamental),
+            ("news", future_news),
+        ]:
+            try:
+                results[name] = fut.result(timeout=COLLECTOR_TIMEOUT)
+            except Exception as e:
+                results["errors"].append(f"{name} collector failed: {e}")
+
+        if future_sec:
+            try:
+                results["filings"] = future_sec.result(timeout=COLLECTOR_TIMEOUT)
+            except Exception:
+                pass
+        else:
+            results["filings"] = []
+
+        if future_hkex:
+            try:
+                results["hkex"] = future_hkex.result(timeout=COLLECTOR_TIMEOUT)
+            except Exception:
+                pass
+        else:
+            results["hkex"] = []
 
     return results
+
+
+def _collect_sec(symbol: str) -> list[dict]:
+    from tools.sec_edgar_tools import collect_sec_facts
+    return collect_sec_facts(symbol)
+
+
+def _collect_hkex(symbol: str) -> list[dict]:
+    from tools.hkex_tools import collect_hkex_facts
+    return collect_hkex_facts(symbol)
 
 
 __all__ = [

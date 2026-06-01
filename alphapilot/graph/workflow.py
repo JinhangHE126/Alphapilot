@@ -112,8 +112,10 @@ def evidence_packet_builder(state: GraphState) -> dict:
     market_facts_raw = collector_results.get("market", []) if is_cold_start else []
     fundamental_facts_raw = collector_results.get("fundamental", []) if is_cold_start else []
     news_facts_raw = collector_results.get("news", []) if is_cold_start else []
+    filings_raw = collector_results.get("filings", []) if is_cold_start else []
+    hkex_raw = collector_results.get("hkex", []) if is_cold_start else []
 
-    all_facts_raw = rag_facts + market_facts_raw + fundamental_facts_raw + news_facts_raw
+    all_facts_raw = rag_facts + market_facts_raw + fundamental_facts_raw + news_facts_raw + filings_raw + hkex_raw
 
     facts = []
     for f in all_facts_raw:

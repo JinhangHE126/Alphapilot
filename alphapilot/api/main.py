@@ -460,6 +460,13 @@ async def dashboard_stats(current_user: dict[str, Any] = Depends(get_current_use
     return success({"stats": stats, "recent_analyses": recent_items})
 
 
+@api.get("/metrics")
+async def prometheus_metrics():
+    from monitoring.counters import get_metrics
+    m = get_metrics()
+    return {"data": m.snapshot(), "status": "ok"}
+
+
 @api.get("/analyze/stream")
 async def analyze_stream_get(
     message: str,
