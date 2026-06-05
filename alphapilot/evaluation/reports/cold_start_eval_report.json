@@ -1,0 +1,33 @@
+{
+  "summary": {
+    "results": 1,
+    "avg_hallucination_rate": 0.0,
+    "reject_accuracy": 1.0,
+    "source_traceability": 1.0,
+    "cold_start_coverage": 1.0,
+    "output_level_accuracy": 1.0
+  },
+  "results": [
+    {
+      "case_id": "cs_030",
+      "symbol": "AMD",
+      "question": "最近的新闻和市场情绪如何？有什么重大事件？",
+      "output_level": "limited_analysis",
+      "expected_output_levels": [
+        "data_summary_only",
+        "limited_analysis",
+        "full_analysis"
+      ],
+      "output_level_match": true,
+      "hallucination_count": 0,
+      "hallucination_rate": 0.0,
+      "facts_traceable": 10,
+      "total_conclusions": 10,
+      "should_reject": false,
+      "did_reject": false,
+      "reject_accuracy": 1.0,
+      "cold_start_detected": true,
+      "notes": "{\"evidence_score\": 90, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 40566, \"forbidden_terms\": [\"unknown source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 1, \"cold_start_pct\": 100.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 100.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 100.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 40566, \"top_missing_fields\": [[\"pe_ratio\", 1], [\"revenue_growth_yoy\", 1], [\"eps_growth_yoy\", 1], [\"market_cap\", 1]]}}"
+    }
+  ]
+}

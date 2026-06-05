@@ -1,0 +1,7 @@
+EvalSuite Summary:
+  Results: 1
+  Avg Hallucination Rate: 0.0%
+  Reject Accuracy: 100.0%
+  Source Traceability: 100.0%
+  Cold Start Coverage: 100.0%
+  Output Level Accuracy: 100.0%

@@ -1,5 +1,6 @@
 from typing import Any
 from datetime import date
+import time
 
 from dotenv import load_dotenv
 from langgraph.graph import START, END, StateGraph
@@ -8,6 +9,7 @@ from langchain_core.messages import HumanMessage
 from graph.state import GraphState
 from graph.checkpointer import get_checkpointer
 from graph.user_profile import load_user_profile
+from monitoring.counters import get_metrics
 
 from schemas.evidence_packet import (
     EvidencePacket,
@@ -20,6 +22,7 @@ from schemas.evidence_packet import (
     render_packet_for_agent,
 )
 from tools.data_collector import collect_all
+from knowledge.ingest_service import upsert_packet
 from rag.retriever import retriever
 
 from agents.market_agent import market_agent
@@ -40,7 +43,7 @@ checkpointer = get_checkpointer()
 
 GUARD_MAX_RETRIES = 2
 
-RAG_SCORE_THRESHOLD = 0.55
+RAG_SIMILARITY_THRESHOLD = 0.55
 
 
 def evidence_packet_builder(state: GraphState) -> dict:
@@ -82,11 +85,11 @@ def evidence_packet_builder(state: GraphState) -> dict:
     rag_facts = []
 
     if matched_rag:
-        top_score = matched_rag[0].score
+        top_similarity = matched_rag[0].similarity
         has_metadata = any(
             r.metadata.get("symbol") or r.metadata.get("source") for r in matched_rag
         )
-        if top_score < RAG_SCORE_THRESHOLD or not has_metadata:
+        if top_similarity < RAG_SIMILARITY_THRESHOLD or not has_metadata:
             is_cold_start = True
     else:
         is_cold_start = True
@@ -101,7 +104,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
                 "source": r.metadata.get("source", "rag"),
                 "source_url": r.metadata.get("url"),
                 "as_of_date": r.metadata.get("date", today),
-                "confidence": min(r.score, 0.75),
+                "confidence": min(r.similarity, 0.95),
                 "confidence_tier": "llm_extracted",
             })
 
@@ -154,7 +157,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
                 allowed_output_level="insufficient_evidence",
             )
             return {
-                "evidence_packet": escape_packet.model_dump(),
+                "evidence_packet": escape_packet.model_dump(mode="json"),
                 "cold_start": True,
                 "messages": [{
                     "role": "system",
@@ -211,6 +214,11 @@ def evidence_packet_builder(state: GraphState) -> dict:
     packet = compute_evidence_score(packet)
     guard_result = determine_output_level(packet)
     packet.allowed_output_level = guard_result.allowed_output_level
+    ingestion_result = None
+    try:
+        ingestion_result = upsert_packet(packet)
+    except Exception as exc:
+        ingestion_result = {"symbol": symbol, "ingested": 0, "skipped": -1, "error": str(exc)}
 
     rendered = render_packet_for_agent(packet)
 
@@ -218,14 +226,27 @@ def evidence_packet_builder(state: GraphState) -> dict:
     print(f"   Symbol: {symbol}")
     print(f"   Cold Start: {is_cold_start}")
     print(f"   RAG Results: {len(rag_results)}")
+    if matched_rag:
+        print(
+            f"   Top RAG distance/similarity: "
+            f"{matched_rag[0].distance:.4f}/{matched_rag[0].similarity:.4f} "
+            f"(threshold={RAG_SIMILARITY_THRESHOLD})"
+        )
     print(f"   Facts: {len(facts)}")
     print(f"   Evidence Score: {packet.evidence_score}/100")
     print(f"   Output Level: {guard_result.allowed_output_level.value}")
     print(f"   Reason: {guard_result.reason}\n")
+    if ingestion_result is not None:
+        print(
+            "   Ingestion: "
+            f"ingested={ingestion_result.get('ingested', 0)} "
+            f"skipped={ingestion_result.get('skipped', 0)}"
+        )
 
     return {
-        "evidence_packet": packet.model_dump(),
+        "evidence_packet": packet.model_dump(mode="json"),
         "cold_start": is_cold_start,
+        "ingestion_result": ingestion_result,
         "messages": [{"role": "system", "content": rendered}],
     }
 
@@ -303,14 +324,42 @@ def orchestrator_node(state: GraphState) -> dict:
     guard_retry = state.get("guard_retry_count", 0)
     guard_failed = bool(guard_check) and not guard_check.get("is_valid") and guard_retry < GUARD_MAX_RETRIES
 
+    # Classify hard vs soft Guard failures.
+    # Hard (evidence-level): can't fix by re-running agents → END immediately.
+    # Soft (output-level): ungrounded claims / prohibited keywords → retry agents.
     if guard_failed:
+        issues = guard_check.get("issues", [])
+        hard_failure_keywords = [
+            "INSUFFICIENT_EVIDENCE",
+            "Symbol mismatch",
+            "no evidence packet",
+            "evidence packet corrupted",
+            "cannot produce analysis",
+        ]
+        is_hard_failure = any(
+            kw.lower() in str(issue).lower()
+            for issue in issues
+            for kw in hard_failure_keywords
+        )
+
+        if is_hard_failure:
+            reasoning = (
+                f"Guard hard-failure (evidence-level, retry {guard_retry}/{GUARD_MAX_RETRIES}). "
+                f"Re-running agents cannot fix this. Ending pipeline."
+            )
+            print(f"\n🎛️ Orchestrator Decision:")
+            print(f"   Executed: {executed}")
+            print(f"   Next: []")
+            print(f"   Reasoning: {reasoning}\n")
+            return {"next": "__end__", "orchestrator_reasoning": reasoning}
+
         corrections = guard_check.get("corrections", [])
         correction_msg = "\n".join(f"- {c}" for c in corrections) if corrections else "Address the identified issues."
         guard_msg = {"role": "user", "content": f"Guard Agent identified issues:\n{correction_msg}\nPlease fix these and regenerate your analysis."}
         messages.append(guard_msg)
         next_agents = ["strategy_expert"]
         executed = [a for a in executed if a not in ("strategy_expert", "risk_expert", "recommendation_agent", "guard_agent")]
-        reasoning = f"Guard check failed (retry {guard_retry}/{GUARD_MAX_RETRIES}). Re-running strategy → risk → recommendation."
+        reasoning = f"Guard soft-failure (output-level, retry {guard_retry}/{GUARD_MAX_RETRIES}). Re-running strategy → risk → recommendation."
     elif is_alert:
         if _alert_done:
             next_agents = []
@@ -333,43 +382,66 @@ def orchestrator_node(state: GraphState) -> dict:
             next_agents = ["recommendation_agent"]
             reasoning = "User requested personalized recommendation → route to recommendation_agent"
     else:
-        FULL_STAGES = [
-            ["market_data_expert", "fundamental_expert", "news_sentiment_expert"],
-            ["strategy_expert"],
-            ["risk_expert"],
-            ["portfolio_agent"],
-            ["backtesting_agent"],
-        ]
+        ep = state.get("evidence_packet", {})
+        allowed_level = ep.get("allowed_output_level", "") if ep else ""
+        evidence_score = ep.get("evidence_score", 0) if ep else 0
+
+        if allowed_level in ("insufficient_evidence", "data_summary_only"):
+            STAGES: list[list[str]] = []
+        elif allowed_level == "limited_analysis":
+            STAGES = [
+                ["market_data_expert", "fundamental_expert", "news_sentiment_expert"],
+                ["strategy_expert"],
+                ["risk_expert"],
+            ]
+        else:
+            STAGES = [
+                ["market_data_expert", "fundamental_expert", "news_sentiment_expert"],
+                ["strategy_expert"],
+                ["risk_expert"],
+                ["portfolio_agent"],
+                ["backtesting_agent"],
+            ]
+
         executed_set = set(executed)
         next_agents = []
-        for stage in FULL_STAGES:
+        for stage in STAGES:
             missing = [agent for agent in stage if agent not in executed_set]
             if missing:
                 next_agents = missing
                 break
 
-        stage0_agents = {"market_data_expert", "fundamental_expert", "news_sentiment_expert"}
-        stage0_done = stage0_agents.issubset(executed_set)
-        if stage0_done and next_agents == ["strategy_expert"]:
-            ep = state.get("evidence_packet", {})
-            evidence_score = ep.get("evidence_score", 0) if ep else 0
-            if evidence_score < 50 and "guard_agent" not in executed_set:
-                next_agents = ["guard_agent"]
-                reasoning = (
-                    f"Evidence score {evidence_score}/100 < 50 after data collection. "
-                    f"Skipping strategy→risk→portfolio→backtest→recommendation. Routing to Guard."
-                )
-
-        if not next_agents and "recommendation_agent" not in executed_set:
-            next_agents = ["recommendation_agent"]
-            reasoning = "Full analysis done. Routing to recommendation for personalized advice."
-        elif not next_agents and "recommendation_agent" in executed_set and "guard_agent" not in executed_set:
-            next_agents = ["guard_agent"]
-            reasoning = "Recommendation complete. Routing to Guard Agent for fact-check verification."
-        elif not next_agents:
-            reasoning = "Guard verification passed. Analysis pipeline complete."
+        if not next_agents:
+            if allowed_level in ("insufficient_evidence", "data_summary_only"):
+                if "guard_agent" not in executed_set:
+                    next_agents = ["guard_agent"]
+                    reasoning = (
+                        f"Evidence level={allowed_level} (score={evidence_score}). "
+                        f"Skipping all analysis. Routing to Guard for rejection."
+                    )
+                else:
+                    reasoning = "Evidence insufficient, guard passed. Pipeline complete."
+            elif allowed_level == "limited_analysis":
+                if "guard_agent" not in executed_set:
+                    next_agents = ["guard_agent"]
+                    reasoning = (
+                        f"Evidence level={allowed_level} (score={evidence_score}). "
+                        f"Analysis done. Routing to Guard (skipping portfolio/backtest/recommendation)."
+                    )
+                else:
+                    reasoning = "Limited analysis + guard complete. Pipeline done."
+            else:
+                if "recommendation_agent" not in executed_set:
+                    next_agents = ["recommendation_agent"]
+                    reasoning = "Full analysis done. Routing to recommendation for personalized advice."
+                elif "guard_agent" not in executed_set:
+                    next_agents = ["guard_agent"]
+                    reasoning = "Recommendation complete. Routing to Guard Agent for fact-check verification."
+                else:
+                    reasoning = "Guard verification passed. Analysis pipeline complete."
         else:
-            reasoning = "Deterministic full-analysis route."
+            level_label = allowed_level if allowed_level else "full"
+            reasoning = f"Deterministic route ({level_label})."
 
     print("\n🎛️ Orchestrator Decision:")
     print(f"   User Instruction: {user_instruction[:80]}...")
@@ -388,6 +460,8 @@ def orchestrator_node(state: GraphState) -> dict:
     if guard_failed:
         result["guard_check"] = {}
     return result
+
+    
 # ====================== StateGraph ======================
 workflow = StateGraph(GraphState)
 
@@ -459,6 +533,74 @@ workflow.add_conditional_edges(
     },
 )
 
-app = workflow.compile(checkpointer=checkpointer)
+_compiled_app = workflow.compile(checkpointer=checkpointer)
+
+
+def _extract_symbol_mismatch(guard_check: dict | None) -> bool:
+    if not isinstance(guard_check, dict):
+        return False
+    issues = guard_check.get("issues", [])
+    if not isinstance(issues, list):
+        return False
+    return any("symbol mismatch" in str(issue).lower() for issue in issues)
+
+
+def _record_request_metrics(
+    evidence_packet: dict | None,
+    guard_check: dict | None,
+    duration_ms: int,
+) -> None:
+    metrics = get_metrics()
+    guard_valid = True
+    if isinstance(guard_check, dict) and guard_check:
+        guard_valid = bool(guard_check.get("is_valid", False))
+    symbol_mismatch = _extract_symbol_mismatch(guard_check)
+    metrics.record(
+        evidence_packet=evidence_packet,
+        guard_valid=guard_valid,
+        symbol_mismatch=symbol_mismatch,
+        duration_ms=duration_ms,
+    )
+
+
+class InstrumentedWorkflowApp:
+    """
+    Lightweight wrapper around compiled LangGraph app.
+    Records monitoring counters for both invoke and stream paths.
+    """
+
+    def __init__(self, inner_app):
+        self._inner = inner_app
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def invoke(self, *args, **kwargs):
+        t0 = time.time()
+        output = self._inner.invoke(*args, **kwargs)
+        elapsed_ms = int((time.time() - t0) * 1000)
+        ep = output.get("evidence_packet") if isinstance(output, dict) else None
+        guard = output.get("guard_check") if isinstance(output, dict) else None
+        _record_request_metrics(ep, guard, elapsed_ms)
+        return output
+
+    def stream(self, *args, **kwargs):
+        t0 = time.time()
+        latest_packet = None
+        latest_guard = None
+        for chunk in self._inner.stream(*args, **kwargs):
+            if isinstance(chunk, dict):
+                for _node, update in chunk.items():
+                    if isinstance(update, dict):
+                        if "evidence_packet" in update:
+                            latest_packet = update.get("evidence_packet")
+                        if "guard_check" in update:
+                            latest_guard = update.get("guard_check")
+            yield chunk
+        elapsed_ms = int((time.time() - t0) * 1000)
+        _record_request_metrics(latest_packet, latest_guard, elapsed_ms)
+
+
+app = InstrumentedWorkflowApp(_compiled_app)
 
 __all__ = ["app"]

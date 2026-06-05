@@ -1,82 +1,57 @@
-from typing import TypedDict, Annotated, Any, NotRequired, Optional
+from typing import TypedDict, Annotated, Optional
 from langgraph.graph import add_messages
 from langchain_core.messages import BaseMessage
 
 
-class GraphState(TypedDict):
-    """AlphaPilot 全局共享状态（所有 Agent 都能读写）"""
-    
+class GraphState(TypedDict, total=False):
+    """AlphaPilot 全局共享状态（所有 Agent 都能读写）。"""
+
     # 基础输入
-    stock_symbol: str                      # 股票代码，例如 "TSLA" 或 "0700.HK"
-
-    # === Evidence Packet（v4 防幻觉核心）===
-    evidence_packet: NotRequired[Optional[dict]]
-    cold_start: NotRequired[bool]
-    
-    # 各 Agent 的输出结果（便于后续 Strategy Agent 汇总）
-    market_data: Annotated[str, "market_data_expert output"] = ""
-    fundamental_data: Annotated[str, "fundamental_expert output"]= ""
-    news_sentiment: Annotated[str, "news_sentiment_expert output"]= ""
-    strategy_recommendation: Annotated[str, "strategy_expert output"]= ""
-    risk_assessment: Annotated[str, "risk_expert output"]= ""
-
-
-    next: NotRequired[str]
-    errors: NotRequired[list[str]]
-    
-    # LangGraph 内置的消息列表（Supervisor 主要依赖这个）
+    stock_symbol: str
     messages: Annotated[list[BaseMessage], add_messages]
-    
-    # 未来会用到的扩展字段（现在先定义好）
-    rag_context: Annotated[str, "RAG retrieved context"] = ""
-    # memory_summary: Annotated[str, "Memory summary"] = ""
-    final_score: Annotated[float, "Final score 0-100"] = 0.0
 
+    # Evidence Packet（v4 防幻觉核心）
+    evidence_packet: Optional[dict]
+    cold_start: bool
+    ingestion_result: dict
 
-        # Agent 执行记录（防止重复调用）
-    executed_agents: Annotated[list[str], "List of executed agents"] = []
-    
-    # 最终输出
-    # final_recommendation: Annotated[str, "最终 Buy/Hold/Sell"] = ""
-    final_recommendation: Annotated[str, "Final Buy/Hold/Sell"] = ""
-    final_report: Annotated[str, "Complete analysis report"] = ""
-        # === Week 4 新增：持久化 Memory ===
-    conversation_history: Annotated[list[dict], "Conversation history record"] = []
-    user_profile: Annotated[dict, "User preference profile"] = {}
-    memory: Annotated[dict, "Long-term memory (Historical stock analysis)"] = {}
-    
-    #  Memory 相关
-    memory_summary: Annotated[str, "history analysis memory"] = ""
-    conversation_history: Annotated[list, 'history messages'] = []
-    
-    # 可选：错误记录
-    errors: list[str] = []
+    # Orchestrator / 工作流控制
+    next: str
+    executed_agents: list[str]
+    orchestrator_reasoning: str
 
-    # === 6.4 幻觉防护相关 ===
-    guard_check: Annotated[dict, "Guard Agent validation results"] = {}
-    sources: Annotated[list[str], "All source references"] = []
-    confidence_score: Annotated[int, "Final confidence score 0-100"] = 0
-    guard_retry_count: Annotated[int, "Current guard retry count"] = 0
+    # 各 Agent 输出
+    market_data: str
+    fundamental_data: str
+    news_sentiment: str
+    strategy_recommendation: str
+    risk_assessment: str
+    final_recommendation: str
+    final_report: str
+    portfolio_suggestion: str
+    backtest_report: str
+    backtest_metrics: dict
+    comparison_report: str
+    portfolio_optimization_report: str
+    optimized_weights: dict
+    alert_report: str
+    active_alerts: list
 
-# === Week 6 新增：Portfolio 相关 ===
-    portfolio_suggestion: Annotated[str, "Position sizing and portfolio suggestions"] = ""
-    current_portfolio: Annotated[dict, "Current portfolio holdings record"] = {}
+    # 记忆 / 用户画像
+    user_profile: dict
+    memory: dict
+    long_term_memory: dict
+    conversation_history: list[dict]
+    memory_summary: str
 
-# === Week 6 新增：Portfolio & Backtesting ===
-    # portfolio_suggestion: Annotated[str, "Position sizing and portfolio suggestions"] = ""
-    backtest_report: Annotated[str, "Historical backtesting report"] = ""
-    backtest_metrics: Annotated[dict, "Key backtesting metrics"] = {}
-    
-    # === Week 6 新增：Comparison Agent ===
-    comparison_report: Annotated[str, "Multi-stock comparative analysis report"] = ""
+    # Guard / 质量控制
+    guard_check: dict
+    sources: list[str]
+    confidence_score: int
+    guard_retry_count: int
 
-# === Week 7 新增：用户画像与长期记忆 ===
-    user_profile: Annotated[dict, "User profile (risk preference, style, historical memory)"] = {}
-    long_term_memory: Annotated[dict, "Cross-session long-term memory"] = {}
-# === Week 7 新增：Portfolio Optimization ===
-    portfolio_optimization_report: Annotated[str, "Portfolio optimization report"] = ""
-    optimized_weights: Annotated[dict, "Optimized asset weights"] = {}
-
-    # === Week 7 新增：Alert Agent ===
-    alert_report: Annotated[str, "实时警报报告"] = ""
-    active_alerts: Annotated[list, "当前激活的警报列表"] = []
+    # 其他扩展
+    rag_context: str
+    final_score: float
+    current_portfolio: dict
+    errors: list[str]

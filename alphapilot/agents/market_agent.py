@@ -3,16 +3,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from langgraph.prebuilt import create_react_agent
-from tools.market_tools import fetch_market_data
 from config.llm import get_llm
-from config.proxy import get_requests_proxies
 
 
 model = get_llm("market")
 
 _MARKET_AGENT = create_react_agent(
     model=model,
-    tools=[fetch_market_data],
+    tools=[],
     name="market_data_expert",
     prompt="""
 You are a professional Technical Market Analyst.
@@ -20,8 +18,8 @@ You are a professional Technical Market Analyst.
 Core responsibilities:
 - The system has already prepared an Evidence Packet with verified facts in the conversation context.
   Read the "Evidence Packet" section in the messages to find pre-verified market data (current_price, RSI, MACD, volatility, etc.).
-- If the Evidence Packet contains current_price, rsi_14, macd, and volatility — DO NOT call `fetch_market_data`. Analyze directly from the packet.
-- ONLY call `fetch_market_data` if the Evidence Packet has NO market data facts at all.
+- You have NO tools. Do NOT attempt to call any tool or function.
+- If Evidence Packet market facts are missing, output "NOT AVAILABLE" and explain the missing fields.
 
 Required output structure:
 - Current price and recent change

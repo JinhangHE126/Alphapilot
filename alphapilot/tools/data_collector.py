@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from datetime import date
 from typing import Optional
 
@@ -292,7 +293,55 @@ def collect_news_facts(symbol: str) -> list[dict]:
     return facts
 
 
-def collect_all(symbol: str) -> dict:
+_collector_cache: dict[str, tuple[dict, float]] = {}
+
+# Per-data-type TTL in seconds. Market data goes stale fastest; fundamentals
+# and filings are valid for the duration of a single process (eval run).
+_collector_cache_ttl: dict[str, float] = {
+    "market": 300.0,      # 5 min
+    "fundamental": 3600.0,  # 1 hour (fin statements don't change intra-day)
+    "news": 600.0,         # 10 min
+    "filings": 7200.0,      # 2 hours
+    "hkex": 7200.0,
+}
+_default_cache_ttl = 600.0
+
+
+def collect_all(symbol: str, force_refresh: bool = False) -> dict:
+    """
+    Collect all available data for a symbol.
+
+    Caches results per-symbol with per-data-type TTL to avoid redundant
+    yfinance downloads during short-lived eval runs. Set force_refresh=True
+    to bypass the cache entirely.
+
+    TODO: long-term replace this process-level cache with a real Fact Store
+          that uses field-level TTL and coverage checks, not just a
+          similarity-threshold cold-start gate.
+    """
+    import time
+
+    now = time.time()
+    entry = _collector_cache.get(symbol)
+    if entry is not None and not force_refresh:
+        cached_data, cached_at = entry
+        age = now - cached_at
+
+        # Use the shortest TTL among populated data keys.
+        populated_keys = [k for k, v in cached_data.items() if v and not k.startswith("errors")]
+        effective_ttl = min(
+            (_collector_cache_ttl.get(k, _default_cache_ttl) for k in populated_keys),
+            default=_default_cache_ttl,
+        )
+
+        if age < effective_ttl:
+            print(f"   💾 Collector cache hit for {symbol} (age={age:.0f}s, ttl={effective_ttl}s)")
+            return cached_data
+        else:
+            print(f"   ⏳ Collector cache expired for {symbol} (age={age:.0f}s > ttl={effective_ttl}s)")
+    elif entry is not None and force_refresh:
+        print(f"   🔄 Force refresh for {symbol}, bypassing collector cache")
+
     import concurrent.futures
 
     results = {"market": [], "fundamental": [], "news": [], "errors": []}
@@ -338,6 +387,9 @@ def collect_all(symbol: str) -> dict:
         else:
             results["hkex"] = []
 
+    has_data = any(results.get(k) for k in ("market", "fundamental", "news", "filings", "hkex"))
+    if has_data:
+        _collector_cache[symbol] = (results, time.time())
     return results
 
 

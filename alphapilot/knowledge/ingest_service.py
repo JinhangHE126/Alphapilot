@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 
 from knowledge.ingestion import should_ingest, extract_records, IngestionRecord
 from schemas.evidence_packet import EvidencePacket
-from rag.vectorstore import rag as vectorstore
+from rag.retriever import retriever as vectorstore
 
 
 def upsert_packet(packet: EvidencePacket) -> dict:
@@ -37,9 +36,11 @@ def upsert_packet(packet: EvidencePacket) -> dict:
         text = f"{record.field}: {record.value} (source: {record.source}, date: {record.as_of_date})"
 
         try:
-            vectorstore.add_document(text=text, metadata=metadata, doc_id=doc_id)
-            result["ingested"] += 1
-            result["records"].append({"field": record.field, "source": record.source})
+            if vectorstore.add_document(text=text, metadata=metadata, doc_id=doc_id):
+                result["ingested"] += 1
+                result["records"].append({"field": record.field, "source": record.source})
+            else:
+                result["skipped"] += 1
         except Exception as exc:
             result["skipped"] += 1
             result.setdefault("errors", []).append(str(exc))

@@ -34,6 +34,91 @@ def _detect_symbol_mismatch(packet_symbol: str, state_symbol: str, facts: list) 
     return issues
 
 
+_KEYWORD_FIELD_MAP: dict[str, str] = {
+    "current price": "current_price",
+    "股价": "current_price",
+    "价格": "current_price",
+    "price": "current_price",
+    "rsi": "rsi_14",
+    "macd": "macd",
+    "volatility": "volatility_20d_annualized",
+    "波动率": "volatility_20d_annualized",
+    "pe ratio": "pe_ratio",
+    "p/e": "pe_ratio",
+    "市盈率": "pe_ratio",
+    "pb ratio": "pb_ratio",
+    "p/b": "pb_ratio",
+    "市净率": "pb_ratio",
+    "market cap": "market_cap",
+    "市值": "market_cap",
+    "revenue growth": "revenue_growth_yoy",
+    "营收增长": "revenue_growth_yoy",
+    "eps growth": "eps_growth_yoy",
+    "eps增长": "eps_growth_yoy",
+}
+
+
+def _number_variants(value) -> set[str]:
+    variants = set()
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return variants
+    variants.add(str(int(num)) if num.is_integer() else str(num))
+    variants.add(f"{num:.1f}")
+    variants.add(f"{num:.2f}")
+    variants.add(f"{num:.3f}")
+    if abs(num) <= 1000:
+        variants.add(f"{num:,.2f}".replace(",", ""))
+    return {v.rstrip("0").rstrip(".") if "." in v else v for v in variants}
+
+
+def _find_ungrounded_claims(ep: EvidencePacket, output_text: str) -> list[str]:
+    """
+    规则型 grounding 检查：
+    1) 报告提到某类关键字段，但 packet 中没有该字段 -> ungrounded
+    2) 报告含 target price/目标价等高风险结论 -> ungrounded
+    """
+    issues = []
+    text = output_text or ""
+    lower = text.lower()
+    available_fields = {f.field for f in ep.facts}
+
+    for keyword, required_field in _KEYWORD_FIELD_MAP.items():
+        if keyword in lower and required_field not in available_fields:
+            issues.append(
+                f"Ungrounded claim: mentions '{keyword}' but Evidence Packet has no field '{required_field}'"
+            )
+
+    target_price_patterns = [
+        r"\btarget\s*price\b",
+        r"目标价",
+        r"\bprice\s*target\b",
+    ]
+    if any(re.search(pat, lower) for pat in target_price_patterns):
+        issues.append(
+            "Ungrounded claim: target price statement is not allowed unless explicitly grounded in Evidence Packet"
+        )
+
+    # Optional value-level check for frequently abused numeric fields.
+    numeric_fields = {"current_price", "pe_ratio", "pb_ratio", "revenue_growth_yoy", "eps_growth_yoy"}
+    numeric_fact_map = {
+        f.field: _number_variants(f.value)
+        for f in ep.facts
+        if f.field in numeric_fields
+    }
+    for field_name, variants in numeric_fact_map.items():
+        if not variants:
+            continue
+        keyword_hits = [kw for kw, fld in _KEYWORD_FIELD_MAP.items() if fld == field_name and kw in lower]
+        if keyword_hits and not any(v and v in lower for v in variants):
+            issues.append(
+                f"Potential ungrounded numeric claim: '{field_name}' is mentioned but numeric value not traceable to packet fact"
+            )
+
+    return issues
+
+
 def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = "") -> dict:
     """
     硬规则校验：不经过 LLM，确定性判定输出是否可以接受。
@@ -87,7 +172,6 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
             "final_reasoning": guard_result.reason,
         }
 
-    facts_text = {f.field: str(f.value) for f in ep.facts}
     issues = []
 
     if guard_result.allowed_output_level in (OutputLevel.DATA_SUMMARY_ONLY, OutputLevel.LIMITED_ANALYSIS):
@@ -103,6 +187,8 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
                     f"Output contains '{kw}' but output_level={guard_result.allowed_output_level.value} "
                     f"(investment recommendations not allowed at this level)"
                 )
+
+    issues.extend(_find_ungrounded_claims(ep, final_output_text))
 
     is_valid = len(issues) == 0
 

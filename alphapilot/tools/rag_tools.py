@@ -18,11 +18,18 @@ def retrieve_knowledge(query: str, k: int = 5) -> str:
     for r in results:
         docs_json.append({
             "content": r.doc.page_content[:500],
-            "score": r.score,
+            "score": r.similarity,
+            "similarity": r.similarity,
+            "distance": r.distance,
             "source": r.metadata.get("source", "unknown"),
             "symbol": r.metadata.get("symbol", ""),
+            "as_of_date": r.metadata.get("as_of_date", r.metadata.get("date", "")),
             "date": r.metadata.get("date", ""),
+            "data_type": r.metadata.get("data_type", r.metadata.get("type", "")),
             "type": r.metadata.get("type", ""),
+            "confidence_tier": r.metadata.get("confidence_tier", ""),
+            "expires_at": r.metadata.get("expires_at"),
+            "url": r.metadata.get("url"),
         })
 
     return json.dumps({"status": "ok", "documents": docs_json}, ensure_ascii=False)

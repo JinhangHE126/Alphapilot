@@ -3,29 +3,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from langgraph.prebuilt import create_react_agent
-from tools.fundamental_tools import analyze_fundamental_request
 from config.llm import get_llm
 
-model = get_llm('fundamental')
+model = get_llm("fundamental")
 
-def analyze_fundamental_request_tool(
-    symbol: str, 
-    user_query: str = "", 
-    model=None
-) -> str:
-    """Tool wrapper for fundamental analysis"""
-    try:
-        return analyze_fundamental_request(
-            symbol=symbol, 
-            user_query=user_query, 
-            model=model
-        )
-    except Exception as e:
-        return f"Fundamental analysis failed: {str(e)}"
 
-fundamental_agent = create_react_agent(
+_FUNDAMENTAL_AGENT = create_react_agent(
     model=model,
-    tools=[analyze_fundamental_request_tool],
+    tools=[],
     name="fundamental_expert",
     prompt="""
 You are a professional Fundamental Analyst.
@@ -33,8 +18,8 @@ You are a professional Fundamental Analyst.
 Core responsibilities:
 - The system has already prepared an Evidence Packet with verified facts in the conversation context.
   Read the "Evidence Packet" section in the messages to find pre-verified fundamental data (revenue_growth_yoy, eps_growth_yoy, pe_ratio, market_cap, etc.).
-- Use the `analyze_fundamental_request_tool` ONLY if detailed PDF-based financial report extraction is needed.
-- Combine Evidence Packet facts with tool output for a complete analysis.
+- You have NO tools. Do NOT attempt to call any tool or function.
+- Build analysis strictly from Evidence Packet facts.
 
 Required output elements:
 - Revenue growth (YoY)
@@ -44,7 +29,7 @@ Required output elements:
 - One-sentence fundamental summary
 
 Strict rules:
-- Base everything on Evidence Packet facts and tool data.
+- Base everything on Evidence Packet facts.
 - NEVER fabricate or assume data points not in the Evidence Packet.
 - If critical fundamental fields (revenue_growth_yoy, eps_growth_yoy, pe_ratio, market_cap) are ALL missing:
   state clearly "Insufficient fundamental data available" and STOP. Do NOT fill the gap with technical indicators (RSI, MACD, volatility, price) or other agents' data.
@@ -53,5 +38,44 @@ Strict rules:
 """
 )
 
-# 导出供 workflow 使用
+
+def fundamental_agent(state):
+    ep = state.get("evidence_packet", {}) or {}
+    output_level = ep.get("allowed_output_level", "")
+
+    if output_level in ("insufficient_evidence", "data_summary_only"):
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": (
+                    "## Fundamental Analysis: NOT AVAILABLE\n"
+                    f"- Reason: Evidence insufficient (output level: {output_level})\n"
+                    "- Action: Await verified fundamental data before analysis"
+                ),
+            }],
+        }
+
+    facts = ep.get("facts", []) if isinstance(ep, dict) else []
+    available_fields = {
+        f.get("field")
+        for f in facts
+        if isinstance(f, dict) and f.get("field")
+    }
+    critical_fields = {"revenue_growth_yoy", "eps_growth_yoy", "pe_ratio", "market_cap"}
+    if critical_fields.isdisjoint(available_fields):
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": (
+                    "## Fundamental Analysis: NOT AVAILABLE\n"
+                    "- Reason: critical fundamental fields are missing "
+                    "(revenue_growth_yoy, eps_growth_yoy, pe_ratio, market_cap)\n"
+                    "- Action: collect/verify fundamental data before analysis"
+                ),
+            }],
+        }
+
+    return _FUNDAMENTAL_AGENT.invoke(state)
+
+
 __all__ = ["fundamental_agent"]

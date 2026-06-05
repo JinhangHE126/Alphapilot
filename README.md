@@ -8,7 +8,10 @@
 |------|------|
 | 前端 | React 18 + Vite + TypeScript |
 | 后端 | FastAPI + Python 3.12 |
-| 多智能体 | LangGraph Supervisor + 12 个专业 Agent |
+| 多智能体 | LangGraph StateGraph + Evidence Packet 前置节点 + 12 个专业 Agent |
+| 防幻觉 | Hybrid RAG + Evidence Packet + Guard 硬规则 + 冷启动评测 |
+| 数据源 | yfinance 主链路 + SEC/HKEX 辅助采集（规划接入 Polygon / Tiingo / Alpha Vantage） |
+| 知识库 | FAISS 动态事实缓存（doc_id 去重、TTL 过滤、冷启动回写） |
 | 数据库 | SQLite（分析记录、用户、会话、消息） |
 | 认证 | JWT（注册/登录/刷新） |
 | 实时流 | SSE (Server-Sent Events) |
@@ -47,21 +50,27 @@ docker compose -f alphapilot/docker-compose.yml up -d
 ## 系统架构
 
 ```
-用户 → React 前端 → FastAPI → LangGraph Supervisor
-                                    ├── Market Data Agent (yfinance)
-                                    ├── Fundamental Agent + RAG
-                                    ├── News & Sentiment Agent + RAG
-                                    ├── Risk Agent
-                                    ├── Strategy Agent
-                                    ├── Comparison Agent
-                                    ├── Backtesting Agent
-                                    ├── Alert Agent
-                                    ├── Portfolio Optimization Agent
-                                    ├── Recommendation Agent
-                                    └── Guard Agent
-                                         ↓
-                                    SQLite 持久化
+用户 → React 前端 → FastAPI → LangGraph StateGraph
+                                │
+                                ▼
+                      Evidence Packet Builder
+                      ├── FAISS RAG 检索（score + metadata）
+                      ├── 冷启动判断（symbol / similarity / coverage）
+                      ├── collect_all 数据采集（yfinance + SEC/HKEX 辅助）
+                      ├── Evidence Packet 评分与输出等级
+                      └── 高质量 facts 回写 FAISS（去重 + TTL）
+                                │
+                                ▼
+                           Orchestrator
+                      ├── insufficient/data_summary → Guard 拒答
+                      ├── limited_analysis → Market/Fundamental/News → Strategy/Risk → Guard
+                      └── full_analysis → 完整链路 + Guard
+                                │
+                                ▼
+                         SQLite + Checkpointer
 ```
+
+当前 Agent 的职责已经收敛：Market / Fundamental / News 等 Agent 不再直接调用 RAG 或外部数据工具，而是消费 `state.evidence_packet` 中的结构化事实。数据采集统一前置到 `evidence_packet_builder`，Guard 负责输出前的确定性校验。
 
 ## API 端点
 
@@ -93,7 +102,11 @@ alphapilot/
 ├── services/                 # 分析服务（流式 & 同步）
 ├── db/                       # SQLite 模型 & 仓储层
 ├── tools/                    # 市场数据、新闻、RAG 工具
-├── rag/                      # ChromaDB 向量检索
+├── knowledge/                # Evidence Packet 入库治理（质量门槛、TTL、去重）
+├── rag/                      # FAISS 动态事实缓存 + 兼容 Chroma 辅助模块
+├── schemas/                  # Evidence Packet / Fact / Coverage / GuardResult
+├── evaluation/               # 冷启动评测集、指标、结构化报告
+├── monitoring/               # Evidence/Guard 运行指标
 ├── prompts/                  # Supervisor 提示词
 ├── Dockerfile & compose
 frontend/

@@ -94,7 +94,29 @@ _REQUEST_SOURCE_EXPECTATIONS: dict[str, int] = {
 }
 
 
-CRITICAL_FIELDS = {"revenue", "eps", "current_price", "revenue_growth_yoy", "eps_growth"}
+_CRITICAL_FIELDS_BY_REQUEST_TYPE: dict[str, set[str]] = {
+    "comprehensive_analysis": {
+        "current_price",
+        "revenue_growth_yoy",
+        "eps_growth_yoy",
+        "pe_ratio",
+        "market_cap",
+    },
+    "fundamental_analysis": {
+        "revenue_growth_yoy",
+        "eps_growth_yoy",
+        "pe_ratio",
+        "market_cap",
+    },
+    "technical_analysis": {
+        "current_price",
+        "rsi_14",
+        "macd",
+        "volatility_20d_annualized",
+    },
+    "news_sentiment": {"news_headline"},
+    "risk_assessment": {"current_price", "volatility_20d_annualized"},
+}
 
 _TIER_WEIGHT = {
     "machine": 1.0,
@@ -206,7 +228,11 @@ def determine_output_level(packet: EvidencePacket) -> GuardResult:
             evidence_score_breakdown=packet.evidence_score_breakdown,
         )
 
-    critical_missing = CRITICAL_FIELDS & {m.field for m in packet.missing_fields}
+    critical_fields = _CRITICAL_FIELDS_BY_REQUEST_TYPE.get(
+        packet.request_type,
+        _CRITICAL_FIELDS_BY_REQUEST_TYPE["comprehensive_analysis"],
+    )
+    critical_missing = critical_fields & {m.field for m in packet.missing_fields}
     if critical_missing:
         return GuardResult(
             allowed_output_level=OutputLevel.LIMITED_ANALYSIS,
