@@ -83,15 +83,24 @@ def evidence_packet_builder(state: GraphState) -> dict:
 
     is_cold_start = False
     rag_facts = []
+    fact_store_hit = False
 
-    if matched_rag:
+    from db.fact_store import get_fact_store
+    store = get_fact_store()
+    if store.has_coverage(symbol, ["current_price"]):
+        stored_active = store.get_active_facts(symbol)
+        if len(stored_active) >= 3:
+            fact_store_hit = True
+            is_cold_start = False
+            print(f"   📦 Fact Store hit: {len(stored_active)} active facts for {symbol}, skipping cold start")
+    if not fact_store_hit and matched_rag:
         top_similarity = matched_rag[0].similarity
         has_metadata = any(
             r.metadata.get("symbol") or r.metadata.get("source") for r in matched_rag
         )
         if top_similarity < RAG_SIMILARITY_THRESHOLD or not has_metadata:
             is_cold_start = True
-    else:
+    elif not fact_store_hit:
         is_cold_start = True
 
     if not is_cold_start:
@@ -108,15 +117,33 @@ def evidence_packet_builder(state: GraphState) -> dict:
                 "confidence_tier": "llm_extracted",
             })
 
+    stored_fact_dicts = []
     collector_results = {}
     if is_cold_start:
         collector_results = collect_all(symbol)
+    elif fact_store_hit:
+        stored_facts = store.get_active_facts(symbol)
+        for sf in stored_facts:
+            tier = sf.get("confidence_tier", "machine")
+            stored_fact_dicts.append({
+                "field": sf["field"],
+                "value": sf["value"],
+                "unit": sf["unit"],
+                "period": sf["period"],
+                "source": sf["source"],
+                "source_url": sf.get("source_url"),
+                "as_of_date": sf["as_of_date"],
+                "confidence": sf["confidence"],
+                "confidence_tier": tier,
+            })
+        print(f"   📦 Fact Store: {len(stored_facts)} active facts loaded for {symbol}")
 
-    market_facts_raw = collector_results.get("market", []) if is_cold_start else []
-    fundamental_facts_raw = collector_results.get("fundamental", []) if is_cold_start else []
-    news_facts_raw = collector_results.get("news", []) if is_cold_start else []
-    filings_raw = collector_results.get("filings", []) if is_cold_start else []
-    hkex_raw = collector_results.get("hkex", []) if is_cold_start else []
+    use_collector = is_cold_start
+    market_facts_raw = collector_results.get("market", []) if use_collector else []
+    fundamental_facts_raw = collector_results.get("fundamental", []) if use_collector else []
+    news_facts_raw = collector_results.get("news", []) if use_collector else []
+    filings_raw = collector_results.get("filings", []) if use_collector else []
+    hkex_raw = collector_results.get("hkex", []) if use_collector else []
 
     all_collectors_failed = (
         is_cold_start
@@ -170,6 +197,8 @@ def evidence_packet_builder(state: GraphState) -> dict:
                     ),
                 }],
             }
+    elif fact_store_hit:
+        all_facts_raw = rag_facts + stored_fact_dicts
     else:
         all_facts_raw = rag_facts + market_facts_raw + fundamental_facts_raw + news_facts_raw + filings_raw + hkex_raw
 
@@ -180,23 +209,54 @@ def evidence_packet_builder(state: GraphState) -> dict:
         except Exception:
             continue
 
-    has_fundamental = bool(fundamental_facts_raw)
+    has_fundamental = bool(fundamental_facts_raw) or (
+        fact_store_hit and any(
+            f.field in ("pe_ratio", "market_cap", "revenue_growth_yoy", "eps_growth_yoy", "revenue", "eps")
+            for f in facts
+        )
+    )
     coverage = Coverage(
         rag_context="available" if rag_facts else "missing",
-        market_data="available" if market_facts_raw else "missing",
+        market_data="available" if (market_facts_raw or fact_store_hit) else "missing",
         fundamental_data="available" if has_fundamental else "missing",
-        news_data="available" if news_facts_raw else "missing",
-        filings="missing",
+        news_data="available" if (news_facts_raw or fact_store_hit) else "missing",
+        filings="available" if (filings_raw or fact_store_hit) else "missing",
     )
 
     expected_fields = {
-        "comprehensive_analysis": ["current_price", "rsi_14", "pe_ratio", "revenue_growth_yoy", "eps_growth_yoy", "market_cap", "news_headline"],
+        "comprehensive_analysis": [
+            "current_price", "rsi_14", "pe_ratio",
+            "revenue_growth_yoy", "eps_growth_yoy", "market_cap", "news_headline",
+        ],
     }
+
+    FIELD_SUBSTITUTES = {
+        "revenue_growth_yoy": ["revenue", "revenue_ttm"],
+        "eps_growth_yoy": ["eps", "eps_diluted"],
+    }
+
     existing_keys = {f.field for f in facts}
     missing_fields = []
     for field in expected_fields.get("comprehensive_analysis", []):
-        if field not in existing_keys:
-            missing_fields.append(MissingField(field=field, reason="not available from current data sources"))
+        if field in existing_keys:
+            continue
+        substitutes = FIELD_SUBSTITUTES.get(field, [])
+        found_sub = None
+        for sub in substitutes:
+            if sub in existing_keys:
+                found_sub = sub
+                break
+        if found_sub:
+            missing_fields.append(MissingField(
+                field=field,
+                reason=f"not directly available; using '{found_sub}' as partial substitute",
+                substitute=found_sub,
+            ))
+        else:
+            missing_fields.append(MissingField(
+                field=field,
+                reason="not available from current data sources",
+            ))
 
     packet = EvidencePacket(
         symbol=symbol,

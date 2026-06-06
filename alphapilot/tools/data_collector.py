@@ -343,49 +343,89 @@ def collect_all(symbol: str, force_refresh: bool = False) -> dict:
         print(f"   🔄 Force refresh for {symbol}, bypassing collector cache")
 
     import concurrent.futures
+    from tools.providers.registry import get_registry
 
-    results = {"market": [], "fundamental": [], "news": [], "errors": []}
+    registry = get_registry()
+    enabled_providers = registry.get_enabled()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-        future_market = pool.submit(collect_market_facts, symbol)
-        future_fundamental = pool.submit(collect_fundamental_facts, symbol)
-        future_news = pool.submit(collect_news_facts, symbol)
+    is_hk = symbol.endswith('.HK')
+    is_us = not is_hk and not symbol.endswith('.SZ') and not symbol.endswith('.SS')
 
-        is_hk = symbol.endswith('.HK')
-        is_us = not is_hk and not symbol.endswith('.SZ') and not symbol.endswith('.SS')
+    results = {"market": [], "fundamental": [], "news": [], "filings": [], "hkex": [], "errors": []}
 
-        future_sec = None
-        future_hkex = None
-        if is_us:
-            future_sec = pool.submit(_collect_sec, symbol)
-        if is_hk:
-            future_hkex = pool.submit(_collect_hkex, symbol)
+    if enabled_providers:
+        n = len(enabled_providers)
+        names = ",".join(p.name for p in enabled_providers)
+        print(f"   🔌 Multi-provider mode: {n} enabled ({names})")
 
-        for name, fut in [
-            ("market", future_market),
-            ("fundamental", future_fundamental),
-            ("news", future_news),
-        ]:
-            try:
-                results[name] = fut.result(timeout=COLLECTOR_TIMEOUT)
-            except Exception as e:
-                results["errors"].append(f"{name} collector failed: {e}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            futures_map: dict = {}
 
-        if future_sec:
-            try:
-                results["filings"] = future_sec.result(timeout=COLLECTOR_TIMEOUT)
-            except Exception:
-                pass
-        else:
-            results["filings"] = []
+            for provider in enabled_providers:
+                for category in ["market", "fundamentals", "news"]:
+                    method = getattr(provider, f"collect_{category}", None)
+                    if method is None:
+                        continue
+                    key = "fundamental" if category == "fundamentals" else category
+                    futures_map[pool.submit(method, symbol)] = (provider.name, key)
 
-        if future_hkex:
-            try:
-                results["hkex"] = future_hkex.result(timeout=COLLECTOR_TIMEOUT)
-            except Exception:
-                pass
-        else:
-            results["hkex"] = []
+                if is_us and hasattr(provider, "collect_filings"):
+                    futures_map[pool.submit(provider.collect_filings, symbol)] = (provider.name, "filings")
+
+            if is_hk:
+                futures_map[pool.submit(_collect_hkex, symbol)] = ("direct", "hkex")
+
+            for fut in concurrent.futures.as_completed(futures_map):
+                provider_name, category = futures_map[fut]
+                try:
+                    provider_results = fut.result(timeout=COLLECTOR_TIMEOUT)
+                    if provider_name != "direct":
+                        registry.record_result(provider_name, True)
+                except Exception as e:
+                    if provider_name != "direct":
+                        registry.record_result(provider_name, False)
+                    results["errors"].append(f"{provider_name} {category} failed: {e}")
+                    continue
+
+                if not isinstance(provider_results, list):
+                    continue
+                for item in provider_results:
+                    try:
+                        results[category].append(item.model_dump(mode="json"))
+                    except AttributeError:
+                        results[category].append(item)
+    else:
+        print(f"   ⚠️ No enabled providers, falling back to direct calls")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            future_market = pool.submit(collect_market_facts, symbol)
+            future_fundamental = pool.submit(collect_fundamental_facts, symbol)
+            future_news = pool.submit(collect_news_facts, symbol)
+
+            future_sec = pool.submit(_collect_sec, symbol) if is_us else None
+            future_hkex = pool.submit(_collect_hkex, symbol) if is_hk else None
+
+            for name, fut in [
+                ("market", future_market),
+                ("fundamental", future_fundamental),
+                ("news", future_news),
+            ]:
+                try:
+                    results[name] = fut.result(timeout=COLLECTOR_TIMEOUT)
+                except Exception as e:
+                    results["errors"].append(f"{name} collector failed: {e}")
+
+            if future_sec:
+                try:
+                    results["filings"] = future_sec.result(timeout=COLLECTOR_TIMEOUT)
+                except Exception:
+                    pass
+
+            if future_hkex:
+                try:
+                    results["hkex"] = future_hkex.result(timeout=COLLECTOR_TIMEOUT)
+                except Exception:
+                    pass
 
     has_data = any(results.get(k) for k in ("market", "fundamental", "news", "filings", "hkex"))
     if has_data:

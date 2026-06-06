@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import sys
 import time
 import json
 from pathlib import Path
 
-from evaluation.metrics import (
+_PARENT = Path(__file__).resolve().parent.parent
+if str(_PARENT) not in sys.path:
+    sys.path.insert(0, str(_PARENT))
+
+from alphapilot.evaluation.metrics import (
     EvalCase,
     EvalResult,
     EvalSuite,
@@ -44,9 +49,9 @@ def run_single(symbol: str, question: str, case: EvalCase | None = None) -> Eval
     )
 
     try:
-        from graph.workflow import app
+        from alphapilot.graph.workflow import app
         from langchain_core.messages import HumanMessage
-        from monitoring.counters import get_metrics
+        from alphapilot.monitoring.counters import get_metrics
 
         state_in = {
             "stock_symbol": symbol,

@@ -35,6 +35,7 @@ class Fact(BaseModel):
 class MissingField(BaseModel):
     field: str
     reason: str
+    substitute: Optional[str] = None
 
 
 class Conflict(BaseModel):
@@ -232,11 +233,22 @@ def determine_output_level(packet: EvidencePacket) -> GuardResult:
         packet.request_type,
         _CRITICAL_FIELDS_BY_REQUEST_TYPE["comprehensive_analysis"],
     )
-    critical_missing = critical_fields & {m.field for m in packet.missing_fields}
+    hard_missing = [m.field for m in packet.missing_fields if not m.substitute]
+    critical_missing = critical_fields & set(hard_missing)
     if critical_missing:
         return GuardResult(
             allowed_output_level=OutputLevel.LIMITED_ANALYSIS,
             reason=f"critical fields missing: {critical_missing}",
+            evidence_score=packet.evidence_score,
+            evidence_score_breakdown=packet.evidence_score_breakdown,
+        )
+
+    partial_missing = [m.field for m in packet.missing_fields if m.substitute]
+    critical_partial = critical_fields & set(partial_missing)
+    if critical_partial:
+        return GuardResult(
+            allowed_output_level=OutputLevel.LIMITED_ANALYSIS,
+            reason=f"critical fields have substitute only: {critical_partial}",
             evidence_score=packet.evidence_score,
             evidence_score_breakdown=packet.evidence_score_breakdown,
         )
@@ -349,7 +361,10 @@ def render_packet_for_agent(packet: EvidencePacket) -> str:
     lines.append("")
     lines.append("### Missing Data (DO NOT fabricate)")
     for m in packet.missing_fields:
-        lines.append(f"- {m.field}: {m.reason}")
+        if m.substitute:
+            lines.append(f"- {m.field}: {m.reason} — use '{m.substitute}' as indirect evidence ONLY")
+        else:
+            lines.append(f"- {m.field}: {m.reason}")
 
     if packet.conflicts:
         lines.append("")
@@ -363,6 +378,7 @@ def render_packet_for_agent(packet: EvidencePacket) -> str:
     lines.append("- [?] facts are speculative, not definitive.")
     lines.append("- If a data point is missing, explicitly state it is unavailable.")
     lines.append("- Do NOT generate investment recommendations when output level is data_summary_only or insufficient_evidence.")
+    lines.append("- SUBSTITUTE FIELDS: 'revenue' / 'eps' are absolute values, NOT year-over-year growth rates. When revenue_growth_yoy or eps_growth_yoy is missing with a substitute, explain that trend analysis is limited to absolute values, and do NOT fabricate growth percentages.")
 
     return "\n".join(lines)
 

@@ -171,18 +171,18 @@ def load_eval_cases(path: str | Path = DEFAULT_EVAL_SET_PATH) -> list[EvalCase]:
             payload = json.loads(line)
             case_id = payload.get("case_id") or f"case_{idx:03d}"
             should_reject = payload.get("should_reject", False)
-        if isinstance(should_reject, str):
-            should_reject = should_reject.lower() in ("true", "1", "yes")
-        cases.append(
-            EvalCase(
-                case_id=case_id,
-                symbol=payload["symbol"],
-                question=payload["question"],
-                expected_output_levels=payload.get("expected_output_levels", []),
-                must_not_contain=payload.get("must_not_contain", []),
-                require_traceability=bool(payload.get("require_traceability", True)),
-                should_reject=bool(should_reject),
-            )
+            if isinstance(should_reject, str):
+                should_reject = should_reject.lower() in ("true", "1", "yes")
+            cases.append(
+                EvalCase(
+                    case_id=case_id,
+                    symbol=payload["symbol"],
+                    question=payload["question"],
+                    expected_output_levels=payload.get("expected_output_levels", []),
+                    must_not_contain=payload.get("must_not_contain", []),
+                    require_traceability=bool(payload.get("require_traceability", True)),
+                    should_reject=bool(should_reject),
+                )
             )
     return cases
 

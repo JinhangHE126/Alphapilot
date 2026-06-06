@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from knowledge.ingestion import should_ingest, extract_records, IngestionRecord
-from schemas.evidence_packet import EvidencePacket
+from schemas.evidence_packet import EvidencePacket, ConfidenceTier
 from rag.retriever import retriever as vectorstore
 
 
@@ -44,6 +44,18 @@ def upsert_packet(packet: EvidencePacket) -> dict:
         except Exception as exc:
             result["skipped"] += 1
             result.setdefault("errors", []).append(str(exc))
+
+    try:
+        from db.fact_store import get_fact_store
+        store = get_fact_store()
+        for fact in packet.facts:
+            if fact.confidence_tier == ConfidenceTier.LLM_INFERRED:
+                continue
+            store.upsert_fact(packet.symbol, fact)
+        result["fact_store_written"] = True
+    except Exception as exc:
+        result["fact_store_written"] = False
+        result.setdefault("errors", []).append(f"fact_store: {exc}")
 
     return result
 
