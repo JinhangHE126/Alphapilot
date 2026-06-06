@@ -71,12 +71,13 @@ def evidence_packet_builder(state: GraphState) -> dict:
     today = date.today().isoformat()
     query = f"{symbol} {user_instruction[:200]}"
 
-    rag_results = retriever.retrieve_with_scores(query, k=5)
+    rag_results = retriever.retrieve_with_scores(query, k=10)
 
     matched_rag = [
         r for r in rag_results
         if r.metadata.get("symbol", "").upper() == symbol.upper()
     ]
+    matched_rag = matched_rag[:5]
     mismatched_count = len(rag_results) - len(matched_rag)
     if mismatched_count > 0:
         print(f"   ⚠️ {mismatched_count} RAG results filtered out (symbol mismatch with {symbol})")

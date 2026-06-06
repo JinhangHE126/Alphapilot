@@ -57,6 +57,27 @@ def upsert_packet(packet: EvidencePacket) -> dict:
         result["fact_store_written"] = False
         result.setdefault("errors", []).append(f"fact_store: {exc}")
 
+    try:
+        import json
+        from db.document_store import get_document_store
+        doc_store = get_document_store()
+        raw_json = packet.model_dump_json(indent=2).encode("utf-8")
+        doc_id = doc_store.upsert(
+            symbol=packet.symbol,
+            doc_type="evidence_packet",
+            fmt="json",
+            source="evidence_packet_builder",
+            content=raw_json,
+            as_of_date=packet.as_of_date,
+            title=f"Evidence Packet {packet.symbol} {packet.as_of_date}",
+        )
+        if doc_id is not None:
+            result["document_id"] = doc_id
+            result["document_stored"] = True
+    except Exception as exc:
+        result["document_stored"] = False
+        result.setdefault("errors", []).append(f"document_store: {exc}")
+
     return result
 
 

@@ -91,5 +91,17 @@ def _init_defaults(registry: ProviderRegistry) -> None:
     except Exception:
         pass
 
+    try:
+        from tools.providers.polygon_provider import PolygonProvider
+        registry.register(PolygonProvider())
+    except Exception:
+        pass
+
+    try:
+        from tools.providers.tiingo_provider import TiingoProvider
+        registry.register(TiingoProvider())
+    except Exception:
+        pass
+
 
 __all__ = ["ProviderRegistry", "get_registry"]
