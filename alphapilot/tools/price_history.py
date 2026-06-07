@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import time
 from datetime import date, timedelta
 from typing import Callable, Optional
@@ -87,7 +88,7 @@ def _fetch_polygon(symbol: str) -> Optional[pd.DataFrame]:
 def _fetch_eastmoney_hk(symbol: str) -> Optional[pd.DataFrame]:
     if not symbol.endswith(".HK"):
         return None
-    code = symbol.replace(".HK", "")
+    code = symbol.replace(".HK", "").zfill(5)
     secid = f"116.{code}"
     url = (
         f"https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid}"
@@ -95,9 +96,15 @@ def _fetch_eastmoney_hk(symbol: str) -> Optional[pd.DataFrame]:
         "&klt=101&fqt=1&end=20500101&lmt=60"
     )
     try:
-        from tools.providers.akshare_provider import _curl_get_json
-        data = _curl_get_json(url)
-    except Exception:
+        result = subprocess.run(
+            ["curl", "-4", "-s", "--max-time", "15",
+             "-H", "User-Agent: Mozilla/5.0", url],
+            capture_output=True, text=True, timeout=20,
+        )
+        if result.returncode != 0 or not result.stdout:
+            return None
+        data = json.loads(result.stdout)
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
         return None
     if not data or not data.get("data") or not data["data"].get("klines"):
         return None

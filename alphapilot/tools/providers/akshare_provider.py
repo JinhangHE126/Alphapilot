@@ -61,14 +61,13 @@ class AKShareProvider(DataProvider):
             return []
 
         today = date.today().isoformat()
-        code = symbol.replace(".HK", "")
-        session = _ProxyAwareSession()
+        code = symbol.replace(".HK", "").zfill(5)
         facts = []
 
         fs = "m:128+t:3,m:128+t:4,m:128+t:1,m:128+t:2"
         fields = "f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21,f23,f24,f25,f22,f11,f62,f128,f136,f115,f152"
         url = f"https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f12&fs={fs}&fields={fields}"
-        data = session.get_json(url)
+        data = _curl_get_json(url)
         if data and data.get("data") and data["data"].get("diff"):
             for row in data["data"]["diff"]:
                 if row.get("f12") == code:
@@ -95,7 +94,7 @@ class AKShareProvider(DataProvider):
         secid = f"116.{code}"
         secid = f"116.{code}"
         hist_url = f"https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=60"
-        hist_data = session.get_json(hist_url)
+        hist_data = _curl_get_json(hist_url)
         if hist_data and hist_data.get("data") and hist_data["data"].get("klines"):
             klines = hist_data["data"]["klines"]
             if len(klines) >= 2:
@@ -146,14 +145,13 @@ class AKShareProvider(DataProvider):
             return []
 
         today = date.today().isoformat()
-        code = symbol.replace(".HK", "")
-        session = _ProxyAwareSession()
+        code = symbol.replace(".HK", "").zfill(5)
         facts = []
 
         secid = f"116.{code}"
         fields = "f104,f108,f109,f116,f117,f127,f160,f161,f173"
         url = f"https://push2.eastmoney.com/api/qt/stock/get?secid={secid}&fields={fields}"
-        data = session.get_json(url)
+        data = _curl_get_json(url)
         if not data or not isinstance(data.get("data"), dict):
             return facts
 
