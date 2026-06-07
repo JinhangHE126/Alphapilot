@@ -4,7 +4,6 @@ import time
 from datetime import date
 from typing import Optional
 
-from tools.market_tools import _download_price_frame
 from tools.news_tools import _fetch_news_list, _extract_news_item
 
 COLLECTOR_TIMEOUT = 15
@@ -27,7 +26,7 @@ def collect_market_facts(symbol: str) -> list[dict]:
     today = date.today().isoformat()
 
     try:
-        df, fetch_error = _download_price_frame(symbol)
+        df, fetch_error = fetch_price_history(symbol)
     except Exception:
         return [
             {
@@ -394,6 +393,15 @@ def collect_all(symbol: str, force_refresh: bool = False) -> dict:
                         results[category].append(item.model_dump(mode="json"))
                     except AttributeError:
                         results[category].append(item)
+
+        market = "HK" if is_hk else ("CN" if not is_us else "US")
+        for category in ["market", "fundamental", "news", "filings", "hkex"]:
+            if results.get(category):
+                before = len(results[category])
+                results[category] = registry.apply_field_priority(results[category], market)
+                after = len(results[category])
+                if before != after:
+                    print(f"   🔍 Field-priority dedup ({category}): {before} → {after} facts")
     else:
         print(f"   ⚠️ No enabled providers, falling back to direct calls")
 
@@ -443,9 +451,21 @@ def _collect_hkex(symbol: str) -> list[dict]:
     return collect_hkex_facts(symbol)
 
 
+def fetch_price_history(symbol: str):
+    """Download raw OHLCV DataFrame for a symbol.
+
+    Uses cache + multi-provider fallback (tiingo/polygon/eastmoney → yfinance).
+    Agents that need full price series (e.g. backtesting) should call this
+    instead of importing market_tools directly.
+    """
+    from tools.price_history import fetch_price_history as _fetch
+    return _fetch(symbol)
+
+
 __all__ = [
     "collect_market_facts",
     "collect_fundamental_facts",
     "collect_news_facts",
     "collect_all",
+    "fetch_price_history",
 ]
