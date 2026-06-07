@@ -17,6 +17,9 @@ class SecEdgarProvider(DataProvider):
         results = []
         for f in raw:
             try:
+                period = f.get("period")
+                if isinstance(period, int):
+                    f["period"] = f"FY{period}"
                 results.append(Fact(**f))
             except Exception:
                 pass

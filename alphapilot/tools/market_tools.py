@@ -89,6 +89,30 @@ def _download_price_frame(symbol: str):
 
     return None, "all_attempts_failed"
 
+
+def _download_price_frame_fast(symbol: str):
+    """Single-attempt yfinance download for OHLCV fallback. Fails fast on rate limit."""
+    proxy = get_proxy_for_agent("market")
+    kwargs = {"period": "60d", "progress": False, "timeout": 30}
+    if proxy:
+        kwargs["proxy"] = proxy
+
+    try:
+        print(f"📥 [fast] Downloading {symbol} (proxy: {'启用' if proxy else '直连'})...")
+        df = yf.download(symbol, **kwargs)
+        if df is not None and not df.empty:
+            print(f"✅ [fast] 下载成功！共 {len(df)} 条记录")
+            return df, ""
+    except YFRateLimitError:
+        print(f"⚠️ [fast] Rate Limit for {symbol}, skipping retries")
+        return None, "rate_limited"
+    except Exception as exc:
+        print(f"❌ [fast] 错误: {exc}")
+        return None, str(exc)
+
+    return None, "empty"
+
+
 def fetch_market_data(symbol: str) -> str:
     """获取完整技术面数据：价格 + RSI + MACD + 波动率"""
     try:

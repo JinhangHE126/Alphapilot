@@ -1,6 +1,6 @@
 import numpy as np
 from config.llm import get_llm
-from tools.market_tools import _download_price_frame
+from tools.data_collector import fetch_price_history
 
 
 def _compute_backtest_metrics(close_prices, benchmark_close=None):
@@ -53,7 +53,7 @@ def backtesting_agent(state):
         }
 
     try:
-        df, err = _download_price_frame(symbol)
+        df, err = fetch_price_history(symbol)
     except Exception:
         df, err = None, "exception"
 
