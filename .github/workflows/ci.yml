@@ -24,6 +24,17 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .
+      - name: Check agent import boundaries
+        run: |
+          echo "🔍 Checking agents/ do not bypass data_collector..."
+          FORBIDDEN=$(grep -rn '^from tools\.' alphapilot/agents/ | grep -v 'from tools\.data_collector' || true)
+          if [ -n "$FORBIDDEN" ]; then
+            echo "❌ Agents must NOT import directly from tools.* (except tools.data_collector)"
+            echo "   Forbidden imports found:"
+            echo "$FORBIDDEN"
+            exit 1
+          fi
+          echo "✅ Agent import boundaries clean"
       - name: Unit tests
         run: pytest test/test_auth_sessions.py
 

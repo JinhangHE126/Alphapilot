@@ -1,14 +1,16 @@
+# =============================================================================
+# INTERNAL USE ONLY — do not import from agents/
+# All data access from agents MUST go through tools/data_collector.py
+# or tools/providers/ (via ProviderRegistry). Direct imports of this module
+# from alphapilot/agents/ will be caught by CI.
+# =============================================================================
+
 import yfinance as yf
 import pandas as pd
 import time
 import random
 from yfinance.exceptions import YFRateLimitError
 from config.proxy import get_proxy_for_agent
-# from tools.rag_tools import retrieve_knowledge
-# import time
-
-# import time
-# from yfinance.exceptions import YFRateLimitError
 
 
 
@@ -113,8 +115,19 @@ def _download_price_frame_fast(symbol: str):
     return None, "empty"
 
 
+import warnings
+
 def fetch_market_data(symbol: str) -> str:
-    """获取完整技术面数据：价格 + RSI + MACD + 波动率"""
+    """[DEPRECATED] 获取完整技术面数据：价格 + RSI + MACD + 波动率
+
+    所有 Agent 应通过 tools.data_collector.fetch_price_history() 获取 OHLCV，
+    或消费 Evidence Packet 中的结构化 Fact。本函数将在后续版本移除。
+    """
+    warnings.warn(
+        "fetch_market_data is deprecated. Use tools.data_collector.fetch_price_history() "
+        "or consume Evidence Packet facts instead.",
+        DeprecationWarning, stacklevel=2,
+    )
     try:
         df, fetch_error = _download_price_frame(symbol)
         if df is None or df.empty:
