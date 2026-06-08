@@ -238,7 +238,12 @@ export default function AnalyzePage() {
             setAgents((prev) => {
               let nextReport = evt.data.final_report ?? "";
               if (isPlaceholderReport(nextReport)) {
-                const combined = buildReportFromAgents(prev);
+                const deduped = prev.filter(
+                  (a, i, arr) => arr.findIndex((x) => x.agent === a.agent) === i,
+                );
+                const combined = buildReportFromAgents(
+                  deduped.map((a) => ({ agent: a.agent, label: a.label, content: a.content })),
+                );
                 if (combined) nextReport = combined;
                 else if (evt.data.recommendation) nextReport = evt.data.recommendation;
               }

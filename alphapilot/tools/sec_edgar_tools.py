@@ -49,6 +49,8 @@ def fetch_sec_company_facts(cik: str) -> dict:
         if not usd_entries:
             usd_entries = units.get("shares", [])
         if not usd_entries:
+            usd_entries = units.get("USD/shares", [])
+        if not usd_entries:
             continue
 
         latest = max(
@@ -71,6 +73,43 @@ def fetch_sec_company_facts(cik: str) -> dict:
             "confidence": 0.95,
             "confidence_tier": "machine",
         })
+
+    yoy_fields = {
+        "Revenues": "revenue_growth_yoy",
+        "EarningsPerShareDiluted": "eps_growth_yoy",
+    }
+    for sec_field, growth_field in yoy_fields.items():
+        if sec_field not in facts:
+            continue
+        units = facts[sec_field].get("units", {})
+        usd_entries = units.get("USD", [])
+        if not usd_entries:
+            usd_entries = units.get("shares", [])
+        if not usd_entries:
+            usd_entries = units.get("USD/shares", [])
+        if not usd_entries:
+            continue
+        k_entries = sorted(
+            (e for e in usd_entries if e.get("form") == "10-K" and e.get("fy")),
+            key=lambda e: e.get("fy", 0),
+            reverse=True,
+        )
+        if len(k_entries) >= 2:
+            latest_val = k_entries[0].get("val")
+            prev_val = k_entries[1].get("val")
+            if latest_val and prev_val and prev_val != 0:
+                pct = round((latest_val - prev_val) / abs(prev_val) * 100, 2)
+                extracted.append({
+                    "field": growth_field,
+                    "value": pct,
+                    "unit": "percent",
+                    "period": "latest",
+                    "source": "SEC_EDGAR",
+                    "source_url": f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json",
+                    "as_of_date": str(k_entries[0].get("filed", today)),
+                    "confidence": 0.90,
+                    "confidence_tier": "machine",
+                })
 
     return {
         "status": "ok",

@@ -23,8 +23,43 @@ AGENT_LABELS: dict[str, dict[str, str]] = {
 
 def _safe_text(message_obj: Any) -> str:
     if hasattr(message_obj, "content"):
-        return str(message_obj.content)
+        raw = message_obj.content
+        if isinstance(raw, list):
+            return "\n".join(
+                item.get("text", "") if isinstance(item, dict) else str(item)
+                for item in raw
+            )
+        return str(raw)
+    if isinstance(message_obj, dict):
+        content = message_obj.get("content", "")
+        if isinstance(content, list):
+            return "\n".join(
+                item.get("text", "") if isinstance(item, dict) else str(item)
+                for item in content
+            )
+        return str(content)
     return str(message_obj)
+
+
+def _format_agent_content(raw: str) -> str:
+    try:
+        obj = json.loads(raw)
+        if not isinstance(obj, dict):
+            return raw
+        lines = []
+        for k, v in obj.items():
+            label = k.replace("_", " ").title()
+            if isinstance(v, (int, float)):
+                lines.append(f"- **{label}**: {v}")
+            elif isinstance(v, str) and v:
+                lines.append(f"- **{label}**: {v}")
+            elif isinstance(v, list):
+                lines.append(f"- **{label}**: {', '.join(str(i) for i in v)}")
+            else:
+                lines.append(f"- **{label}**: {v}")
+        return "\n".join(lines)
+    except (json.JSONDecodeError, ValueError):
+        return raw
 
 
 def _extract_text(update: dict) -> str:
@@ -32,7 +67,13 @@ def _extract_text(update: dict) -> str:
         return str(update["final_report"])
     messages = update.get("messages")
     if messages and isinstance(messages, list) and len(messages) > 0:
-        return _safe_text(messages[-1])
+        text = _safe_text(messages[-1])
+        stripped = text.strip()
+        if stripped.startswith("{") and stripped.endswith("}"):
+            return _format_agent_content(stripped)
+        if stripped.startswith("{'role':") or stripped.startswith('{"role":'):
+            return _format_agent_content(stripped)
+        return text
     return ""
 
 
@@ -156,7 +197,10 @@ def stream_analysis_events(
             })
 
             content = _extract_text(update)
-            if content:
+            is_guard = node_name in ("guard_agent", "guard")
+            has_guard = isinstance(update.get("guard_check"), dict) and update["guard_check"]
+
+            if content and not is_guard:
                 yield _sse("agent_output", {
                     "agent": node_name,
                     "content": content,
@@ -166,9 +210,20 @@ def stream_analysis_events(
                 final_report = str(update["final_report"])
             if node_name == "recommendation_agent" and update.get("messages"):
                 recommendation = _safe_text(update["messages"][-1])
-            if node_name in ("guard_agent", "guard") and isinstance(update.get("guard_check"), dict) and update["guard_check"]:
+            if is_guard and has_guard:
                 guard_check = update["guard_check"]
                 output_level = update.get("output_level", "")
+                gc = guard_check
+                guard_text = (
+                    f"- **Valid**: {gc.get('is_valid', 'N/A')}\n"
+                    f"- **Confidence Score**: {gc.get('confidence_score', 'N/A')}/100\n"
+                    f"- **Issues**: {', '.join(gc.get('issues', [])) if gc.get('issues') else 'none'}\n"
+                    f"- **Reasoning**: {gc.get('final_reasoning', 'N/A')}"
+                )
+                yield _sse("agent_output", {
+                    "agent": node_name,
+                    "content": guard_text,
+                })
 
             yield _sse("agent_done", {"agent": node_name})
 

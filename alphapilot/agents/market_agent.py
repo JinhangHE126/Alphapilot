@@ -95,6 +95,29 @@ def _build_market_fallback(ep: dict, language: str = "") -> str:
 
     lines.append("")
     lines.append(f"**{get_label('market_disclaimer', lang).replace('：', '：')}**")
+
+    if pv is None:
+        mc = facts.get("market_cap", {})
+        pe = facts.get("pe_ratio", {})
+        extra = []
+        mcv = mc.get("value")
+        if mcv is not None:
+            mu = mc.get("unit", "")
+            ms = mc.get("source", "?")
+            extra.insert(
+                0,
+                f"- {get_label('market_cap_fallback', lang)}：{mcv:,.0f} {mu}（{get_label('market_source', lang)}：{ms}）",
+            )
+        pev = pe.get("value")
+        if pev is not None:
+            pes = pe.get("source", "?")
+            extra.insert(
+                0,
+                f"- {get_label('pe_ratio_fallback', lang)}：{pev}（{get_label('market_source', lang)}：{pes}）",
+            )
+        if extra:
+            lines = extra + [""] + lines
+
     return "\n".join(lines)
 
 
@@ -117,7 +140,6 @@ def market_agent(state):
 
     inject_language(state, language)
     result = _MARKET_AGENT.invoke(state)
-    inject_language(state, language)  # ensure LLM outputs in correct language
     raw_content = result["messages"][-1].content
     text = str(raw_content) if raw_content else ""
 

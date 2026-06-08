@@ -81,10 +81,10 @@ export function isPlaceholderReport(report: string): boolean {
 }
 
 export function buildReportFromAgents(
-  agents: { label: string; content: string }[],
+  agents: { agent: string; label: string; content: string }[],
 ): string {
   return agents
-    .filter((a) => a.content.trim())
+    .filter((a) => !isSystemNode(a.agent) && a.content.trim())
     .map((a) => `### ${a.label}\n\n${a.content}`)
     .join("\n\n---\n\n");
 }
