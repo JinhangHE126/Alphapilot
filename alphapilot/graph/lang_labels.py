@@ -23,7 +23,7 @@ LANG_TRANSLATIONS: dict[str, dict[str, str]] = {
         "news_na_reason": "Reason: Evidence insufficient",
         "news_na_action": "Action: Await verified data before sentiment analysis",
         "reco_na_title": "## Personalized Recommendation: Not Available",
-        "reco_na_reason": "Reason: Evidence score {score}/100, key data missing",
+        "reco_na_reason": "Reason: Evidence score {score}/100, output level is {level} (full_analysis required)",
         "reco_na_action": "Action: Supplement fundamental and technical data then re-analyze",
     },
     "zh": {
@@ -50,7 +50,7 @@ LANG_TRANSLATIONS: dict[str, dict[str, str]] = {
         "news_na_reason": "原因：证据不足",
         "news_na_action": "建议：等待验证数据后重新分析",
         "reco_na_title": "## 个性化推荐：无法生成",
-        "reco_na_reason": "原因：证据评分 {score}/100，关键数据缺失",
+        "reco_na_reason": "原因：证据评分 {score}/100，当前分析等级为 {level}（个性化推荐需 full_analysis）",
         "reco_na_action": "建议：补充基本面和技术面数据后重新分析",
     },
     "yue": {
@@ -77,7 +77,7 @@ LANG_TRANSLATIONS: dict[str, dict[str, str]] = {
         "news_na_reason": "原因：證據不足",
         "news_na_action": "建議：等驗證數據後重新分析",
         "reco_na_title": "## 個人化推薦：無法生成",
-        "reco_na_reason": "原因：證據評分 {score}/100，關鍵數據缺失",
+        "reco_na_reason": "原因：證據評分 {score}/100，當前分析等級為 {level}（個人化推薦需 full_analysis）",
         "reco_na_action": "建議：補充基本面同技術面數據後重新分析",
     },
 }

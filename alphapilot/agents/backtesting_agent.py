@@ -37,7 +37,7 @@ def backtesting_agent(state):
     回测指标由 Python 确定性计算，LLM 仅做文字解读。
     """
     ep = state.get("evidence_packet", {})
-    ep_score = ep.get("evidence_score", 0) if ep else 0
+    ep_score = int(ep.get("evidence_score", 0)) if ep else 0
     symbol = state.get("stock_symbol", "")
 
     if ep_score < 50:

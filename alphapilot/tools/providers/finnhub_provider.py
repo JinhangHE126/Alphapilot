@@ -170,25 +170,44 @@ class FinnhubProvider(DataProvider):
     def collect_news(self, symbol: str) -> list[Fact]:
         clean = symbol.replace(".HK", "").replace(".SZ", "").replace(".SS", "").replace(".L", "")
         today = date.today()
-        week_ago = (today - timedelta(days=7)).isoformat()
         today_str = today.isoformat()
+        is_us = not symbol.endswith(('.HK', '.SZ', '.SS', '.L', '.T'))
 
-        data = self._get(f"/company-news?symbol={clean}&from={week_ago}&to={today_str}")
-        if not data or not isinstance(data, list):
-            return []
+        facts: list[Fact] = []
 
-        facts = []
-        for item in data[:5]:
-            headline = item.get("headline", "")
-            if not headline:
-                continue
-            published = date.fromtimestamp(item.get("datetime", 0)).isoformat() if item.get("datetime") else today_str
-            facts.append(Fact(
-                field="news_headline", value=headline,
-                unit="text", period="latest",
-                source=item.get("source", "finnhub_news"),
-                source_url=item.get("url"),
-                as_of_date=published,
-                confidence=0.70, confidence_tier="llm_extracted",
-            ))
+        if is_us:
+            week_ago = (today - timedelta(days=7)).isoformat()
+            data = self._get(f"/company-news?symbol={clean}&from={week_ago}&to={today_str}")
+            if data and isinstance(data, list):
+                for item in data[:5]:
+                    headline = item.get("headline", "")
+                    if not headline:
+                        continue
+                    published = date.fromtimestamp(item.get("datetime", 0)).isoformat() if item.get("datetime") else today_str
+                    facts.append(Fact(
+                        field="news_headline", value=headline,
+                        unit="text", period="latest",
+                        source=item.get("source", "finnhub_news"),
+                        source_url=item.get("url"),
+                        as_of_date=published,
+                        confidence=0.70, confidence_tier="llm_extracted",
+                    ))
+
+        if not facts:
+            gen_news = self._get(f"/news?category=general")
+            if gen_news and isinstance(gen_news, list):
+                for item in gen_news[:3]:
+                    headline = item.get("headline", "")
+                    if not headline:
+                        continue
+                    published = date.fromtimestamp(item.get("datetime", 0)).isoformat() if item.get("datetime") else today_str
+                    facts.append(Fact(
+                        field="news_headline", value=f"[Market] {headline}",
+                        unit="text", period="latest",
+                        source=item.get("source", "finnhub_market"),
+                        source_url=item.get("url"),
+                        as_of_date=published,
+                        confidence=0.55, confidence_tier="llm_extracted",
+                    ))
+
         return facts

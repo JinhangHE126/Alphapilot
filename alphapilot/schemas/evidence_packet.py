@@ -250,6 +250,14 @@ def determine_output_level(packet: EvidencePacket) -> GuardResult:
     critical_partial = critical_fields & set(partial_missing)
     substitute_count = len(critical_partial)
 
+    if hard_missing_count == 0 and substitute_count <= 1 and packet.evidence_score >= 85 and not packet.conflicts:
+        return GuardResult(
+            allowed_output_level=OutputLevel.FULL_ANALYSIS,
+            reason="all checks passed — high evidence coverage",
+            evidence_score=packet.evidence_score,
+            evidence_score_breakdown=packet.evidence_score_breakdown,
+        )
+
     if hard_missing_count == 0 and substitute_count <= 1 and packet.evidence_score >= 80:
         reason_parts = []
         if critical_partial:

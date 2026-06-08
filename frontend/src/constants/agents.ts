@@ -80,11 +80,48 @@ export function isPlaceholderReport(report: string): boolean {
   return !report.trim() || REPORT_PLACEHOLDERS.has(report.trim());
 }
 
+const REPORT_EXCLUDE = new Set([
+  ...SYSTEM_NODE_IDS,
+  "orchestrator",
+  "guard_agent",
+  "guard",
+]);
+
+const REPORT_ORDER = [
+  "market_data_expert",
+  "fundamental_expert",
+  "news_sentiment_expert",
+  "strategy_expert",
+  "risk_expert",
+  "portfolio_agent",
+  "backtesting_agent",
+  "recommendation_agent",
+  "guard_agent",
+] as const;
+
 export function buildReportFromAgents(
   agents: { agent: string; label: string; content: string }[],
 ): string {
-  return agents
-    .filter((a) => !isSystemNode(a.agent) && a.content.trim())
-    .map((a) => `### ${a.label}\n\n${a.content}`)
-    .join("\n\n---\n\n");
+  const deduped = agents.filter(
+    (a, i, arr) => arr.findIndex((x) => x.agent === a.agent) === i,
+  );
+  const byAgent = new Map(
+    deduped
+      .filter((a) => !REPORT_EXCLUDE.has(a.agent) && a.content.trim())
+      .map((a) => [a.agent, a]),
+  );
+
+  const ordered: typeof agents = [];
+  for (const id of REPORT_ORDER) {
+    const item = byAgent.get(id);
+    if (item) {
+      ordered.push(item);
+      byAgent.delete(id);
+    }
+  }
+  for (const item of byAgent.values()) {
+    ordered.push(item);
+  }
+
+  return ordered.map((a) => `### ${a.label}\n\n${a.content}`).join("\n\n---\n\n");
 }

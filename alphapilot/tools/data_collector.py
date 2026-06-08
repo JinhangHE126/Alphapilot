@@ -8,6 +8,52 @@ from tools.news_tools import _fetch_news_list, _extract_news_item
 
 COLLECTOR_TIMEOUT = 15
 
+_SUPPLEMENT_FIELDS = frozenset({
+    "pe_ratio",
+    "revenue_growth_yoy",
+    "eps_growth_yoy",
+    "news_headline",
+})
+
+
+def _collect_fields(results: dict, *categories: str) -> set[str]:
+    fields: set[str] = set()
+    for cat in categories:
+        for fact in results.get(cat, []):
+            if isinstance(fact, dict) and fact.get("field"):
+                fields.add(fact["field"])
+    return fields
+
+
+def _supplement_missing_facts(symbol: str, results: dict, registry, market: str) -> None:
+    """Backfill critical fields from yfinance when higher-priority HK sources omit them."""
+    present = _collect_fields(results, "market", "fundamental", "news")
+    missing = _SUPPLEMENT_FIELDS - present
+    if not missing:
+        return
+
+    added = False
+    fund_missing = missing & {"pe_ratio", "revenue_growth_yoy", "eps_growth_yoy"}
+    if fund_missing:
+        for fact in collect_fundamental_facts(symbol):
+            if fact.get("field") in fund_missing:
+                results["fundamental"].append(fact)
+                added = True
+
+    if "news_headline" in missing:
+        news = collect_news_facts(symbol)
+        if news:
+            results["news"].extend(news)
+            added = True
+
+    if not added:
+        return
+
+    print(f"   🔄 Supplemental fetch for {symbol}: {sorted(missing)}")
+    for category in ("market", "fundamental", "news"):
+        if results.get(category):
+            results[category] = registry.apply_field_priority(results[category], market)
+
 
 def _currency_for(symbol: str) -> str:
     upper = symbol.upper()
@@ -83,7 +129,7 @@ def collect_market_facts(symbol: str) -> list[dict]:
     returns = close.pct_change().dropna()
     volatility = round(float(returns.std() * (252 ** 0.5) * 100), 2) if len(returns) >= 5 else 0
 
-    return [
+    market_facts = [
         {
             "field": "current_price",
             "value": latest,
@@ -150,7 +196,9 @@ def collect_market_facts(symbol: str) -> list[dict]:
             "confidence": 0.85,
             "confidence_tier": "machine",
         },
-        {
+    ]
+    if avg_volume > 0:
+        market_facts.append({
             "field": "avg_volume_20d",
             "value": avg_volume,
             "unit": "shares",
@@ -160,8 +208,8 @@ def collect_market_facts(symbol: str) -> list[dict]:
             "as_of_date": today,
             "confidence": 0.90,
             "confidence_tier": "machine",
-        },
-    ]
+        })
+    return market_facts
 
 
 def collect_fundamental_facts(symbol: str) -> list[dict]:
@@ -230,6 +278,15 @@ def collect_fundamental_facts(symbol: str) -> list[dict]:
     _add_pct("eps_growth_yoy", info.get("earningsGrowth"))
     _add_pct("return_on_equity", info.get("returnOnEquity"))
     _add_ratio("debt_to_equity", info.get("debtToEquity"))
+
+    if not any(f["field"] == "pe_ratio" for f in facts):
+        mcap = info.get("marketCap")
+        net_income = info.get("netIncomeToCommon") or info.get("netIncome")
+        try:
+            if mcap and net_income and float(net_income) > 0:
+                _add_ratio("pe_ratio", float(mcap) / float(net_income))
+        except (TypeError, ValueError):
+            pass
 
     if info.get("longName"):
         facts.append({
@@ -402,6 +459,7 @@ def collect_all(symbol: str, force_refresh: bool = False) -> dict:
                 after = len(results[category])
                 if before != after:
                     print(f"   🔍 Field-priority dedup ({category}): {before} → {after} facts")
+        _supplement_missing_facts(symbol, results, registry, market)
     else:
         print(f"   ⚠️ No enabled providers, falling back to direct calls")
 

@@ -6,19 +6,30 @@ from graph.user_profile import load_user_profile
 
 
 AGENT_LABELS: dict[str, dict[str, str]] = {
+    "evidence_packet_builder": {"label": "Evidence Builder", "icon": "\U0001f4e6"},
+    "orchestrator": {"label": "Orchestrator", "icon": "\U0001f9e0"},
     "market_data_expert": {"label": "Market", "icon": "\U0001f4c8"},
     "fundamental_expert": {"label": "Fundamental", "icon": "\U0001f4ca"},
     "news_expert": {"label": "News", "icon": "\U0001f4f0"},
+    "news_sentiment_expert": {"label": "News & Sentiment", "icon": "\U0001f4f0"},
     "risk_expert": {"label": "Risk", "icon": "\u26a0\ufe0f"},
     "strategy_expert": {"label": "Strategy", "icon": "\U0001f3af"},
+    "portfolio_agent": {"label": "Portfolio", "icon": "\U0001f4bc"},
     "recommendation_agent": {"label": "Recommendation", "icon": "\u2b50"},
     "comparison_agent": {"label": "Comparison", "icon": "\U0001f500"},
     "backtesting_agent": {"label": "Backtest", "icon": "\U0001f4c9"},
     "alert_agent": {"label": "Alert", "icon": "\U0001f514"},
-    "portfolio_optimization_agent": {"label": "Portfolio", "icon": "\U0001f4a0"},
+    "portfolio_optimization_agent": {"label": "Portfolio Optimization", "icon": "\U0001f4a0"},
     "supervisor": {"label": "Supervisor", "icon": "\U0001f9e0"},
     "guard_agent": {"label": "Guard", "icon": "\U0001f6e1\ufe0f"},
 }
+
+REPORT_EXCLUDE_NODES = frozenset({
+    "evidence_packet_builder",
+    "orchestrator",
+    "guard_agent",
+    "guard",
+})
 
 
 def _safe_text(message_obj: Any) -> str:
@@ -184,17 +195,21 @@ def stream_analysis_events(
         "analysis_type": "analyze",
     })
 
+    emitted_agents: set[str] = set()
+
     for chunk in langgraph_app.stream(initial_state, config=config, stream_mode="updates"):
         for node_name, update in chunk.items():
             agent_meta = AGENT_LABELS.get(node_name, {"label": node_name, "icon": "\U0001f916"})
             label = agent_meta["label"]
             icon = agent_meta["icon"]
 
-            yield _sse("agent_start", {
-                "agent": node_name,
-                "label": label,
-                "icon": icon,
-            })
+            if node_name not in emitted_agents:
+                emitted_agents.add(node_name)
+                yield _sse("agent_start", {
+                    "agent": node_name,
+                    "label": label,
+                    "icon": icon,
+                })
 
             content = _extract_text(update)
             is_guard = node_name in ("guard_agent", "guard")

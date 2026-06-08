@@ -5,7 +5,7 @@ from typing import Optional
 
 from tools.providers.base import DataProvider
 
-_DEFAULT_ENABLED = "yfinance,sec_edgar"
+_DEFAULT_ENABLED = "yfinance,sec_edgar,akshare"
 _DEFAULT_PRIORITY = "sec_edgar:100,yfinance:40"
 _COLLECTOR_TIMEOUT = 15
 
@@ -17,11 +17,12 @@ class ProviderRegistry:
             "price_change_pct":     ["akshare_hk", "akshare_hk_hist", "yfinance"],
             "rsi_14":               ["akshare_hk_hist", "yfinance"],
             "volatility_20d_annualized": ["akshare_hk_hist", "yfinance"],
-            "avg_volume_20d":       ["akshare_hk", "yfinance"],
+            "avg_volume_20d":       ["akshare_hk_hist", "akshare_hk", "yfinance"],
             "market_cap":           ["akshare", "yfinance"],
-            "pe_ratio":             ["akshare", "yfinance"],
-            "revenue_growth_yoy":   ["akshare", "yfinance"],
-            "eps_growth_yoy":       ["akshare", "yfinance"],
+            "pe_ratio":             ["yfinance", "akshare_derived", "akshare"],
+            "revenue_growth_yoy":   ["akshare_hk", "akshare", "yfinance"],
+            "eps_growth_yoy":       ["akshare_hk", "akshare", "yfinance"],
+            "news_headline":        ["akshare_hk", "yfinance"],
         },
         "US": {
             "revenue":              ["SEC_EDGAR", "yfinance"],
@@ -37,6 +38,7 @@ class ProviderRegistry:
             "macd":                 ["yfinance", "finnhub"],
             "macd_signal":          ["yfinance", "finnhub"],
             "volatility_20d_annualized": ["yfinance", "finnhub"],
+            "news_headline":        ["finnhub_news", "finnhub_market", "yfinance"],
         },
         "CN": {
             "current_price":        ["yfinance"],

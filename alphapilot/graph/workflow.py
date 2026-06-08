@@ -45,6 +45,40 @@ GUARD_MAX_RETRIES = 2
 
 RAG_SIMILARITY_THRESHOLD = 0.55
 
+_FUNDAMENTAL_STORE_FIELDS = frozenset({
+    "market_cap", "pe_ratio", "revenue", "revenue_growth_yoy", "eps", "net_profit",
+})
+_MARKET_STORE_FIELDS = frozenset({
+    "current_price", "price_change_pct", "rsi_14", "macd", "macd_signal",
+    "volatility_20d_annualized", "avg_volume_20d",
+})
+_NEWS_STORE_FIELDS = frozenset({"news_headline"})
+
+
+def _merge_fact_dicts(*layers: list[dict]) -> list[dict]:
+    """Merge fact dicts; later layers override earlier ones for the same field."""
+    merged: dict[str, dict] = {}
+    for layer in layers:
+        for fact in layer:
+            field = fact.get("field")
+            if field:
+                merged[field] = fact
+    return list(merged.values())
+
+
+def _fill_category_from_store(
+    collector_facts: list[dict],
+    stored_facts: list[dict],
+    allowed_fields: frozenset[str],
+) -> list[dict]:
+    present = {f.get("field") for f in collector_facts if f.get("field")}
+    filled = list(collector_facts)
+    for fact in stored_facts:
+        field = fact.get("field")
+        if field in allowed_fields and field not in present:
+            filled.append(fact)
+    return filled
+
 
 def evidence_packet_builder(state: GraphState) -> dict:
     """
@@ -90,10 +124,20 @@ def evidence_packet_builder(state: GraphState) -> dict:
     store = get_fact_store()
     if store.has_coverage(symbol, ["current_price"]):
         stored_active = store.get_active_facts(symbol)
-        if len(stored_active) >= 3:
+        stored_fields = {r["field"] for r in stored_active}
+        has_fundamentals = bool(stored_fields & _FUNDAMENTAL_STORE_FIELDS)
+        if len(stored_active) >= 3 and has_fundamentals:
             fact_store_hit = True
             is_cold_start = False
-            print(f"   📦 Fact Store hit: {len(stored_active)} active facts for {symbol}, skipping cold start")
+            print(
+                f"   📦 Fact Store hit: {len(stored_active)} active facts for {symbol} "
+                f"(market+fundamental cache), refreshing live data"
+            )
+        elif len(stored_active) >= 3:
+            print(
+                f"   📦 Fact Store partial: {len(stored_active)} facts for {symbol} "
+                f"but missing fundamentals — will fetch live data"
+            )
     if not fact_store_hit and matched_rag:
         top_similarity = matched_rag[0].similarity
         has_metadata = any(
@@ -118,11 +162,8 @@ def evidence_packet_builder(state: GraphState) -> dict:
                 "confidence_tier": "llm_extracted",
             })
 
-    stored_fact_dicts = []
-    collector_results = {}
-    if is_cold_start:
-        collector_results = collect_all(symbol)
-    elif fact_store_hit:
+    stored_fact_dicts: list[dict] = []
+    if fact_store_hit or store.has_coverage(symbol, ["current_price"]):
         stored_facts = store.get_active_facts(symbol)
         for sf in stored_facts:
             tier = sf.get("confidence_tier", "machine")
@@ -137,23 +178,39 @@ def evidence_packet_builder(state: GraphState) -> dict:
                 "confidence": sf["confidence"],
                 "confidence_tier": tier,
             })
-        print(f"   📦 Fact Store: {len(stored_facts)} active facts loaded for {symbol}")
+        if stored_fact_dicts:
+            print(f"   📦 Fact Store: {len(stored_fact_dicts)} cached facts for {symbol}")
 
-    use_collector = is_cold_start
-    market_facts_raw = collector_results.get("market", []) if use_collector else []
-    fundamental_facts_raw = collector_results.get("fundamental", []) if use_collector else []
-    news_facts_raw = collector_results.get("news", []) if use_collector else []
-    filings_raw = collector_results.get("filings", []) if use_collector else []
-    hkex_raw = collector_results.get("hkex", []) if use_collector else []
-
-    all_collectors_failed = (
-        is_cold_start
-        and not market_facts_raw
-        and not fundamental_facts_raw
-        and not news_facts_raw
-        and not filings_raw
-        and not hkex_raw
+    collector_results = collect_all(
+        symbol,
+        force_refresh=bool(state.get("force_refresh")),
     )
+    market_facts_raw = collector_results.get("market", [])
+    fundamental_facts_raw = collector_results.get("fundamental", [])
+    news_facts_raw = collector_results.get("news", [])
+    filings_raw = collector_results.get("filings", [])
+    hkex_raw = collector_results.get("hkex", [])
+
+    if stored_fact_dicts:
+        market_facts_raw = _fill_category_from_store(
+            market_facts_raw, stored_fact_dicts, _MARKET_STORE_FIELDS,
+        )
+        fundamental_facts_raw = _fill_category_from_store(
+            fundamental_facts_raw, stored_fact_dicts, _FUNDAMENTAL_STORE_FIELDS,
+        )
+        news_facts_raw = _fill_category_from_store(
+            news_facts_raw, stored_fact_dicts, _NEWS_STORE_FIELDS,
+        )
+
+    collector_facts_raw = _merge_fact_dicts(
+        market_facts_raw,
+        fundamental_facts_raw,
+        news_facts_raw,
+        filings_raw,
+        hkex_raw,
+    )
+
+    all_collectors_failed = not collector_facts_raw and not stored_fact_dicts
 
     if all_collectors_failed:
         if rag_facts:
@@ -198,10 +255,8 @@ def evidence_packet_builder(state: GraphState) -> dict:
                     ),
                 }],
             }
-    elif fact_store_hit:
-        all_facts_raw = rag_facts + stored_fact_dicts
     else:
-        all_facts_raw = rag_facts + market_facts_raw + fundamental_facts_raw + news_facts_raw + filings_raw + hkex_raw
+        all_facts_raw = rag_facts + collector_facts_raw
 
     facts = []
     for f in all_facts_raw:
@@ -210,18 +265,16 @@ def evidence_packet_builder(state: GraphState) -> dict:
         except Exception:
             continue
 
-    has_fundamental = bool(fundamental_facts_raw) or (
-        fact_store_hit and any(
-            f.field in ("pe_ratio", "market_cap", "revenue_growth_yoy", "eps_growth_yoy", "revenue", "eps")
-            for f in facts
-        )
+    has_fundamental = any(
+        f.field in ("pe_ratio", "market_cap", "revenue_growth_yoy", "eps_growth_yoy", "revenue", "eps")
+        for f in facts
     )
     coverage = Coverage(
         rag_context="available" if rag_facts else "missing",
-        market_data="available" if (market_facts_raw or fact_store_hit) else "missing",
+        market_data="available" if any(f.field in _MARKET_STORE_FIELDS for f in facts) else "missing",
         fundamental_data="available" if has_fundamental else "missing",
-        news_data="available" if (news_facts_raw or fact_store_hit) else "missing",
-        filings="available" if (filings_raw or fact_store_hit) else "missing",
+        news_data="available" if any(f.field in _NEWS_STORE_FIELDS for f in facts) else "missing",
+        filings="available" if filings_raw else "missing",
     )
 
     expected_fields = {

@@ -81,7 +81,14 @@ def _find_ungrounded_claims(ep: EvidencePacket, output_text: str) -> list[str]:
     """
     issues = []
     text = output_text or ""
-    lower = text.lower()
+    lines = text.split("\n")
+    _negation = re.compile(
+        r"缺少|缺乏|缺失|无法|不提供|禁止|不允许|不得|没有|不可用|不可获取|不可计算|无意义|"
+        r"missing|not available|no data|unavailable|do not|does not|not provide|n/?a\b",
+        re.IGNORECASE,
+    )
+    clean_lines = [ln for ln in lines if not _negation.search(ln)]
+    lower = "\n".join(clean_lines).lower()
     available_fields = {f.field for f in ep.facts}
 
     for keyword, required_field in _KEYWORD_FIELD_MAP.items():
@@ -165,7 +172,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
     if guard_result.allowed_output_level == OutputLevel.INSUFFICIENT_EVIDENCE:
         return {
             "is_valid": False,
-            "confidence_score": ep.evidence_score,
+            "confidence_score": int(ep.evidence_score),
             "issues": [f"INSUFFICIENT_EVIDENCE: {guard_result.reason}"],
             "corrections": ["cannot produce analysis with current data"],
             "sources": [f.source for f in ep.facts],
@@ -209,9 +216,18 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
 
     is_valid = len(issues) == 0
 
-    confidence = ep.evidence_score
+    confidence = int(ep.evidence_score)
     if guard_result.allowed_output_level == OutputLevel.LIMITED_ANALYSIS_PARTIAL:
         confidence = max(0, confidence - 5)
+
+    level = guard_result.allowed_output_level.value
+    if is_valid and level != OutputLevel.FULL_ANALYSIS.value:
+        reasoning = (
+            f"Guard passed at {level} level. "
+            f"Output constraints enforced; data note: {guard_result.reason}"
+        )
+    else:
+        reasoning = guard_result.reason
 
     return {
         "is_valid": is_valid,
@@ -219,7 +235,8 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
         "issues": issues,
         "corrections": issues if not is_valid else [],
         "sources": [f.source for f in ep.facts],
-        "final_reasoning": guard_result.reason,
+        "final_reasoning": reasoning,
+        "output_level": level,
     }
 
 

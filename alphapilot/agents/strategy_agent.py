@@ -84,25 +84,73 @@ _NA_STRATEGY = (
 
 _PARTIAL_PREFIX = '{"data_quality":"partial",'
 
+_PARTIAL_STRATEGY_AGENT = create_react_agent(
+    model=model,
+    tools=[],
+    name="strategy_expert_partial",
+    prompt="""
+You are AlphaPilot's Chief Strategy Analyst operating in LIMITED ANALYSIS mode.
+
+CRITICAL CONTEXT: Evidence Score is 60-72/100. Some key data points are missing.
+The analysis MUST be conservative and qualified.
+
+You have NO tools. Do NOT attempt to call any tool or function.
+Respond with JSON only (no markdown, no prose).
+
+RULES for LIMITED mode:
+- recommendation: ONLY "Hold" or "N/A" — NEVER "Buy" or "Sell"
+- confidence_score: 30-50 (reduced due to data gaps)
+- reasoning: synthesize available Market/Fundamental/News outputs, explicitly list missing data and how it limits the conclusion
+- weight_summary: use available weights, mark missing dimensions as "N/A (data missing)"
+- Add field "data_quality": "limited"
+- Add field "missing_data": ["field1", "field2", ...]
+
+Return JSON only:
+{"recommendation": "Hold|N/A", "confidence_score": 0-50, "reasoning": "...", "weight_summary": "...", "data_quality": "limited", "missing_data": [...]}
+""",
+)
+
 
 def strategy_agent(state):
     ep = state.get("evidence_packet", {}) or {}
     output_level = ep.get("allowed_output_level", "")
+    ep_score = int(ep.get("evidence_score", 0)) if isinstance(ep, dict) else (int(ep.evidence_score) if hasattr(ep, 'evidence_score') else 0)
     language = state.get("language", "")
 
-    if output_level in ("limited_analysis", "data_summary_only", "insufficient_evidence"):
+    if output_level in ("data_summary_only", "insufficient_evidence"):
         return {
             "messages": [{"role": "assistant", "content": _NA_STRATEGY}],
         }
 
+    if output_level == "limited_analysis" and ep_score >= 60:
+        inject_language(state, language)
+        result = _PARTIAL_STRATEGY_AGENT.invoke(state)
+        raw = result["messages"][-1].content
+        text = str(raw) if raw else ""
+        try:
+            obj = json.loads(text)
+            obj["data_quality"] = "limited"
+            obj["recommendation"] = "Hold" if obj.get("recommendation") not in ("Hold", "N/A") else obj.get("recommendation", "Hold")
+            obj["confidence_score"] = min(float(obj.get("confidence_score", 35)), 50)
+            result["messages"][-1].content = json.dumps(obj, ensure_ascii=False)
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return result
+
     inject_language(state, language)
     result = _strategy_agent.invoke(state)
 
-    if output_level == "limited_analysis_partial":
-        raw = result["messages"][-1].content
-        text = str(raw) if raw else ""
-        if text.strip().startswith("{") and '"data_quality"' not in text:
-            result["messages"][-1].content = _PARTIAL_PREFIX + text[1:]
+    raw = result["messages"][-1].content
+    text = str(raw) if raw else ""
+    if text.strip().startswith("{"):
+        try:
+            obj = json.loads(text)
+            if output_level == "limited_analysis_partial":
+                obj["data_quality"] = "partial"
+            result["messages"][-1].content = json.dumps(obj, ensure_ascii=False)
+        except (json.JSONDecodeError, ValueError):
+            if output_level == "limited_analysis_partial" and '"data_quality"' not in text:
+                result["messages"][-1].content = _PARTIAL_PREFIX + text[1:]
 
     return result
 

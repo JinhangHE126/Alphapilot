@@ -136,35 +136,73 @@ _NA_RISK_JSON_SCORE = (
 
 _PARTIAL_PREFIX = '{"data_quality":"partial",'
 
+_PARTIAL_RISK_AGENT = create_react_agent(
+    model=model,
+    tools=[],
+    name="risk_expert_partial",
+    prompt="""
+You are AlphaPilot's Chief Risk Control Expert operating in LIMITED ANALYSIS mode.
+
+CRITICAL CONTEXT: Evidence Score is 50-72/100. Some key data may be missing.
+The risk assessment MUST be conservative, qualified, and explicitly mention data gaps.
+
+You have NO tools. Do NOT attempt to call any tool or function.
+Respond with JSON only (no markdown, no prose).
+
+RULES for LIMITED mode:
+- volatility_risk: estimate from available market data (price_change_pct, beta, etc). If no market data at all, use "N/A"
+- macro_risk: assess from available news/fundamental signals
+- stop_loss_suggestion: if current_price available, suggest a percentage loss threshold (e.g. -8%); otherwise "N/A"
+- position_suggestion: always suggest conservative sizing ("no more than 5%")
+- overall_risk_score: 50-80 (elevated due to limited data)
+- risk_reasoning: MUST list missing fields and explain how they limit the assessment
+- Add field "data_quality": "limited"
+
+Return JSON only with keys: volatility_risk, macro_risk, stop_loss_suggestion, position_suggestion, overall_risk_score, risk_reasoning, data_quality
+""",
+)
+
 
 def risk_agent(state):
-    """
-    Risk Agent - v4 硬拦截版
-    """
     ep = state.get("evidence_packet", {}) or {}
-    ep_score = ep.get("evidence_score", 0)
+    ep_score = int(ep.get("evidence_score", 0)) if isinstance(ep, dict) else (int(ep.evidence_score) if hasattr(ep, 'evidence_score') else 0)
     output_level = ep.get("allowed_output_level", "")
     language = state.get("language", "")
 
-    if output_level in ("limited_analysis", "data_summary_only", "insufficient_evidence"):
+    if output_level in ("data_summary_only", "insufficient_evidence"):
         return {
             "messages": [{"role": "assistant", "content": NA_RISK_JSON}],
         }
 
-    if ep_score < 50:
+    if output_level == "limited_analysis" and ep_score >= 50:
+        agent = _PARTIAL_RISK_AGENT
+    elif ep_score >= 50 or output_level in ("full_analysis", "limited_analysis_partial"):
+        agent = _create_risk_agent()
+    else:
         return {
             "messages": [{"role": "assistant", "content": _NA_RISK_JSON_SCORE}],
         }
 
-    agent = _create_risk_agent()
     inject_language(state, language)
     result = agent.invoke(state)
 
-    if output_level == "limited_analysis_partial":
-        raw = result["messages"][-1].content
-        text = str(raw) if raw else ""
-        if text.strip().startswith("{") and '"data_quality"' not in text:
-            result["messages"][-1].content = _PARTIAL_PREFIX + text[1:]
+    raw = result["messages"][-1].content
+    text = str(raw) if raw else ""
+    if text.strip().startswith("{"):
+        try:
+            obj = json.loads(text)
+            if output_level == "limited_analysis":
+                obj["data_quality"] = "limited"
+                try:
+                    obj["overall_risk_score"] = min(int(round(float(obj.get("overall_risk_score", 60)))), 80)
+                except (TypeError, ValueError):
+                    obj["overall_risk_score"] = 60
+            elif output_level == "limited_analysis_partial":
+                obj["data_quality"] = "partial"
+            result["messages"][-1].content = json.dumps(obj, ensure_ascii=False)
+        except (json.JSONDecodeError, ValueError):
+            if output_level == "limited_analysis_partial" and '"data_quality"' not in text:
+                result["messages"][-1].content = _PARTIAL_PREFIX + text[1:]
 
     return result
 

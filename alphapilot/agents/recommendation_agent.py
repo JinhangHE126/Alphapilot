@@ -23,15 +23,36 @@ def recommendation_agent(state):
     language = state.get("language", "")
 
     ep = state.get("evidence_packet", {})
-    ep_score = ep.get("evidence_score", 0) if ep else 0
+    ep_score = int(ep.get("evidence_score", 0)) if isinstance(ep, dict) else (int(ep.evidence_score) if ep else 0)
     output_level = ep.get("allowed_output_level", "limited_analysis") if ep else "limited_analysis"
 
-    if ep_score < 70 or output_level != "full_analysis":
+    if output_level != "full_analysis":
+        reason = (
+            f"当前分析等级为 {output_level}，尚未达到 full_analysis，暂不生成个性化推荐。"
+            if language in ("zh", "yue", "")
+            else f'Output level is "{output_level}" (not full_analysis); personalized recommendation is withheld.'
+        )
         system_prompt = f"""
 You are Recommendation Agent.
 
-CRITICAL: Evidence score is {ep_score}/100 (below threshold).
-Output level is "{output_level}".
+Evidence score: {ep_score}/100.
+Output level: "{output_level}" (requires "full_analysis" for personalized advice).
+
+Your ONLY task: output a concise notice that personalized recommendation cannot be generated yet.
+
+You have NO tools. Do NOT attempt to call any tool or function.
+Respond with plain text only, no tool calls, no XML tags.
+
+Output format:
+{get_label('reco_na_title', language)}
+- {reason}
+- {get_label('reco_na_action', language)}
+"""
+    elif ep_score < 70:
+        system_prompt = f"""
+You are Recommendation Agent.
+
+CRITICAL: Evidence score is {ep_score}/100 (below 70 threshold).
 
 Your ONLY task: output a concise notice that personalized recommendation cannot be generated.
 
@@ -40,7 +61,7 @@ Respond with plain text only, no tool calls, no XML tags.
 
 Output format:
 {get_label('reco_na_title', language)}
-- {get_label('reco_na_reason', language).format(score=ep_score)}
+- {get_label('reco_na_reason', language).format(score=ep_score, level=output_level)}
 - {get_label('reco_na_action', language)}
 """
     else:
