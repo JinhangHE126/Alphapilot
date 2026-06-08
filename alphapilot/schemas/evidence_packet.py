@@ -15,6 +15,7 @@ class ConfidenceTier(str, Enum):
 
 class OutputLevel(str, Enum):
     FULL_ANALYSIS = "full_analysis"
+    LIMITED_ANALYSIS_PARTIAL = "limited_analysis_partial"
     LIMITED_ANALYSIS = "limited_analysis"
     DATA_SUMMARY_ONLY = "data_summary_only"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
@@ -235,7 +236,9 @@ def determine_output_level(packet: EvidencePacket) -> GuardResult:
     )
     hard_missing = [m.field for m in packet.missing_fields if not m.substitute]
     critical_missing = critical_fields & set(hard_missing)
-    if critical_missing:
+    hard_missing_count = len(critical_missing)
+
+    if hard_missing_count >= 2:
         return GuardResult(
             allowed_output_level=OutputLevel.LIMITED_ANALYSIS,
             reason=f"critical fields missing: {critical_missing}",
@@ -245,6 +248,30 @@ def determine_output_level(packet: EvidencePacket) -> GuardResult:
 
     partial_missing = [m.field for m in packet.missing_fields if m.substitute]
     critical_partial = critical_fields & set(partial_missing)
+    substitute_count = len(critical_partial)
+
+    if hard_missing_count == 0 and substitute_count <= 1 and packet.evidence_score >= 80:
+        reason_parts = []
+        if critical_partial:
+            reason_parts.append(f"critical fields have substitute only: {critical_partial}")
+        if packet.conflicts:
+            reason_parts.append(f"{len(packet.conflicts)} unresolved conflict(s)")
+        reason = "; ".join(reason_parts) if reason_parts else "partial — near full coverage"
+        return GuardResult(
+            allowed_output_level=OutputLevel.LIMITED_ANALYSIS_PARTIAL,
+            reason=reason,
+            evidence_score=packet.evidence_score,
+            evidence_score_breakdown=packet.evidence_score_breakdown,
+        )
+
+    if critical_missing:
+        return GuardResult(
+            allowed_output_level=OutputLevel.LIMITED_ANALYSIS,
+            reason=f"critical fields missing: {critical_missing}",
+            evidence_score=packet.evidence_score,
+            evidence_score_breakdown=packet.evidence_score_breakdown,
+        )
+
     if critical_partial:
         return GuardResult(
             allowed_output_level=OutputLevel.LIMITED_ANALYSIS,
@@ -337,7 +364,21 @@ def detect_conflicts(packet: EvidencePacket) -> EvidencePacket:
     return packet
 
 
-def render_packet_for_agent(packet: EvidencePacket) -> str:
+LANGUAGE_LABELS: dict[str, str] = {
+    "zh": "简体中文",
+    "yue": "粤语 (Cantonese)",
+    "en": "English",
+}
+
+
+def _language_instruction(language: str) -> str:
+    if not language or language == "en":
+        return ""
+    label = LANGUAGE_LABELS.get(language, language)
+    return f"\n\n### 【语言要求 - 最高优先级】\n请全程使用 {label} 回复。所有分析内容、指标解读、结论、建议都必须使用 {label} 输出。禁止使用其他语言。"
+
+
+def render_packet_for_agent(packet: EvidencePacket, language: str = "") -> str:
     guard_result = determine_output_level(packet)
 
     lines = [
@@ -378,7 +419,13 @@ def render_packet_for_agent(packet: EvidencePacket) -> str:
     lines.append("- [?] facts are speculative, not definitive.")
     lines.append("- If a data point is missing, explicitly state it is unavailable.")
     lines.append("- Do NOT generate investment recommendations when output level is data_summary_only or insufficient_evidence.")
+    lines.append("- DO NOT output any target price, price target, 目标价, 价位, or 介入点. These are never grounded in Evidence Packet facts.")
+    lines.append("- When mentioning a numeric fact (price, PE, etc.), quote the EXACT value from the facts list. Do NOT round, approximate, or use 约/大概/approximately/roughly.")
     lines.append("- SUBSTITUTE FIELDS: 'revenue' / 'eps' are absolute values, NOT year-over-year growth rates. When revenue_growth_yoy or eps_growth_yoy is missing with a substitute, explain that trend analysis is limited to absolute values, and do NOT fabricate growth percentages.")
+
+    lang_instr = _language_instruction(language)
+    if lang_instr:
+        lines.append(lang_instr)
 
     return "\n".join(lines)
 

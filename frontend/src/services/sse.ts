@@ -22,13 +22,14 @@ function encodeBody(body: Record<string, unknown>) {
 }
 
 export async function streamAnalyze(
-  payload: { session_id: string; message: string; stock_symbol: string },
+  payload: { session_id: string; message: string; stock_symbol: string; language?: string },
   onEvent: (event: StreamEvent) => void,
 ) {
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...authHeader(),
-  };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const auth = authHeader();
+  if (auth.Authorization) {
+    headers.Authorization = auth.Authorization;
+  }
 
   const response = await fetch("/api/analyze/stream", {
     method: "POST",

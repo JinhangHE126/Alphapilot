@@ -1,11 +1,13 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { Link, Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
+import { Link, Navigate, NavLink, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import AnalyzePage from "./pages/AnalyzePage";
 import AnalysisDetailPage from "./pages/AnalysisDetailPage";
 import DashboardPage from "./pages/DashboardPage";
 import HistoryPage from "./pages/HistoryPage";
 import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
+import LanguageSwitcher from "./components/LanguageSwitcher";
+import { useTranslation } from "./i18n";
 import { clearToken, getMe, hasToken, refreshToken, saveToken } from "./services/api";
 
 interface AuthState {
@@ -66,20 +68,24 @@ function ProtectedRoute() {
 
 function AppShell() {
   const { logout } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <div className="layout">
       <aside className="sidebar">
         <h1>AlphaPilot</h1>
         <nav>
-          <Link to="/">Dashboard</Link>
-          <Link to="/analyze">Analyze</Link>
-          <Link to="/history">History</Link>
-          <Link to="/settings">Settings</Link>
+          <NavLink to="/" end>{t("nav.dashboard")}</NavLink>
+          <NavLink to="/analyze">{t("nav.analyze")}</NavLink>
+          <NavLink to="/history">{t("nav.history")}</NavLink>
+          <NavLink to="/settings">{t("nav.settings")}</NavLink>
         </nav>
-        <button className="btn ghost" onClick={logout}>
-          Logout
-        </button>
+        <div className="sidebar-footer">
+          <LanguageSwitcher />
+          <button className="btn ghost" onClick={logout}>
+            {t("nav.logout")}
+          </button>
+        </div>
       </aside>
       <main className="content">
         <Outlet />

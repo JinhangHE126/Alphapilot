@@ -281,7 +281,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
     except Exception as exc:
         ingestion_result = {"symbol": symbol, "ingested": 0, "skipped": -1, "error": str(exc)}
 
-    rendered = render_packet_for_agent(packet)
+    rendered = render_packet_for_agent(packet, language=state.get("language", ""))
 
     print(f"\n📦 Evidence Packet Builder:")
     print(f"   Symbol: {symbol}")

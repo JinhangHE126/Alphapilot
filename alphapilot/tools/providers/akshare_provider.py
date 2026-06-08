@@ -172,7 +172,14 @@ class AKShareProvider(DataProvider):
             if val is None or val == "-" or val == "":
                 continue
             try:
-                parsed = str(val) if unit == "text" else (int(val) if unit == "integer" else float(val))
+                if unit == "integer":
+                    parsed = int(val)
+                    if field_name == "employee_count" and parsed > 1_000_000:
+                        continue
+                elif unit == "text":
+                    parsed = str(val)
+                else:
+                    parsed = float(val)
                 facts.append(Fact(
                     field=field_name,
                     value=parsed,
@@ -186,6 +193,31 @@ class AKShareProvider(DataProvider):
                 ))
             except (ValueError, TypeError):
                 continue
+
+        pe_fact = next((f for f in facts if f.field == "pe_ratio"), None)
+        mcap_fact = next((f for f in facts if f.field == "market_cap"), None)
+        np_fact = next((f for f in facts if f.field == "net_profit"), None)
+        if pe_fact and mcap_fact and np_fact and np_fact.value > 0:
+            try:
+                pe_derived = float(mcap_fact.value) / float(np_fact.value)
+                pe_raw = float(pe_fact.value)
+                if pe_raw > 0 and pe_derived > 0:
+                    deviation = abs(pe_raw - pe_derived) / max(pe_raw, pe_derived)
+                    if deviation > 0.5:
+                        print(f"   ⚠️ AKShare PE={pe_raw} vs derived={pe_derived:.1f} (dev={deviation:.0%}), dropping PE")
+                        facts = [f for f in facts if f.field != "pe_ratio"]
+            except (ValueError, TypeError):
+                pass
+
+        roe_fact = next((f for f in facts if f.field == "return_on_equity"), None)
+        if roe_fact is not None:
+            try:
+                roe_val = float(roe_fact.value)
+                if roe_val < 0.01 or roe_val > 100:
+                    print(f"   ⚠️ AKShare ROE={roe_val} out of plausible range (0.01-100), dropping")
+                    facts = [f for f in facts if f.field != "return_on_equity"]
+            except (ValueError, TypeError):
+                pass
 
         return facts
 

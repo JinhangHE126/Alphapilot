@@ -3,6 +3,7 @@ import { BrowserRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import App from "./App";
+import { I18nProvider } from "./i18n";
 
 describe("App", () => {
   beforeEach(() => {
@@ -12,7 +13,9 @@ describe("App", () => {
   it("shows login when unauthenticated", () => {
     render(
       <BrowserRouter>
-        <App />
+        <I18nProvider>
+          <App />
+        </I18nProvider>
       </BrowserRouter>,
     );
     expect(screen.getByText("AlphaPilot")).toBeInTheDocument();

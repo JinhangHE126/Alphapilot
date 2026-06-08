@@ -1,5 +1,6 @@
 from langgraph.prebuilt import create_react_agent
 from config.llm import get_llm
+from graph.lang_labels import get_label, inject_language
 
 
 model = get_llm("news")
@@ -39,19 +40,21 @@ Strict rules:
 def news_agent(state):
     ep = state.get("evidence_packet", {}) or {}
     output_level = ep.get("allowed_output_level", "")
+    language = state.get("language", "")
 
     if output_level in ("insufficient_evidence", "data_summary_only"):
         return {
             "messages": [{
                 "role": "assistant",
                 "content": (
-                    "## News & Sentiment Analysis: NOT AVAILABLE\n"
-                    f"- Reason: Evidence insufficient (output level: {output_level})\n"
-                    "- Action: Await verified data before sentiment analysis"
+                    f"{get_label('news_not_available', language)}\n"
+                    f"- {get_label('news_na_reason', language)} (output level: {output_level})\n"
+                    f"- {get_label('news_na_action', language)}"
                 ),
             }],
         }
 
+    inject_language(state, language)
     return _NEWS_AGENT.invoke(state)
 
 __all__ = ["news_agent"]

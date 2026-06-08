@@ -8,6 +8,7 @@ class GraphState(TypedDict, total=False):
 
     # 基础输入
     stock_symbol: str
+    language: str
     messages: Annotated[list[BaseMessage], add_messages]
 
     # Evidence Packet（v4 防幻觉核心）

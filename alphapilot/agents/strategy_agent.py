@@ -1,10 +1,10 @@
 from langgraph.prebuilt import create_react_agent
 from config.llm import get_llm
+from graph.lang_labels import inject_language
 from pydantic import BaseModel, Field
 from typing import Literal
 import json
 import re
-from pydantic import ValidationError
 
 model = get_llm("strategy")
 
@@ -22,13 +22,13 @@ def _extract_json_text(text: str) -> str:
     raise ValueError("No valid JSON found in model output.")
 class StrategyRecommendation(BaseModel):
     """Structured output for the Strategy Agent."""
-    recommendation: Literal["Buy", "Hold", "Sell"]
+    recommendation: Literal["Buy", "Hold", "Sell", "N/A"]
     confidence_score: float = Field(description="Overall confidence score (0-100)")
     reasoning: str = Field(description="Detailed Chain-of-Thought reasoning process")
     weight_summary: str = Field(description="Summary of factor weights")
 
 def run_strategy_analysis(user_text: str) -> StrategyRecommendation:
-    result = strategy_agent.invoke({
+    result = _strategy_agent.invoke({
         "messages": [{"role": "user", "content": user_text}]
     })
 
@@ -45,7 +45,7 @@ def run_strategy_analysis(user_text: str) -> StrategyRecommendation:
 
 
 
-strategy_agent = create_react_agent(
+_strategy_agent = create_react_agent(
     model=model,
     tools=[],
     name="strategy_expert",
@@ -74,5 +74,37 @@ The recommendation field in the JSON is the single source of truth.
 Do NOT write "Final Recommendation: BUY" or similar text outside the JSON.
 """,
 )
+
+_NA_STRATEGY = (
+    '{"recommendation":"N/A","confidence_score":0,'
+    '"reasoning":"Insufficient data for strategy analysis. '
+    'Evidence output level is limited_analysis or worse.",'
+    '"weight_summary":"Strategy unavailable at this output level."}'
+)
+
+_PARTIAL_PREFIX = '{"data_quality":"partial",'
+
+
+def strategy_agent(state):
+    ep = state.get("evidence_packet", {}) or {}
+    output_level = ep.get("allowed_output_level", "")
+    language = state.get("language", "")
+
+    if output_level in ("limited_analysis", "data_summary_only", "insufficient_evidence"):
+        return {
+            "messages": [{"role": "assistant", "content": _NA_STRATEGY}],
+        }
+
+    inject_language(state, language)
+    result = _strategy_agent.invoke(state)
+
+    if output_level == "limited_analysis_partial":
+        raw = result["messages"][-1].content
+        text = str(raw) if raw else ""
+        if text.strip().startswith("{") and '"data_quality"' not in text:
+            result["messages"][-1].content = _PARTIAL_PREFIX + text[1:]
+
+    return result
+
 
 __all__ = ["strategy_agent"]

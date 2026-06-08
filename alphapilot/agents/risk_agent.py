@@ -1,6 +1,7 @@
 from langgraph.prebuilt import create_react_agent
 # from langchain_openai import ChatOpenAI   # 如果你想统一用 Google，可改成 from your_global_settings import get_llm
 from config.llm import get_llm
+from graph.lang_labels import inject_language
 from pydantic import BaseModel, Field
 from typing import Any, Literal
 import json
@@ -117,7 +118,23 @@ Return JSON only with keys: volatility_risk, macro_risk, stop_loss_suggestion, p
     )
 
 
-NA_RISK_JSON = '{"volatility_risk":"N/A","macro_risk":"N/A","stop_loss_suggestion":"N/A","position_suggestion":"N/A","overall_risk_score":0,"risk_reasoning":"Insufficient data for risk assessment. Evidence score below threshold."}'
+NA_RISK_JSON = (
+    '{"volatility_risk":"N/A","macro_risk":"N/A",'
+    '"stop_loss_suggestion":"N/A","position_suggestion":"N/A",'
+    '"overall_risk_score":0,'
+    '"risk_reasoning":"Risk assessment unavailable: '
+    'output level is limited_analysis or worse"}'
+)
+
+_NA_RISK_JSON_SCORE = (
+    '{"volatility_risk":"N/A","macro_risk":"N/A",'
+    '"stop_loss_suggestion":"N/A","position_suggestion":"N/A",'
+    '"overall_risk_score":0,'
+    '"risk_reasoning":"Risk assessment unavailable: '
+    'evidence score below threshold (50)"}'
+)
+
+_PARTIAL_PREFIX = '{"data_quality":"partial",'
 
 
 def risk_agent(state):
@@ -127,13 +144,28 @@ def risk_agent(state):
     ep = state.get("evidence_packet", {}) or {}
     ep_score = ep.get("evidence_score", 0)
     output_level = ep.get("allowed_output_level", "")
+    language = state.get("language", "")
 
-    if ep_score < 50 or output_level in ("limited_analysis", "data_summary_only", "insufficient_evidence"):
+    if output_level in ("limited_analysis", "data_summary_only", "insufficient_evidence"):
         return {
             "messages": [{"role": "assistant", "content": NA_RISK_JSON}],
         }
 
+    if ep_score < 50:
+        return {
+            "messages": [{"role": "assistant", "content": _NA_RISK_JSON_SCORE}],
+        }
+
     agent = _create_risk_agent()
-    return agent.invoke(state)
+    inject_language(state, language)
+    result = agent.invoke(state)
+
+    if output_level == "limited_analysis_partial":
+        raw = result["messages"][-1].content
+        text = str(raw) if raw else ""
+        if text.strip().startswith("{") and '"data_quality"' not in text:
+            result["messages"][-1].content = _PARTIAL_PREFIX + text[1:]
+
+    return result
 
 __all__ = ["risk_agent", "run_risk_assessment"]

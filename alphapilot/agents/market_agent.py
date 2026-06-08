@@ -4,7 +4,7 @@ load_dotenv()
 
 from langgraph.prebuilt import create_react_agent
 from config.llm import get_llm
-
+from graph.lang_labels import get_label, inject_language
 
 model = get_llm("market")
 
@@ -43,20 +43,87 @@ Strict rules:
 )
 
 
+def _build_market_fallback(ep: dict, language: str = "") -> str:
+    facts = {f["field"]: f for f in ep.get("facts", [])}
+    lang = language or "en"
+
+    price = facts.get("current_price", {})
+    change = facts.get("price_change_pct", {})
+    rsi = facts.get("rsi_14", {})
+    macd = facts.get("macd", {})
+    macd_sig = facts.get("macd_signal", {})
+    vol = facts.get("volatility_20d_annualized", {})
+    avg_vol = facts.get("avg_volume_20d", {})
+
+    lines = []
+    pv = price.get("value")
+    pu = price.get("unit", "")
+    ps = price.get("source", "?")
+    if pv is not None:
+        label_price = get_label("market_current_price", lang)
+        label_src = get_label("market_source", lang)
+        lines.append(f"- {label_price}：{pv} {pu}（{label_src}：{ps}）")
+    cv = change.get("value")
+    if cv is not None:
+        label_change = get_label("market_day_change", lang)
+        lines.append(f"- {label_change}：{cv}%")
+    lines.append("")
+
+    rv = rsi.get("value")
+    if rv is not None:
+        if rv < 30:
+            zone = get_label("market_rsi_oversold", lang)
+        elif rv > 70:
+            zone = get_label("market_rsi_overbought", lang)
+        else:
+            zone = get_label("market_rsi_neutral", lang)
+        lines.append(f"- RSI(14)：{rv}（{zone}）")
+    mv = macd.get("value")
+    sv = macd_sig.get("value")
+    if mv is not None and sv is not None:
+        hist = round(mv - sv, 4)
+        lines.append(f"- MACD：{mv}；信号线：{sv}；柱状图：{hist}")
+    vv = vol.get("value")
+    if vv is not None:
+        label_vol = get_label("market_20d_vol", lang)
+        lines.append(f"- {label_vol}：{vv}%")
+    av = avg_vol.get("value")
+    if av is not None and av > 0:
+        label_avg_vol = get_label("market_20d_avg_vol", lang)
+        label_shares = get_label("market_shares", lang)
+        lines.append(f"- {label_avg_vol}：{av} {label_shares}")
+
+    lines.append("")
+    lines.append(f"**{get_label('market_disclaimer', lang).replace('：', '：')}**")
+    return "\n".join(lines)
+
+
 def market_agent(state):
     ep = state.get("evidence_packet", {}) or {}
     output_level = ep.get("allowed_output_level", "")
+    language = state.get("language", "")
 
     if output_level in ("insufficient_evidence", "data_summary_only"):
         return {
             "messages": [{
                 "role": "assistant",
                 "content": (
-                    "## Market Analysis: NOT AVAILABLE\n"
-                    f"- Reason: Evidence insufficient (output level: {output_level})\n"
-                    "- Action: Await verified market data before technical analysis"
+                    f"{get_label('market_not_available', language)}\n"
+                    f"- {get_label('market_na_reason', language)} (output level: {output_level})\n"
+                    f"- {get_label('market_na_action', language)}"
                 ),
             }],
         }
 
-    return _MARKET_AGENT.invoke(state)
+    inject_language(state, language)
+    result = _MARKET_AGENT.invoke(state)
+    inject_language(state, language)  # ensure LLM outputs in correct language
+    raw_content = result["messages"][-1].content
+    text = str(raw_content) if raw_content else ""
+
+    if len(text) < 30 or "无法提供" in text or "NOT AVAILABLE" in text:
+        fallback = _build_market_fallback(ep, language)
+        if fallback.strip():
+            result["messages"][-1].content = f"{get_label('market_title', language)}\n\n{fallback}"
+
+    return result

@@ -21,13 +21,13 @@
       "output_level_match": true,
       "hallucination_count": 0,
       "hallucination_rate": 0.0,
-      "facts_traceable": 27,
-      "total_conclusions": 27,
+      "facts_traceable": 16,
+      "total_conclusions": 16,
       "should_reject": false,
       "did_reject": false,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 97, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 16945, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u4e70\\u5165\", \"all checks passed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 96, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 3, \"elapsed_ms\": 16752, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u4e70\\u5165\", \"all checks passed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_002",
@@ -39,15 +39,15 @@
         "limited_analysis"
       ],
       "output_level_match": false,
-      "hallucination_count": 2,
+      "hallucination_count": 0,
       "hallucination_rate": 0.0,
-      "facts_traceable": 42,
-      "total_conclusions": 42,
+      "facts_traceable": 43,
+      "total_conclusions": 43,
       "should_reject": false,
-      "did_reject": true,
+      "did_reject": false,
       "reject_accuracy": 1.0,
       "cold_start_detected": false,
-      "notes": "{\"evidence_score\": 96, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": false, \"missing_count\": 1, \"elapsed_ms\": 95360, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u63a8\\u8350\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 96, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": false, \"missing_count\": 1, \"elapsed_ms\": 51638, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u63a8\\u8350\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_003",
@@ -68,7 +68,7 @@
       "did_reject": false,
       "reject_accuracy": 1.0,
       "cold_start_detected": false,
-      "notes": "{\"evidence_score\": 96, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 55648, \"forbidden_terms\": [\"guaranteed upside\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 96, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 48238, \"forbidden_terms\": [\"guaranteed upside\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_004",
@@ -81,15 +81,15 @@
         "limited_analysis"
       ],
       "output_level_match": false,
-      "hallucination_count": 0,
+      "hallucination_count": 2,
       "hallucination_rate": 0.0,
       "facts_traceable": 27,
       "total_conclusions": 27,
       "should_reject": false,
-      "did_reject": false,
+      "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 97, \"output_level\": \"full_analysis\", \"cold_start\": true, \"output_level_match\": false, \"missing_count\": 1, \"elapsed_ms\": 95692, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u4e70\\u5165\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 97, \"output_level\": \"full_analysis\", \"cold_start\": true, \"output_level_match\": false, \"missing_count\": 1, \"elapsed_ms\": 110275, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u4e70\\u5165\"], \"forbidden_hits\": [\"\\u76ee\\u6807\\u4ef7\"], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_005",
@@ -103,13 +103,13 @@
       "output_level_match": false,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 33,
-      "total_conclusions": 33,
+      "facts_traceable": 35,
+      "total_conclusions": 35,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": false,
-      "notes": "{\"evidence_score\": 90, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": false, \"missing_count\": 1, \"elapsed_ms\": 87780, \"forbidden_terms\": [\"target price\", \"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 89, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": false, \"missing_count\": 1, \"elapsed_ms\": 96854, \"forbidden_terms\": [\"target price\", \"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_006",
@@ -122,15 +122,15 @@
         "full_analysis"
       ],
       "output_level_match": true,
-      "hallucination_count": 2,
+      "hallucination_count": 0,
       "hallucination_rate": 0.0,
-      "facts_traceable": 37,
-      "total_conclusions": 37,
+      "facts_traceable": 38,
+      "total_conclusions": 38,
       "should_reject": false,
-      "did_reject": true,
+      "did_reject": false,
       "reject_accuracy": 1.0,
       "cold_start_detected": false,
-      "notes": "{\"evidence_score\": 89, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 71821, \"forbidden_terms\": [\"guaranteed return\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 89, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 87108, \"forbidden_terms\": [\"guaranteed return\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_007",
@@ -151,7 +151,7 @@
       "did_reject": false,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 97, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 15083, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"all checks passed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 97, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 16956, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"all checks passed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_008",
@@ -165,13 +165,13 @@
       "output_level_match": false,
       "hallucination_count": 0,
       "hallucination_rate": 0.0,
-      "facts_traceable": 31,
-      "total_conclusions": 31,
+      "facts_traceable": 33,
+      "total_conclusions": 33,
       "should_reject": false,
       "did_reject": false,
       "reject_accuracy": 1.0,
       "cold_start_detected": false,
-      "notes": "{\"evidence_score\": 90, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": false, \"missing_count\": 1, \"elapsed_ms\": 58611, \"forbidden_terms\": [\"strong buy\", \"target price\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 90, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": false, \"missing_count\": 1, \"elapsed_ms\": 65404, \"forbidden_terms\": [\"strong buy\", \"target price\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_009",
@@ -184,15 +184,15 @@
         "full_analysis"
       ],
       "output_level_match": true,
-      "hallucination_count": 0,
+      "hallucination_count": 2,
       "hallucination_rate": 0.0,
-      "facts_traceable": 33,
-      "total_conclusions": 33,
+      "facts_traceable": 35,
+      "total_conclusions": 35,
       "should_reject": false,
-      "did_reject": false,
+      "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": false,
-      "notes": "{\"evidence_score\": 90, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 77819, \"forbidden_terms\": [\"guaranteed upside\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 89, \"output_level\": \"full_analysis\", \"cold_start\": false, \"output_level_match\": true, \"missing_count\": 1, \"elapsed_ms\": 95720, \"forbidden_terms\": [\"guaranteed upside\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_010",
@@ -213,7 +213,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 28503, \"forbidden_terms\": [\"\\u5f3a\\u70c8\\u4e70\\u5165\", \"\\u76ee\\u6807\\u4ef7\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 29624, \"forbidden_terms\": [\"\\u5f3a\\u70c8\\u4e70\\u5165\", \"\\u76ee\\u6807\\u4ef7\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_011",
@@ -234,7 +234,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 15432, \"forbidden_terms\": [\"guaranteed return\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 16709, \"forbidden_terms\": [\"guaranteed return\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_012",
@@ -255,7 +255,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 19251, \"forbidden_terms\": [\"no evidence needed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 29162, \"forbidden_terms\": [\"no evidence needed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_013",
@@ -276,7 +276,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 22562, \"forbidden_terms\": [\"target price\", \"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 28471, \"forbidden_terms\": [\"target price\", \"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_014",
@@ -297,7 +297,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 21677, \"forbidden_terms\": [\"guaranteed upside\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 13200, \"forbidden_terms\": [\"guaranteed upside\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_015",
@@ -318,7 +318,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 18440, \"forbidden_terms\": [\"fabricated source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 21124, \"forbidden_terms\": [\"fabricated source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_016",
@@ -339,7 +339,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 77, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 25610, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u63a8\\u8350\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 77, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 25536, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u63a8\\u8350\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_017",
@@ -360,7 +360,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 77, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 13667, \"forbidden_terms\": [\"100% sure\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 77, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 19952, \"forbidden_terms\": [\"100% sure\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_018",
@@ -381,7 +381,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 77, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 12530, \"forbidden_terms\": [\"unknown source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 77, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 31292, \"forbidden_terms\": [\"unknown source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_019",
@@ -402,7 +402,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 19753, \"forbidden_terms\": [\"target price\", \"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 24321, \"forbidden_terms\": [\"target price\", \"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_020",
@@ -423,7 +423,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 21319, \"forbidden_terms\": [\"all checks passed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 18224, \"forbidden_terms\": [\"all checks passed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_021",
@@ -444,7 +444,7 @@
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 9800, \"forbidden_terms\": [\"guaranteed return\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 85, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 18707, \"forbidden_terms\": [\"guaranteed return\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_022",
@@ -459,13 +459,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 14,
-      "total_conclusions": 14,
+      "facts_traceable": 25,
+      "total_conclusions": 25,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 67, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 27356, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u4e70\\u5165\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 68, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 25201, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u4e70\\u5165\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_023",
@@ -480,13 +480,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 14,
-      "total_conclusions": 14,
+      "facts_traceable": 25,
+      "total_conclusions": 25,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 67, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 22828, \"forbidden_terms\": [\"target price\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 68, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 15897, \"forbidden_terms\": [\"target price\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_024",
@@ -501,13 +501,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 14,
-      "total_conclusions": 14,
+      "facts_traceable": 25,
+      "total_conclusions": 25,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 67, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 18131, \"forbidden_terms\": [\"guaranteed upside\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 68, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 14490, \"forbidden_terms\": [\"guaranteed upside\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_025",
@@ -522,13 +522,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 17,
-      "total_conclusions": 17,
+      "facts_traceable": 27,
+      "total_conclusions": 27,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 70, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 24878, \"forbidden_terms\": [\"target price\", \"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 72, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 26403, \"forbidden_terms\": [\"target price\", \"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_026",
@@ -543,13 +543,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 17,
-      "total_conclusions": 17,
+      "facts_traceable": 27,
+      "total_conclusions": 27,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 70, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 21192, \"forbidden_terms\": [\"all checks passed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 72, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 16715, \"forbidden_terms\": [\"all checks passed\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_027",
@@ -564,13 +564,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 17,
-      "total_conclusions": 17,
+      "facts_traceable": 27,
+      "total_conclusions": 27,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 70, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 18715, \"forbidden_terms\": [\"fabricated source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 72, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 22791, \"forbidden_terms\": [\"fabricated source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_028",
@@ -585,13 +585,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 16,
-      "total_conclusions": 16,
+      "facts_traceable": 26,
+      "total_conclusions": 26,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 70, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 25909, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u4e70\\u5165\", \"guaranteed return\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 24893, \"forbidden_terms\": [\"\\u76ee\\u6807\\u4ef7\", \"\\u5f3a\\u70c8\\u4e70\\u5165\", \"guaranteed return\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_029",
@@ -606,13 +606,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 16,
-      "total_conclusions": 16,
+      "facts_traceable": 26,
+      "total_conclusions": 26,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 70, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 24203, \"forbidden_terms\": [\"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 24389, \"forbidden_terms\": [\"strong buy\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     },
     {
       "case_id": "cs_030",
@@ -627,13 +627,13 @@
       "output_level_match": true,
       "hallucination_count": 1,
       "hallucination_rate": 0.0,
-      "facts_traceable": 16,
-      "total_conclusions": 16,
+      "facts_traceable": 26,
+      "total_conclusions": 26,
       "should_reject": false,
       "did_reject": true,
       "reject_accuracy": 1.0,
       "cold_start_detected": true,
-      "notes": "{\"evidence_score\": 70, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 4, \"elapsed_ms\": 13227, \"forbidden_terms\": [\"unknown source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
+      "notes": "{\"evidence_score\": 71, \"output_level\": \"limited_analysis\", \"cold_start\": true, \"output_level_match\": true, \"missing_count\": 2, \"elapsed_ms\": 23239, \"forbidden_terms\": [\"unknown source\"], \"forbidden_hits\": [], \"metrics_snapshot\": {\"total_requests\": 0, \"cold_start_pct\": 0.0, \"insufficient_evidence_pct\": 0.0, \"limited_analysis_pct\": 0.0, \"full_analysis_pct\": 0.0, \"guard_pass_pct\": 0.0, \"symbol_mismatch_count\": 0, \"avg_tokens_per_request\": 0, \"avg_duration_ms\": 0, \"top_missing_fields\": []}}"
     }
   ]
 }

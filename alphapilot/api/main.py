@@ -122,6 +122,7 @@ class AnalyzeStreamRequest(BaseModel):
     message: str
     stock_symbol: Optional[str] = "TSLA"
     session_id: Optional[str] = None
+    language: Optional[str] = None
 
 class CompareRequest(BaseModel):
     stock_symbols: List[str] = ["TSLA", "NVDA"]
@@ -219,6 +220,12 @@ async def analyze(request: AnalyzeRequest, current_user: dict[str, Any] = Depend
     thread_id = f"user_{current_user['id']}_{session_id}"
 
     add_message(session_id, "user", request.message, node_name="user_input")
+    analysis_record = create_analysis_record(
+        current_user["id"],
+        request.stock_symbol or "TSLA",
+        analysis_type="analyze",
+    )
+    analysis_id = analysis_record["id"]
     result = run_analysis_once(
         user_message=request.message,
         stock_symbol=request.stock_symbol or "TSLA",
@@ -226,6 +233,12 @@ async def analyze(request: AnalyzeRequest, current_user: dict[str, Any] = Depend
         thread_id=thread_id,
     )
     add_message(session_id, "assistant", result["final_report"], node_name="recommendation_agent")
+    complete_analysis_record(
+        analysis_id,
+        report=result["final_report"],
+        recommendation=result.get("recommendation"),
+        status="completed",
+    )
 
     return success({
         "session_id": session_id,
@@ -249,29 +262,62 @@ async def analyze_stream(request: AnalyzeStreamRequest, current_user: dict[str, 
     thread_id = f"user_{current_user['id']}_{session_id}"
 
     add_message(session_id, "user", request.message, node_name="user_input")
+    analysis_record = create_analysis_record(
+        current_user["id"],
+        request.stock_symbol or "TSLA",
+        analysis_type="analyze",
+    )
+    analysis_id = analysis_record["id"]
 
     def event_generator():
         final_payload = {"final_report": "分析完成", "recommendation": None}
+        seq_num = 0
         stream = stream_analysis_events(
             user_message=request.message,
             stock_symbol=request.stock_symbol or "TSLA",
             user_id=str(current_user["id"]),
             thread_id=thread_id,
             session_id=session_id,
+            language=request.language,
         )
         while True:
             try:
                 event = next(stream)
-                if event.startswith("event: analysis_complete"):
-                    data_line = event.split("\n")[1]
-                    payload = data_line.replace("data: ", "", 1).strip()
-                    final_payload = json.loads(payload)
+                seq_num += 1
+                lines = event.strip().split("\n")
+                event_line = next((l for l in lines if l.startswith("event: ")), "")
+                data_line = next((l for l in lines if l.startswith("data: ")), "")
+                event_type = event_line.replace("event: ", "", 1).strip()
+                data_str = data_line.replace("data: ", "", 1).strip()
+                try:
+                    data_obj = json.loads(data_str)
+                except (json.JSONDecodeError, ValueError):
+                    data_obj = {}
+
+                if event_type == "analysis_complete":
+                    final_payload = data_obj
+                elif event_type in ("agent_start", "agent_done"):
+                    add_analysis_event(analysis_id, seq_num, data_obj.get("agent", ""), event_type)
+                elif event_type == "agent_output":
+                    add_analysis_event(
+                        analysis_id, seq_num,
+                        data_obj.get("agent", ""), event_type,
+                        content=data_obj.get("content", ""),
+                    )
+                elif event_type == "error":
+                    add_analysis_event(analysis_id, seq_num, "system", "error", content=data_obj.get("detail", ""))
+
                 yield event
             except StopIteration as stop:
                 if isinstance(stop.value, dict):
                     final_payload = stop.value
                 break
             except Exception as exc:
+                complete_analysis_record(
+                    analysis_id,
+                    report="",
+                    status="failed",
+                )
                 yield f"event: error\ndata: {{\"detail\": \"{str(exc)}\"}}\n\n"
                 break
 
@@ -280,6 +326,22 @@ async def analyze_stream(request: AnalyzeStreamRequest, current_user: dict[str, 
             "assistant",
             final_payload.get("final_report", "分析完成"),
             node_name="recommendation_agent",
+        )
+        guard = final_payload.get("guard_check")
+        final_score = float(guard.get("confidence_score", 0)) if isinstance(guard, dict) else 0.0
+        complete_analysis_record(
+            analysis_id,
+            report=final_payload.get("final_report", ""),
+            recommendation=final_payload.get("recommendation"),
+            final_score=final_score,
+            status="completed",
+        )
+        complete_analysis_record(
+            analysis_id,
+            report=final_payload.get("final_report", ""),
+            recommendation=final_payload.get("recommendation"),
+            final_score=float(final_payload.get("guard_check", {}).get("confidence_score", 0) if isinstance(final_payload.get("guard_check"), dict) else 0),
+            status="completed",
         )
 
     headers = {

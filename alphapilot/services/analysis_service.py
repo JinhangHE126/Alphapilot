@@ -36,15 +36,17 @@ def _extract_text(update: dict) -> str:
     return ""
 
 
-def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, thread_id: str) -> dict[str, Any]:
+def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, thread_id: str, language: str | None = None) -> dict[str, Any]:
     """Run LangGraph workflow synchronously and return final results."""
     final_report = ""
     recommendation = None
 
-    enriched_message = f"[股票代码: {stock_symbol}] {user_message}"
+    lang_instruction = _language_instruction(language)
+    enriched_message = f"[股票代码: {stock_symbol}] {user_message}{lang_instruction}"
 
     initial_state = {
         "stock_symbol": stock_symbol,
+        "language": language or "",
         "messages": [{"role": "user", "content": enriched_message}],
         "user_profile": load_user_profile(user_id),
     }
@@ -96,21 +98,39 @@ def run_optimize_once(symbols: list[str], risk_preference: str, user_id: str) ->
     return _run_workflow_sync(message, symbols[0], user_id, f"optimize_{user_id}")
 
 
+LANGUAGE_LABELS: dict[str, str] = {
+    "zh": "简体中文",
+    "yue": "粤语 (Cantonese)",
+    "en": "English",
+}
+
+
+def _language_instruction(language: str | None) -> str:
+    if not language or language == "en":
+        return ""
+    label = LANGUAGE_LABELS.get(language, language)
+    return f"\n\n[语言要求] 请全程使用 {label} 回复。所有分析内容、指标解释、建议都必须用 {label} 输出。"
+
+
 def stream_analysis_events(
     user_message: str,
     stock_symbol: str,
     user_id: str,
     thread_id: str,
     session_id: str,
+    language: str | None = None,
 ) -> Generator[str, None, dict[str, Any]]:
     final_report = ""
     recommendation = None
     guard_check = None
+    output_level = ""
 
-    enriched_message = f"[股票代码: {stock_symbol}] {user_message}"
+    lang_instruction = _language_instruction(language)
+    enriched_message = f"[股票代码: {stock_symbol}] {user_message}{lang_instruction}"
 
     initial_state = {
         "stock_symbol": stock_symbol,
+        "language": language or "",
         "messages": [{"role": "user", "content": enriched_message}],
         "user_profile": load_user_profile(user_id),
     }
@@ -148,14 +168,27 @@ def stream_analysis_events(
                 recommendation = _safe_text(update["messages"][-1])
             if node_name in ("guard_agent", "guard") and isinstance(update.get("guard_check"), dict) and update["guard_check"]:
                 guard_check = update["guard_check"]
+                output_level = update.get("output_level", "")
 
             yield _sse("agent_done", {"agent": node_name})
+
+    if not final_report and recommendation:
+        final_report = recommendation
 
     done_payload = {
         "final_report": final_report or "\u5206\u6790\u5b8c\u6210",
         "recommendation": recommendation,
         "guard_check": guard_check,
     }
+
+    ep = guard_check.get("evidence_packet", {}) if guard_check else {}
+    output_level = ep.get("allowed_output_level", "") if isinstance(ep, dict) else ""
+    if output_level == "limited_analysis_partial":
+        done_payload["disclaimer"] = (
+            "\u672c\u5206\u6790\u56e0\u90e8\u5206\u5173\u952e\u6570\u636e\u7f3a\u5931\uff0c"
+            "\u7b56\u7565\u4e0e\u98ce\u9669\u8bc4\u4f30\u4e3a\u53c2\u8003\u6027\u8d28\u3002"
+        )
+
     yield _sse("analysis_complete", done_payload)
     return done_payload
 

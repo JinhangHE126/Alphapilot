@@ -174,7 +174,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
 
     issues = []
 
-    if guard_result.allowed_output_level in (OutputLevel.DATA_SUMMARY_ONLY, OutputLevel.LIMITED_ANALYSIS):
+    if guard_result.allowed_output_level in (OutputLevel.DATA_SUMMARY_ONLY, OutputLevel.LIMITED_ANALYSIS, OutputLevel.LIMITED_ANALYSIS_PARTIAL):
         prohibited_keywords = [
             "建议买入", "建议卖出", "强烈推荐", "目标价",
             "buy recommendation", "sell recommendation", "strong buy",
@@ -188,13 +188,34 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
                     f"(investment recommendations not allowed at this level)"
                 )
 
+        import json as _json
+        for pattern in [r'"recommendation"\s*:\s*"(Buy|Hold|Sell)"',
+                        r'"recommendation"\s*:\s*"(买入|持有|卖出)"']:
+            m = re.search(pattern, final_output_text, re.IGNORECASE)
+            if m:
+                issues.append(
+                    f"Strategy agent returned recommendation='{m.group(1)}' "
+                    f"but output_level={guard_result.allowed_output_level.value} "
+                    f"(investment recommendations not allowed at this level)"
+                )
+
+    if guard_result.allowed_output_level == OutputLevel.LIMITED_ANALYSIS_PARTIAL:
+        if '"data_quality"' not in final_output_text:
+            issues.append(
+                "LIMITED_ANALYSIS_PARTIAL: Strategy/Risk output missing 'data_quality' field"
+            )
+
     issues.extend(_find_ungrounded_claims(ep, final_output_text))
 
     is_valid = len(issues) == 0
 
+    confidence = ep.evidence_score
+    if guard_result.allowed_output_level == OutputLevel.LIMITED_ANALYSIS_PARTIAL:
+        confidence = max(0, confidence - 5)
+
     return {
         "is_valid": is_valid,
-        "confidence_score": ep.evidence_score,
+        "confidence_score": confidence,
         "issues": issues,
         "corrections": issues if not is_valid else [],
         "sources": [f.source for f in ep.facts],
@@ -236,4 +257,5 @@ def guard_agent(state):
         "confidence_score": guard_result.get("confidence_score", 0),
         "sources": guard_result.get("sources", []),
         "guard_retry_count": next_retry_count,
+        "output_level": evidence_packet.get("allowed_output_level", "") if evidence_packet else "",
     }

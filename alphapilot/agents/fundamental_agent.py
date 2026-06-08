@@ -4,6 +4,7 @@ load_dotenv()
 
 from langgraph.prebuilt import create_react_agent
 from config.llm import get_llm
+from graph.lang_labels import get_label, inject_language
 
 model = get_llm("fundamental")
 
@@ -42,15 +43,16 @@ Strict rules:
 def fundamental_agent(state):
     ep = state.get("evidence_packet", {}) or {}
     output_level = ep.get("allowed_output_level", "")
+    language = state.get("language", "")
 
     if output_level in ("insufficient_evidence", "data_summary_only"):
         return {
             "messages": [{
                 "role": "assistant",
                 "content": (
-                    "## Fundamental Analysis: NOT AVAILABLE\n"
-                    f"- Reason: Evidence insufficient (output level: {output_level})\n"
-                    "- Action: Await verified fundamental data before analysis"
+                    f"{get_label('fundamental_not_available', language)}\n"
+                    f"- {get_label('fundamental_na_reason', language)} (output level: {output_level})\n"
+                    f"- {get_label('fundamental_na_action', language)}"
                 ),
             }],
         }
@@ -67,14 +69,15 @@ def fundamental_agent(state):
             "messages": [{
                 "role": "assistant",
                 "content": (
-                    "## Fundamental Analysis: NOT AVAILABLE\n"
-                    "- Reason: critical fundamental fields are missing "
+                    f"{get_label('fundamental_not_available', language)}\n"
+                    f"- {get_label('fundamental_na_reason', language)} "
                     "(revenue_growth_yoy, eps_growth_yoy, pe_ratio, market_cap)\n"
-                    "- Action: collect/verify fundamental data before analysis"
+                    f"- {get_label('fundamental_na_action', language)}"
                 ),
             }],
         }
 
+    inject_language(state, language)
     return _FUNDAMENTAL_AGENT.invoke(state)
 
 

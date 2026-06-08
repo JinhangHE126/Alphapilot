@@ -1,5 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import LanguageSwitcher from "../components/LanguageSwitcher";
+import { useTranslation } from "../i18n";
 import { login, register, saveToken } from "../services/api";
 import { useAuth } from "../App";
 
@@ -8,6 +10,7 @@ type Props = {
 };
 
 export default function LoginPage({ defaultMode = "login" }: Props) {
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -30,7 +33,7 @@ export default function LoginPage({ defaultMode = "login" }: Props) {
       setAuth({ userId: response.user_id || null, username: response.username || username, authed: true });
       navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed");
+      setError(err instanceof Error ? err.message : t("errors.authFailed"));
     } finally {
       setLoading(false);
     }
@@ -40,19 +43,19 @@ export default function LoginPage({ defaultMode = "login" }: Props) {
     <div className="auth-layout">
       <form className="card auth-card" onSubmit={handleSubmit}>
         <h1>AlphaPilot</h1>
-        <p className="muted">{mode === "login" ? "Sign in to your account" : "Create a new account"}</p>
+        <p className="muted">{mode === "login" ? t("login.signInSubtitle") : t("login.registerSubtitle")}</p>
         <label>
-          Username
+          {t("login.username")}
           <input value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} />
         </label>
         {mode === "register" && (
           <label>
-            Display Name
+            {t("login.displayName")}
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </label>
         )}
         <label>
-          Password
+          {t("login.password")}
           <input
             type="password"
             value={password}
@@ -63,17 +66,18 @@ export default function LoginPage({ defaultMode = "login" }: Props) {
         </label>
         {error ? <div className="error">{error}</div> : null}
         <button className="btn primary" disabled={loading}>
-          {loading ? "Processing..." : mode === "login" ? "Sign in" : "Create account"}
+          {loading ? t("login.processing") : mode === "login" ? t("login.signIn") : t("login.createAccount")}
         </button>
         {mode === "login" ? (
           <Link to="/register" className="btn ghost" style={{ textAlign: "center" }}>
-            Need an account? Register
+            {t("login.needAccount")}
           </Link>
         ) : (
           <Link to="/login" className="btn ghost" style={{ textAlign: "center" }}>
-            Already have an account? Sign in
+            {t("login.haveAccount")}
           </Link>
         )}
+        <LanguageSwitcher className="auth-language" />
       </form>
     </div>
   );
