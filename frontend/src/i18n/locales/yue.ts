@@ -128,6 +128,7 @@ export const yue: TranslationDict = {
     nodes: {
       evidence_packet_builder: { label: "證據構建", role: "數據採集同事實封裝" },
       orchestrator: { label: "編排調度", role: "工作流路由同調度" },
+      debate_stage: { label: "博弈智能體", role: "基於事實批判性討論" },
     },
   },
   history: {

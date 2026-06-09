@@ -76,6 +76,18 @@ AGENT_LLM_ROUTES = {
         "max_retries": 5,
         "timeout": 120,
     },
+    "bull_researcher": {
+        "profile": "deepseek_reasoner",
+        "temperature": 0.3,
+        "max_retries": 5,
+        "timeout": 120,
+    },
+    "bear_researcher": {
+        "profile": "deepseek_reasoner",
+        "temperature": 0.3,
+        "max_retries": 5,
+        "timeout": 120,
+    },
     "risk": {
         "profile": "deepseek_reasoner",
         "temperature": 0.15,

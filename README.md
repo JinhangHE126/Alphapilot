@@ -8,7 +8,7 @@
 |------|------|
 | 前端 | React 18 + Vite + TypeScript |
 | 后端 | FastAPI + Python 3.12 |
-| 多智能体 | LangGraph StateGraph + Evidence Packet 前置节点 + 12 个专业 Agent |
+| 多智能体 | LangGraph StateGraph + Evidence Packet 前置 + Bull vs Bear 多空辩论 + 14 个专业 Agent |
 | 防幻觉 | Hybrid RAG + Evidence Packet + Guard 硬规则 + 冷启动评测 |
 | 数据源 | yfinance 主链路 + SEC/HKEX 辅助采集（规划接入 Polygon / Tiingo / Alpha Vantage） |
 | 知识库 | FAISS 动态事实缓存（doc_id 去重、TTL 过滤、冷启动回写） |
@@ -64,7 +64,8 @@ docker compose -f alphapilot/docker-compose.yml up -d
                            Orchestrator
                       ├── insufficient/data_summary → Guard 拒答
                       ├── limited_analysis → Market/Fundamental/News → Strategy/Risk → Guard
-                      └── full_analysis → 完整链路 + Guard
+                      └── full_analysis → Market/Fundamental/News → Bull vs Bear 辩论 → Strategy/Risk
+                                          → Portfolio/Backtest/Recommendation → Guard
                                 │
                                 ▼
                          SQLite + Checkpointer
@@ -97,7 +98,7 @@ docker compose -f alphapilot/docker-compose.yml up -d
 ```
 alphapilot/
 ├── api/main.py              # FastAPI 路由 & 中间件
-├── agents/                   # 12 个专业 Agent
+├── agents/                   # 14 个专业 Agent（含 Bull/Bear 辩论）
 ├── graph/                    # LangGraph 工作流 & 状态定义
 ├── services/                 # 分析服务（流式 & 同步）
 ├── db/                       # SQLite 模型 & 仓储层

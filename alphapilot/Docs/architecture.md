@@ -1,7 +1,8 @@
 # AlphaPilot 系统架构 v4.1
 
-> 当前版本以 **Evidence Packet 前置构造 + Guard 硬规则校验 + 动态 RAG 事实缓存** 为核心。  
-> 旧版“Agent 各自调工具/RAG”的模式已收敛为“Builder 统一采集证据，Agent 只消费证据”。
+> 当前版本以 **Evidence Packet 前置构造 + Bull vs Bear 多空辩论 + Guard 硬规则校验 + 动态 RAG 事实缓存** 为核心。  
+> 旧版"Agent 各自调工具/RAG"的模式已收敛为"Builder 统一采集证据，Agent 只消费证据"。
+> v4.2 新增 Bull vs Bear 辩论子图，Strategy Agent 综合辩论结论输出最终建议。只消费证据”。
 
 ## 1. 系统全景
 
@@ -25,7 +26,7 @@
 │                                                                  │
 │  Orchestrator                                                    │
 │    → 按 allowed_output_level 分级路由                              │
-│    → Market/Fundamental/News → Strategy/Risk → Guard              │
+│    → Market/Fundamental/News → Bull vs Bear 辩论 → Strategy/Risk  │
 │    → full_analysis 时才进入 Portfolio/Backtest/Recommendation      │
 │                                                                  │
 │  持久化: SQLite (checkpointer + 业务表)                           │
@@ -41,7 +42,7 @@
 | 前端框架 | React 18 + Vite + TypeScript | SPA, Vite proxy 代理 API |
 | 样式 | 手写 CSS 暗色主题 | 无第三方 UI 库依赖 |
 | 后端框架 | FastAPI + Uvicorn | 异步 REST + SSE 流式 |
-| 多智能体 | LangGraph (StateGraph) | Evidence Builder + Orchestrator 编排 12 Agent |
+| 多智能体 | LangGraph (StateGraph) | Evidence Builder + Orchestrator 编排 14 Agent（含 Bull/Bear 辩论） |
 | LLM 路由 | Gemini / DeepSeek / Grok | 按 Agent 类型分模型 |
 | 数据库 | SQLite (WAL 模式) | 业务表 + LangGraph checkpointer |
 | 向量检索 | FAISS (all-MiniLM-L6-v2) + ChromaDB | FAISS 为主流程动态事实缓存，Chroma 保留为辅助模块 |
@@ -51,7 +52,7 @@
 | 数据采集 | yfinance + SEC/HKEX 辅助 | 当前主链路仍以 yfinance 为主，下一阶段接 Polygon/Tiingo/Alpha Vantage |
 | CI/CD | GitHub Actions + GHCR + Docker | 前后端独立镜像 + SSH 部署 |
 
-## 3. 12 智能体体系
+## 3. 14 智能体体系
 
 ### 3.1 Agent 角色矩阵
 
@@ -60,7 +61,9 @@
 | **Market** | `market_data_expert` | DeepSeek | `tools=[]`，只读 Evidence Packet | ❌ 自然语言 |
 | **Fundamental** | `fundamental_expert` | DeepSeek | `tools=[]`，只读 Evidence Packet | ❌ 自然语言 |
 | **News** | `news_sentiment_expert` | DeepSeek | `tools=[]`，只读 Evidence Packet | ❌ 自然语言 |
-| **Strategy** | `strategy_expert` | DeepSeek | `tools=[]`，综合已验证事实与上游输出 | ❌ 自然语言 |
+| **Bull Researcher** | `bull_researcher` (inside `debate_stage`) | DeepSeek | `tools=[]`，构建做多论点 | ❌ 自然语言 |
+| **Bear Researcher** | `bear_researcher` (inside `debate_stage`) | DeepSeek | `tools=[]`，构建做空论点 | ❌ 自然语言 |
+| **Strategy** | `strategy_expert` | DeepSeek | `tools=[]`，综合已验证事实、辩论论点与上游输出 | ❌ 自然语言 |
 | **Risk** | `risk_expert` | DeepSeek | `tools=[]`，按证据等级输出风险 | JSON/自然语言混合 |
 | **Portfolio** | `portfolio_agent` | DeepSeek | `tools=[]`，仅 full analysis 链路使用 | ❌ 自然语言 |
 | **Backtesting** | `backtesting_agent` | DeepSeek | 内部价格下载，limited/eval 场景跳过 | ❌ 自然语言 |
@@ -78,9 +81,32 @@ START
 Evidence Packet Builder
   ├── insufficient_evidence / data_summary_only → Guard → END
   ├── limited_analysis → Market + Fundamental + News → Strategy → Risk → Guard → END
-  └── full_analysis → Market + Fundamental + News → Strategy → Risk
+  └── full_analysis → Market + Fundamental + News 
+                   → Bull vs Bear 辩论子图 (bull_researcher ⇄ bear_researcher, 最多 2 轮)
+                   → Strategy（综合辩论结论输出 Buy/Hold/Sell）→ Risk
                    → Portfolio → Backtest → Recommendation → Guard → END
 ```
+
+#### Bull vs Bear 辩论子图
+
+辩论仅在 `full_analysis` 证据等级时触发，以子图形式嵌入主工作流：
+
+```
+debate_stage (子图)
+  ├── 入口检查: 证据不足 → END（跳过辩论）
+  ├── bull_researcher → bear_researcher
+  │       ↑                  │
+  │       │  rounds < 2?     │
+  │       │  YES → 回到 Bull │
+  │       │  NO  → END       │
+  │       └──────────────────┘
+  ▼
+strategy_expert (消费辩论历史 + 上游输出)
+```
+
+- 双方消费相同的 Evidence Packet 和上游 Market/Fundamental/News 输出
+- 每轮 Bull 先发言、Bear 反驳，支持多轮往复
+- Strategy Agent 权重分配：Market 25% + Fundamental 35% + News 15% + Debate 25%
 
 ### 3.3 模型路由架构
 
@@ -103,6 +129,10 @@ Evidence Packet Builder
 | `market_data` | str | Market Agent 输出 |
 | `fundamental_data` | str | Fundamental Agent 输出 |
 | `news_sentiment` | str | News Agent 输出 |
+| `bull_argument` | str | Bull Researcher 输出 |
+| `bear_argument` | str | Bear Researcher 输出 |
+| `debate_rounds` | int | 当前辩论轮数 |
+| `max_debate_rounds` | int | 最大辩论轮数（默认 2） |
 | `strategy_recommendation` | str | Strategy Agent 输出 |
 | `risk_assessment` | str | Risk Agent 输出 |
 | `executed_agents` | list[str] | 已执行 Agent 列表 (防重复) |
@@ -132,7 +162,9 @@ Evidence Packet Builder
         Evidence level = limited_analysis
           → market + fundamental + news → strategy → risk → guard_agent → END
         Evidence level = full_analysis
-          → market + fundamental + news → strategy → risk
+          → market + fundamental + news
+          → debate_stage (Bull vs Bear 辩论子图)
+          → strategy → risk
           → portfolio → backtesting → recommendation → guard_agent → END
 ```
 
@@ -143,8 +175,10 @@ START → evidence_packet_builder → orchestrator
            ├──→ market ──────────┐
            ├──→ fundamental ─────┤
            ├──→ news ────────────┤
+           ├──→ debate_stage ────┤──→ orchestrator (循环)
+           │    (Bull⇄Bear 子图) │
            ├──→ strategy ────────┤
-           ├──→ risk ────────────┤──→ orchestrator (循环)
+           ├──→ risk ────────────┤
            ├──→ portfolio ───────┤
            ├──→ backtesting ─────┤
            ├──→ recommendation ──┘

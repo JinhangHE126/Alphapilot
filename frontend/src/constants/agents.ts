@@ -9,6 +9,7 @@ import {
   Sparkles,
   Target,
   TrendingUp,
+  Swords,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +28,7 @@ export const ENHANCEMENT_AGENT_IDS = [
   "recommendation_agent",
   "portfolio_agent",
   "backtesting_agent",
+  "debate_stage",
 ] as const;
 
 /** Infrastructure nodes — compact pipeline bar. */
@@ -64,6 +66,7 @@ export const AGENT_VISUAL: Record<
   recommendation_agent: { icon: "⭐", lucide: Sparkles, color: "#fbbf24" },
   portfolio_agent: { icon: "💼", lucide: PieChart, color: "#34d399" },
   backtesting_agent: { icon: "📉", lucide: LineChart, color: "#f472b6" },
+  debate_stage: { icon: "⚔️", lucide: Swords, color: "#fb923c" },
 };
 
 export function isSystemNode(id: string): id is SystemNodeId {
@@ -91,6 +94,7 @@ const REPORT_ORDER = [
   "market_data_expert",
   "fundamental_expert",
   "news_sentiment_expert",
+  "debate_stage",
   "strategy_expert",
   "risk_expert",
   "portfolio_agent",

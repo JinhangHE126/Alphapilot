@@ -128,6 +128,7 @@ export const zhHans: TranslationDict = {
     nodes: {
       evidence_packet_builder: { label: "证据构建", role: "数据采集与事实封装" },
       orchestrator: { label: "编排调度", role: "工作流路由与调度" },
+      debate_stage: { label: "博弈智能体", role: "基于事实批判性讨论" },
     },
   },
   history: {

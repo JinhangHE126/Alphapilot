@@ -29,6 +29,8 @@ from agents.market_agent import market_agent
 from agents.fundamental_agent import fundamental_agent
 from agents.news_agent import news_agent
 from agents.strategy_agent import strategy_agent
+from agents.bull_researcher import bull_researcher
+from agents.bear_researcher import bear_researcher
 from agents.risk_agent import risk_agent
 from agents.portfolio_agent import portfolio_agent
 from agents.backtesting_agent import backtesting_agent
@@ -42,6 +44,7 @@ load_dotenv()
 checkpointer = get_checkpointer()
 
 GUARD_MAX_RETRIES = 2
+MAX_DEBATE_ROUNDS = 2
 
 RAG_SIMILARITY_THRESHOLD = 0.55
 
@@ -78,6 +81,45 @@ def _fill_category_from_store(
         if field in allowed_fields and field not in present:
             filled.append(fact)
     return filled
+
+
+# ── Bull vs Bear Debate Subgraph ──────────────────────────────────────────
+
+def _debate_entry_router(state: GraphState) -> str:
+    ep = state.get("evidence_packet", {}) or {}
+    output_level = ep.get("allowed_output_level", "")
+    if output_level in ("insufficient_evidence", "data_summary_only"):
+        return END
+    return "bull_researcher"
+
+
+def _debate_continue(state: GraphState) -> str:
+    rounds = state.get("debate_rounds", 0)
+    if rounds >= state.get("max_debate_rounds", MAX_DEBATE_ROUNDS):
+        print(f"   🏁 Debate ended after {rounds} round(s)")
+        return END
+    return "bull_researcher"
+
+
+def _build_debate_subgraph() -> StateGraph:
+    debate = StateGraph(GraphState)
+    debate.add_node("bull_researcher", bull_researcher)
+    debate.add_node("bear_researcher", bear_researcher)
+
+    debate.set_conditional_entry_point(
+        _debate_entry_router,
+        {"bull_researcher": "bull_researcher", END: END},
+    )
+
+    debate.add_edge("bull_researcher", "bear_researcher")
+
+    debate.add_conditional_edges(
+        "bear_researcher",
+        _debate_continue,
+        {"bull_researcher": "bull_researcher", END: END},
+    )
+
+    return debate
 
 
 def evidence_packet_builder(state: GraphState) -> dict:
@@ -511,6 +553,7 @@ def orchestrator_node(state: GraphState) -> dict:
         else:
             STAGES = [
                 ["market_data_expert", "fundamental_expert", "news_sentiment_expert"],
+                ["debate_stage"],
                 ["strategy_expert"],
                 ["risk_expert"],
                 ["portfolio_agent"],
@@ -594,6 +637,7 @@ workflow.add_node("portfolio_optimization_agent", portfolio_optimization_agent)
 workflow.add_node("guard_agent", guard_agent)
 
 workflow.add_node("evidence_packet_builder", evidence_packet_builder)
+workflow.add_node("debate_stage", _build_debate_subgraph().compile())
 
 workflow.add_edge(START, "evidence_packet_builder")
 workflow.add_edge("evidence_packet_builder", "orchestrator")
@@ -614,6 +658,7 @@ workflow.add_conditional_edges(
         "recommendation_agent": "recommendation_agent",
         "portfolio_optimization_agent": "portfolio_optimization_agent",
         "guard_agent": "guard_agent",
+        "debate_stage": "debate_stage",
         "__end__": END,
     },
 )
@@ -630,6 +675,7 @@ for agent in [
     "comparison_agent",
     "portfolio_optimization_agent",
     "recommendation_agent",
+    "debate_stage",
 ]:
     workflow.add_edge(agent, "orchestrator")
 

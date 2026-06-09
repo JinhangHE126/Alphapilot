@@ -9,6 +9,7 @@
 > **作者**：Jinhang HE
 >
 > **修订重点**：v4 在 v3 基础上补全了架构衔接、Evidence Packet 生成链路可信性、冲突处理矩阵、分库合并策略、Guard 硬规则、工程工期重估、性能预算和逃生舱设计等关键缺口。
+> v4.2 新增 Bull vs Bear 多空辩论子图，仅在 full_analysis 级别触发。
 
 ---
 
@@ -43,10 +44,10 @@
 
 ### 3.1 当前架构回顾
 
-当前系统是 LangGraph Supervisor 模式下的 12-Agent 工作流，核心分析链为：
+当前系统是 LangGraph Supervisor 模式下的 14-Agent 工作流，核心分析链为：
 
 ```
-Orchestrator → [Market | Fundamental | News] (并行) → Strategy → Risk → ... → Guard → END
+Orchestrator → [Market | Fundamental | News] (并行) → [Bull vs Bear 辩论] → Strategy → Risk → ... → Guard → END
                     ↓
               各自独立调用 retrieve_knowledge + 领域工具
 ```
@@ -538,7 +539,7 @@ if 所有 Data Collector 均失败（网络 / 限流 / 欠费）:
 - `retrieve_knowledge` 工具
 - 基于 LangGraph ReAct 的 `fundamental_agent`、`market_agent`、`news_agent`
 - yfinance 数据源
-- 12-Agent Supervisor 编排
+- 12-Agent Supervisor 编排（v4.2 升级为 14 Agent，新增 Bull/Bear 辩论）
 
 ### 14.1 改造清单
 

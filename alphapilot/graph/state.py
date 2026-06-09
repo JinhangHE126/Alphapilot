@@ -51,6 +51,12 @@ class GraphState(TypedDict, total=False):
     confidence_score: int
     guard_retry_count: int
 
+    # Bull vs Bear 多空辩论
+    bull_argument: str
+    bear_argument: str
+    debate_rounds: int
+    max_debate_rounds: int
+
     # 其他扩展
     rag_context: str
     final_score: float

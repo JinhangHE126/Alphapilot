@@ -121,6 +121,7 @@ export const en: TranslationDict = {
       news_sentiment_expert: { label: "News & Sentiment Agent", role: "News, events & market sentiment" },
       strategy_expert: { label: "Strategy Agent", role: "Investment strategy & thesis building" },
       risk_expert: { label: "Risk Agent", role: "Risk assessment & stress testing" },
+      debate_stage: { label: "Debate Agent", role: "Evidence-based adversarial analysis" },
       guard_agent: { label: "Guard Agent", role: "Fact verification & hallucination guard" },
       recommendation_agent: { label: "Recommendation Agent", role: "Personalized investment advice" },
       portfolio_agent: { label: "Portfolio Agent", role: "Portfolio allocation & positioning" },
