@@ -126,7 +126,7 @@ def _find_ungrounded_claims(ep: EvidencePacket, output_text: str) -> list[str]:
     return issues
 
 
-def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = "") -> dict:
+def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = "", all_output_text: str = "") -> dict:
     """
     硬规则校验：不经过 LLM，确定性判定输出是否可以接受。
     基于 Evidence Packet 中的事实和输出等级做熔断。
@@ -181,7 +181,9 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
 
     issues = []
 
-    if guard_result.allowed_output_level in (OutputLevel.DATA_SUMMARY_ONLY, OutputLevel.LIMITED_ANALYSIS, OutputLevel.LIMITED_ANALYSIS_PARTIAL):
+    if guard_result.allowed_output_level == OutputLevel.FULL_ANALYSIS:
+        pass
+    elif guard_result.allowed_output_level in (OutputLevel.DATA_SUMMARY_ONLY, OutputLevel.LIMITED_ANALYSIS, OutputLevel.LIMITED_ANALYSIS_PARTIAL):
         prohibited_keywords = [
             "建议买入", "建议卖出", "强烈推荐", "目标价",
             "buy recommendation", "sell recommendation", "strong buy",
@@ -207,12 +209,14 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
                 )
 
     if guard_result.allowed_output_level == OutputLevel.LIMITED_ANALYSIS_PARTIAL:
-        if '"data_quality"' not in final_output_text:
+        search_text = all_output_text or final_output_text
+        if '"data_quality"' not in search_text:
             issues.append(
                 "LIMITED_ANALYSIS_PARTIAL: Strategy/Risk output missing 'data_quality' field"
             )
 
-    issues.extend(_find_ungrounded_claims(ep, final_output_text))
+    if guard_result.allowed_output_level != OutputLevel.FULL_ANALYSIS:
+        issues.extend(_find_ungrounded_claims(ep, final_output_text))
 
     is_valid = len(issues) == 0
 
@@ -251,13 +255,19 @@ def guard_agent(state):
 
     messages = state.get("messages", [])
     final_output_text = ""
+    all_output_text = ""
     for m in reversed(messages):
         content = m.get("content", "") if isinstance(m, dict) else getattr(m, "content", "")
         if content and not isinstance(content, list):
-            final_output_text = str(content)
-            break
+            text = str(content)
+            all_output_text = text + "\n" + all_output_text
+            if not final_output_text:
+                final_output_text = text
 
-    guard_result = _hard_rule_guard(evidence_packet, final_output_text, symbol=stock_symbol)
+    guard_result = _hard_rule_guard(
+        evidence_packet, final_output_text,
+        symbol=stock_symbol, all_output_text=all_output_text,
+    )
 
     retry_count = state.get("guard_retry_count", 0)
     next_retry_count = retry_count + 1 if not guard_result.get("is_valid", False) else retry_count

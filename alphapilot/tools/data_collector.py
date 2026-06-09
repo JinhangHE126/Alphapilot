@@ -5,11 +5,13 @@ from datetime import date
 from typing import Optional
 
 from tools.news_tools import _fetch_news_list, _extract_news_item
+from tools.technical_indicators import compute_kdj, compute_bollinger
 
 COLLECTOR_TIMEOUT = 15
 
 _SUPPLEMENT_FIELDS = frozenset({
     "pe_ratio",
+    "market_cap",
     "revenue_growth_yoy",
     "eps_growth_yoy",
     "news_headline",
@@ -33,7 +35,7 @@ def _supplement_missing_facts(symbol: str, results: dict, registry, market: str)
         return
 
     added = False
-    fund_missing = missing & {"pe_ratio", "revenue_growth_yoy", "eps_growth_yoy"}
+    fund_missing = missing & {"pe_ratio", "market_cap", "revenue_growth_yoy", "eps_growth_yoy"}
     if fund_missing:
         for fact in collect_fundamental_facts(symbol):
             if fact.get("field") in fund_missing:
@@ -126,6 +128,22 @@ def collect_market_facts(symbol: str) -> list[dict]:
     macd_val = round(float(macd_line.iloc[-1]), 4)
     macd_signal = round(float(signal_line.iloc[-1]), 4)
 
+    try:
+        high = df["High"]
+        if isinstance(high, pd.DataFrame):
+            high = high.iloc[:, 0]
+        low = df["Low"]
+        if isinstance(low, pd.DataFrame):
+            low = low.iloc[:, 0]
+        kdj_k, kdj_d, kdj_j = compute_kdj(high.dropna(), low.dropna(), close.dropna())
+    except Exception:
+        kdj_k, kdj_d, kdj_j = 0, 0, 0
+
+    try:
+        bb_upper, bb_mid, bb_lower = compute_bollinger(close.dropna())
+    except Exception:
+        bb_upper, bb_mid, bb_lower = 0, 0, 0
+
     returns = close.pct_change().dropna()
     volatility = round(float(returns.std() * (252 ** 0.5) * 100), 2) if len(returns) >= 5 else 0
 
@@ -207,6 +225,74 @@ def collect_market_facts(symbol: str) -> list[dict]:
             "source_url": None,
             "as_of_date": today,
             "confidence": 0.90,
+            "confidence_tier": "machine",
+        })
+    if kdj_k > 0:
+        market_facts.append({
+            "field": "kdj_k",
+            "value": kdj_k,
+            "unit": "index",
+            "period": "latest",
+            "source": "yfinance",
+            "source_url": None,
+            "as_of_date": today,
+            "confidence": 0.80,
+            "confidence_tier": "machine",
+        })
+        market_facts.append({
+            "field": "kdj_d",
+            "value": kdj_d,
+            "unit": "index",
+            "period": "latest",
+            "source": "yfinance",
+            "source_url": None,
+            "as_of_date": today,
+            "confidence": 0.80,
+            "confidence_tier": "machine",
+        })
+        market_facts.append({
+            "field": "kdj_j",
+            "value": kdj_j,
+            "unit": "index",
+            "period": "latest",
+            "source": "yfinance",
+            "source_url": None,
+            "as_of_date": today,
+            "confidence": 0.80,
+            "confidence_tier": "machine",
+        })
+    if bb_mid > 0:
+        market_facts.append({
+            "field": "bollinger_upper",
+            "value": bb_upper,
+            "unit": _currency_for(symbol),
+            "period": "latest",
+            "source": "yfinance",
+            "source_url": None,
+            "as_of_date": today,
+            "confidence": 0.80,
+            "confidence_tier": "machine",
+        })
+        market_facts.append({
+            "field": "bollinger_mid",
+            "value": bb_mid,
+            "unit": _currency_for(symbol),
+            "period": "latest",
+            "source": "yfinance",
+            "source_url": None,
+            "as_of_date": today,
+            "confidence": 0.80,
+            "confidence_tier": "machine",
+        })
+        market_facts.append({
+            "field": "bollinger_lower",
+            "value": bb_lower,
+            "unit": _currency_for(symbol),
+            "period": "latest",
+            "source": "yfinance",
+            "source_url": None,
+            "as_of_date": today,
+            "confidence": 0.80,
             "confidence_tier": "machine",
         })
     return market_facts

@@ -26,11 +26,11 @@ def recommendation_agent(state):
     ep_score = int(ep.get("evidence_score", 0)) if isinstance(ep, dict) else (int(ep.evidence_score) if ep else 0)
     output_level = ep.get("allowed_output_level", "limited_analysis") if ep else "limited_analysis"
 
-    if output_level != "full_analysis":
+    if output_level not in ("full_analysis", "limited_analysis_partial"):
         reason = (
-            f"当前分析等级为 {output_level}，尚未达到 full_analysis，暂不生成个性化推荐。"
+            f"当前分析等级为 {output_level}，尚未达到 full_analysis 或 limited_analysis_partial，暂不生成个性化推荐。"
             if language in ("zh", "yue", "")
-            else f'Output level is "{output_level}" (not full_analysis); personalized recommendation is withheld.'
+            else f'Output level is "{output_level}" (not full_analysis or limited_analysis_partial); personalized recommendation is withheld.'
         )
         system_prompt = f"""
 You are Recommendation Agent.

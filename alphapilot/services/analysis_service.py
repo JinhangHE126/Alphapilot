@@ -101,6 +101,9 @@ def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, threa
         "language": language or "",
         "messages": [{"role": "user", "content": enriched_message}],
         "user_profile": load_user_profile(user_id),
+        "executed_agents": [],
+        "guard_retry_count": 0,
+        "evidence_packet": None,
     }
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -185,6 +188,9 @@ def stream_analysis_events(
         "language": language or "",
         "messages": [{"role": "user", "content": enriched_message}],
         "user_profile": load_user_profile(user_id),
+        "executed_agents": [],
+        "guard_retry_count": 0,
+        "evidence_packet": None,
     }
     config = {"configurable": {"thread_id": thread_id}}
 

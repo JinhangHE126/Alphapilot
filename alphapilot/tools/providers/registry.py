@@ -5,7 +5,7 @@ from typing import Optional
 
 from tools.providers.base import DataProvider
 
-_DEFAULT_ENABLED = "yfinance,sec_edgar,akshare"
+_DEFAULT_ENABLED = "yfinance,sec_edgar,akshare,eastmoney,sina_tencent"
 _DEFAULT_PRIORITY = "sec_edgar:100,yfinance:40"
 _COLLECTOR_TIMEOUT = 15
 
@@ -13,32 +13,40 @@ _COLLECTOR_TIMEOUT = 15
 class ProviderRegistry:
     FIELD_PRIORITY: dict[str, dict[str, list[str]]] = {
         "HK": {
-            "current_price":        ["akshare_hk", "akshare_hk_hist", "yfinance"],
-            "price_change_pct":     ["akshare_hk", "akshare_hk_hist", "yfinance"],
+            "current_price":        ["akshare_hk", "akshare_hk_hist", "tencent_hk", "eastmoney_push2", "yfinance"],
+            "price_change_pct":     ["akshare_hk", "akshare_hk_hist", "tencent_hk", "eastmoney_push2", "yfinance"],
             "rsi_14":               ["akshare_hk_hist", "yfinance"],
             "volatility_20d_annualized": ["akshare_hk_hist", "yfinance"],
             "avg_volume_20d":       ["akshare_hk_hist", "akshare_hk", "yfinance"],
-            "market_cap":           ["akshare", "yfinance"],
-            "pe_ratio":             ["yfinance", "akshare_derived", "akshare"],
-            "revenue_growth_yoy":   ["akshare_hk", "akshare", "yfinance"],
-            "eps_growth_yoy":       ["akshare_hk", "akshare", "yfinance"],
+            "market_cap":           ["tencent_hk", "akshare", "eastmoney_push2", "yfinance"],
+            "pe_ratio":             ["tencent_hk", "yfinance", "akshare_derived", "akshare", "eastmoney_push2"],
+            "revenue_growth_yoy":   ["eastmoney_gmaindicator", "akshare_hk", "akshare", "yfinance"],
+            "eps_growth_yoy":       ["eastmoney_gmaindicator", "akshare_hk", "akshare", "yfinance"],
             "news_headline":        ["akshare_hk", "yfinance"],
+            "return_on_equity":     ["eastmoney_gmaindicator", "akshare", "yfinance"],
+            "gross_margin":         ["eastmoney_gmaindicator"],
+            "net_margin":           ["eastmoney_gmaindicator"],
+            "debt_to_assets":       ["eastmoney_gmaindicator"],
         },
         "US": {
             "revenue":              ["SEC_EDGAR", "yfinance"],
             "eps":                  ["SEC_EDGAR", "yfinance"],
-            "revenue_growth_yoy":   ["yfinance", "sec_edgar", "alpha_vantage"],
-            "eps_growth_yoy":       ["yfinance", "sec_edgar", "alpha_vantage"],
-            "market_cap":           ["yfinance", "finnhub", "alpha_vantage", "polygon", "tiingo"],
-            "pe_ratio":             ["yfinance", "finnhub", "alpha_vantage", "tiingo"],
-            "current_price":        ["polygon", "tiingo", "yfinance", "finnhub"],
-            "price_change_pct":     ["polygon", "tiingo", "yfinance", "finnhub"],
+            "revenue_growth_yoy":   ["yfinance", "sec_edgar", "alpha_vantage", "eastmoney_gmaindicator"],
+            "eps_growth_yoy":       ["yfinance", "sec_edgar", "alpha_vantage", "eastmoney_gmaindicator"],
+            "market_cap":           ["yfinance", "finnhub", "alpha_vantage", "polygon", "tiingo", "sina_us", "tencent_us", "eastmoney_push2"],
+            "pe_ratio":             ["yfinance", "finnhub", "alpha_vantage", "tiingo", "sina_us", "tencent_us", "eastmoney_push2"],
+            "current_price":        ["polygon", "tiingo", "yfinance", "finnhub", "sina_us", "tencent_us", "eastmoney_push2"],
+            "price_change_pct":     ["polygon", "tiingo", "yfinance", "finnhub", "sina_us", "tencent_us", "eastmoney_push2"],
             "avg_volume_20d":       ["polygon", "yfinance", "finnhub"],
             "rsi_14":               ["yfinance", "finnhub"],
             "macd":                 ["yfinance", "finnhub"],
             "macd_signal":          ["yfinance", "finnhub"],
             "volatility_20d_annualized": ["yfinance", "finnhub"],
             "news_headline":        ["finnhub_news", "finnhub_market", "yfinance"],
+            "return_on_equity":     ["eastmoney_gmaindicator", "yfinance"],
+            "gross_margin":         ["eastmoney_gmaindicator"],
+            "net_margin":           ["eastmoney_gmaindicator"],
+            "debt_to_assets":       ["eastmoney_gmaindicator"],
         },
         "CN": {
             "current_price":        ["yfinance"],
@@ -200,6 +208,18 @@ def _init_defaults(registry: ProviderRegistry) -> None:
     try:
         from tools.providers.tushare_provider import TushareProvider
         registry.register(TushareProvider())
+    except Exception:
+        pass
+
+    try:
+        from tools.providers.eastmoney_provider import EastmoneyProvider
+        registry.register(EastmoneyProvider())
+    except Exception:
+        pass
+
+    try:
+        from tools.providers.sina_tencent_provider import SinaTencentProvider
+        registry.register(SinaTencentProvider())
     except Exception:
         pass
 
