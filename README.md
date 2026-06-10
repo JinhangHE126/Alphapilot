@@ -1,5 +1,7 @@
 # AlphaPilot
 
+[![EN](https://img.shields.io/badge/lang-English-blue)](READEME_EN.md)
+
 多智能体股票投资分析平台 — 生产级 Web 应用
 
 ## 技术栈
@@ -8,13 +10,14 @@
 |------|------|
 | 前端 | React 18 + Vite + TypeScript |
 | 后端 | FastAPI + Python 3.12 |
-| 多智能体 | LangGraph StateGraph + Evidence Packet 前置 + Bull vs Bear 多空辩论 + 14 个专业 Agent |
-| 防幻觉 | Hybrid RAG + Evidence Packet + Guard 硬规则 + 冷启动评测 |
-| 数据源 | yfinance 主链路 + SEC/HKEX 辅助采集（规划接入 Polygon / Tiingo / Alpha Vantage） |
+| 多智能体 | LangGraph StateGraph + Evidence Packet 前置 + Bull vs Bear 辩论子图 + 14 个专业 Agent |
+| 防幻觉 | Evidence Packet 字段溯源 + Guard 硬规则校验 + 冷启动评测 + 输出等级门控 |
+| 数据源 | 多 Provider 并行采集（yfinance / HKEX / EastMoney / AKShare）+ 自动降级与字段级来源去重，覆盖港股与美股 |
 | 知识库 | FAISS 动态事实缓存（doc_id 去重、TTL 过滤、冷启动回写） |
-| 数据库 | SQLite（分析记录、用户、会话、消息） |
-| 认证 | JWT（注册/登录/刷新） |
-| 实时流 | SSE (Server-Sent Events) |
+| 数据库 | SQLite WAL 模式（分析记录、用户、会话、消息） |
+| 认证 | JWT（注册 / 登录 / 刷新） |
+| 国际化 | React i18n Context（English / 简体中文 / 粤语），自动检测浏览器语言 |
+| 实时通信 | SSE (Server-Sent Events) 流式推送，Agent 产出渐进可视化 |
 | CI/CD | GitHub Actions + Docker + GHCR |
 | 部署 | Docker Compose（前端 Nginx + 后端 FastAPI） |
 
@@ -50,28 +53,32 @@ docker compose -f alphapilot/docker-compose.yml up -d
 ## 系统架构
 
 ```
-用户 → React 前端 → FastAPI → LangGraph StateGraph
-                                │
-                                ▼
-                      Evidence Packet Builder
-                      ├── FAISS RAG 检索（score + metadata）
-                      ├── 冷启动判断（symbol / similarity / coverage）
-                      ├── collect_all 数据采集（yfinance + SEC/HKEX 辅助）
-                      ├── Evidence Packet 评分与输出等级
-                      └── 高质量 facts 回写 FAISS（去重 + TTL）
-                                │
-                                ▼
-                           Orchestrator
-                      ├── insufficient/data_summary → Guard 拒答
-                      ├── limited_analysis → Market/Fundamental/News → Strategy/Risk → Guard
-                      └── full_analysis → Market/Fundamental/News → Bull vs Bear 辩论 → Strategy/Risk
-                                          → Portfolio/Backtest/Recommendation → Guard
-                                │
-                                ▼
-                         SQLite + Checkpointer
+用户 → React 前端 (i18n EN/ZH/Yue) → FastAPI → LangGraph StateGraph
+                                      │
+                                      ▼
+                            Evidence Packet Builder
+                            ├── FAISS RAG 检索（score + metadata）
+                            ├── 冷启动判断（symbol / similarity / coverage）
+                            ├── 多 Provider 并行采集（yfinance / HKEX / EastMoney / AKShare）
+                            ├── 字段级来源去重与 Evidence Packet 评分
+                            └── 高质量 facts 回写 FAISS（去重 + TTL）
+                                      │
+                                      ▼
+                                 Orchestrator
+                            ├── insufficient → Guard 拒答 → END
+                            ├── limited → Market + Fundamental + News
+                            │            → Strategy → Risk → Guard → END
+                            └── full    → Market + Fundamental + News
+                                         → Bull vs Bear 辩论子图（最多 2 轮）
+                                         → Strategy → Risk
+                                         → Portfolio → Backtest → Recommendation
+                                         → Guard → END
+                                      │
+                                      ▼
+                               SQLite + Checkpointer
 ```
 
-当前 Agent 的职责已经收敛：Market / Fundamental / News 等 Agent 不再直接调用 RAG 或外部数据工具，而是消费 `state.evidence_packet` 中的结构化事实。数据采集统一前置到 `evidence_packet_builder`，Guard 负责输出前的确定性校验。
+**架构核心**：Agent 不直接调用工具或 RAG，只消费 `state.evidence_packet` 中的结构化事实。数据采集统一前置到 Evidence Packet Builder，Guard 对输出执行确定性硬规则校验（非 LLM 判断），不通过则带 corrections 重试（最多 2 次）。Bull vs Bear 辩论以子图形式嵌入，仅 `full_analysis` 时触发。
 
 ## API 端点
 
@@ -98,13 +105,13 @@ docker compose -f alphapilot/docker-compose.yml up -d
 ```
 alphapilot/
 ├── api/main.py              # FastAPI 路由 & 中间件
-├── agents/                   # 14 个专业 Agent（含 Bull/Bear 辩论）
-├── graph/                    # LangGraph 工作流 & 状态定义
-├── services/                 # 分析服务（流式 & 同步）
+├── agents/                   # 14 个专业 Agent（含 Bull/Bear 辩论、Guard 硬规则）
+├── graph/                    # LangGraph StateGraph 工作流 & 辩论子图
+├── services/                 # 分析服务（SSE 流式 & 同步）
 ├── db/                       # SQLite 模型 & 仓储层
-├── tools/                    # 市场数据、新闻、RAG 工具
+├── tools/                    # 多 Provider 数据采集（yfinance/HKEX/EastMoney/AKShare）
 ├── knowledge/                # Evidence Packet 入库治理（质量门槛、TTL、去重）
-├── rag/                      # FAISS 动态事实缓存 + 兼容 Chroma 辅助模块
+├── rag/                      # FAISS 动态事实缓存 + Chroma 辅助模块
 ├── schemas/                  # Evidence Packet / Fact / Coverage / GuardResult
 ├── evaluation/               # 冷启动评测集、指标、结构化报告
 ├── monitoring/               # Evidence/Guard 运行指标
@@ -113,6 +120,7 @@ alphapilot/
 frontend/
 ├── src/pages/                # Dashboard, Analyze, History, Settings, Login
 ├── src/services/             # API 客户端 & SSE 流式解析
+├── src/i18n/                 # 国际化（English / 简体中文 / 粤语）
 ├── Dockerfile & nginx.conf
 deploy/                        # 生产部署脚本
 .github/workflows/             # CI/CD 流水线
