@@ -1322,6 +1322,115 @@ select option {
   animation: agc-progress-indeterminate 1.8s ease-in-out infinite;
 }
 
+/* ── Running highlight (active-running card) ── */
+.agent-grid-card.active-running {
+  border-color: rgba(99, 102, 241, 0.45) !important;
+  box-shadow:
+    0 1px 0 rgba(99, 102, 241, 0.08) inset,
+    0 0 20px rgba(99, 102, 241, 0.18),
+    0 6px 20px rgba(0, 0, 0, 0.22) !important;
+}
+
+/* ── Icon pulse for currently running agent ── */
+.agc-icon-pulse {
+  animation: agc-icon-glow 2s ease-in-out infinite;
+}
+
+@keyframes agc-icon-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(99, 102, 241, 0.15); }
+  50% { box-shadow: 0 0 18px rgba(99, 102, 241, 0.35); }
+}
+
+/* ── Elapsed time badge ── */
+.agc-elapsed {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  font-variant-numeric: tabular-nums;
+  padding: 0.15rem 0.45rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+}
+
+.agent-grid-card.running .agc-elapsed {
+  color: rgba(165, 180, 252, 0.8);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* ── Error & Skipped status tags ── */
+.agent-grid-card.error .agc-status-tag {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.21);
+}
+
+.agent-grid-card.skipped .agc-status-tag {
+  color: rgba(148, 163, 184, 0.58);
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.agent-grid-card.error {
+  border-color: rgba(239, 68, 68, 0.16);
+}
+
+.agent-grid-card.skipped {
+  opacity: 0.58;
+}
+
+/* ── Error text in desc ── */
+.agc-error-text {
+  color: rgba(248, 113, 113, 0.8);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+/* ── Skipped text in desc ── */
+.agc-skipped-text {
+  color: rgba(255, 255, 255, 0.18);
+  font-style: italic;
+  font-size: 0.72rem;
+}
+
+/* ── Desc with content (output preview) ── */
+.agc-desc.has-content {
+  color: rgba(255, 255, 255, 0.48);
+  max-height: 3.4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ── Loading bar (replaces old agc-progress) ── */
+.agc-loading-bar {
+  margin-top: auto;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.agc-loading-bar-inner {
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--agent-color, #818cf8) 50%,
+    transparent 100%
+  );
+  animation: agc-loading-slide 1.5s ease-in-out infinite;
+}
+
+@keyframes agc-loading-slide {
+  0% { transform: translateX(-60%); }
+  100% { transform: translateX(260%); }
+}
+
 @keyframes agc-progress-indeterminate {
   0% { left: -35%; }
   100% { left: 100%; }

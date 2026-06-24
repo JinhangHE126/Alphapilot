@@ -278,24 +278,30 @@ def stream_analysis_events(
     })
 
     emitted_agents: set[str] = set()
+    agent_start_times: dict[str, float] = {}
     target_price: dict | None = None
     risk_level: dict | None = None
 
-    for chunk in langgraph_app.stream(initial_state, config=config, stream_mode="updates"):
-        for node_name, update in chunk.items():
-            agent_meta = AGENT_LABELS.get(node_name, {"label": node_name, "icon": "\U0001f916"})
+    import time as _time
+    current_node_name: str | None = None
+    try:
+        for chunk in langgraph_app.stream(initial_state, config=config, stream_mode="updates"):
+            for node_name, update in chunk.items():
+                current_node_name = node_name
+                agent_meta = AGENT_LABELS.get(node_name, {"label": node_name, "icon": "\U0001f916"})
             label = agent_meta["label"]
             icon = agent_meta["icon"]
 
             if node_name not in emitted_agents:
                 emitted_agents.add(node_name)
+                agent_start_times[node_name] = _time.time()
                 yield _sse("agent_start", {
                     "agent": node_name,
                     "label": label,
                     "icon": icon,
                 })
 
-            # 当 evidence_packet_builder 完成时，向前端发射 evidence_packet 事件
+            # === evidence_packet ===
             if node_name == "evidence_packet_builder" and "evidence_packet" in update:
                 ep = update["evidence_packet"]
                 chart = update.get("chart_data", [])
@@ -318,6 +324,18 @@ def stream_analysis_events(
                             meta = AGENT_LABELS.get(agent_id, {"label": agent_id, "icon": "\U0001f916"})
                             yield _sse("agent_start", {
                                 "agent": agent_id,
+                                "label": meta["label"],
+                                "icon": meta["icon"],
+                            })
+                # 发射被跳过的 agent
+                skipped_agents = update.get("skipped_agents")
+                if isinstance(skipped_agents, list):
+                    for sid in skipped_agents:
+                        if sid not in emitted_agents and sid != "__end__":
+                            emitted_agents.add(sid)
+                            meta = AGENT_LABELS.get(sid, {"label": sid, "icon": "\U0001f916"})
+                            yield _sse("agent_skipped", {
+                                "agent": sid,
                                 "label": meta["label"],
                                 "icon": meta["icon"],
                             })
@@ -366,7 +384,32 @@ def stream_analysis_events(
                     "content": guard_text,
                 })
 
-            yield _sse("agent_done", {"agent": node_name})
+            yield _sse("agent_done", {
+                "agent": node_name,
+                "duration_ms": round((_time.time() - agent_start_times.get(node_name, _time.time())) * 1000),
+            })
+
+    except Exception as exc:
+        import traceback
+        print(f"[analysis_service] agent error for {current_node_name}: {exc}")
+        traceback.print_exc()
+        if current_node_name and current_node_name not in ("strategy_aggregator",):
+            meta = AGENT_LABELS.get(current_node_name, {"label": current_node_name, "icon": "\U0001f916"})
+            yield _sse("agent_error", {
+                "agent": current_node_name,
+                "label": meta["label"],
+                "icon": meta["icon"],
+                "message": str(exc)[:500],
+                "duration_ms": round((_time.time() - agent_start_times.get(current_node_name, _time.time())) * 1000),
+            })
+        final_report = f"分析过程中发生错误: {str(exc)[:200]}"
+        guard_check = {
+            "is_valid": False,
+            "confidence_score": 0,
+            "issues": [f"Pipeline error: {str(exc)[:150]}"],
+            "corrections": [],
+            "final_reasoning": f"Agent {current_node_name} 执行失败",
+        }
 
     if not final_report and recommendation:
         final_report = recommendation

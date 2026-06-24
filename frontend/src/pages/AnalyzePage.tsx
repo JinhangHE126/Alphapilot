@@ -32,8 +32,10 @@ type AgentStatus = {
   agent: string;
   label: string;
   icon: string;
-  status: "idle" | "running" | "done";
+  status: "idle" | "running" | "done" | "error" | "skipped";
   content: string;
+  startedAt?: number;
+  finishedAt?: number;
 };
 
 type NodeDef = {
@@ -82,10 +84,11 @@ type AgentCardProps = {
   live?: AgentStatus;
   running: boolean;
   isSelected: boolean;
-  statusLabel: (status: "idle" | "running" | "done") => string;
+  statusLabel: (status: AgentStatus["status"]) => string;
   clickToView: string;
   descStandingBy: string;
   descReady: string;
+  skippedHint: string;
   onSelect: (id: WorkflowNodeId) => void;
 };
 
@@ -98,36 +101,87 @@ function AgentCard({
   clickToView,
   descStandingBy,
   descReady,
+  skippedHint,
   onSelect,
 }: AgentCardProps) {
   const status = live ? live.status : "idle";
   const hasContent = Boolean(live?.content?.trim());
+  const isCurrentlyRunning = running && status === "running";
   const desc = hasContent
     ? live!.content.slice(-120).replace(/\n/g, " ")
     : running
       ? descStandingBy
       : descReady;
+
+  // 计算耗时
+  const elapsed = useMemo(() => {
+    if (!live?.startedAt) return "";
+    const end = live.finishedAt ?? Date.now();
+    const ms = end - live.startedAt;
+    if (ms < 1000) return "< 1s";
+    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.round((ms % 60000) / 1000);
+    return `${mins}m ${secs}s`;
+  }, [live?.startedAt, live?.finishedAt]);
+
+  // 动态刷新 running 状态的耗时
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!isCurrentlyRunning) return;
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [isCurrentlyRunning]);
+
+  // force re-compute on tick
+  const displayElapsed = isCurrentlyRunning
+    ? (() => {
+        if (!live?.startedAt) return "";
+        const ms = Date.now() - live.startedAt;
+        if (ms < 1000) return "< 1s";
+        if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+        const mins = Math.floor(ms / 60000);
+        const secs = Math.round((ms % 60000) / 1000);
+        return `${mins}m ${secs}s`;
+      })()
+    : elapsed;
+
   const LucideIcon = def.lucide;
 
   return (
     <button
       type="button"
-      className={`agent-grid-card agent-grid-card-btn ${status} ${isSelected ? "selected" : ""} ${hasContent || status !== "idle" ? "has-output" : ""}`}
+      className={`agent-grid-card agent-grid-card-btn ${status} ${isSelected ? "selected" : ""} ${hasContent || status !== "idle" ? "has-output" : ""} ${isCurrentlyRunning ? "active-running" : ""}`}
       style={{ "--agent-color": def.color } as React.CSSProperties}
       onClick={() => onSelect(def.id)}
       aria-pressed={isSelected}
     >
       <div className="agc-top">
-        <div className="agc-icon-wrap" style={{ background: `${def.color}14` }}>
+        <div className={`agc-icon-wrap ${isCurrentlyRunning ? "agc-icon-pulse" : ""}`} style={{ background: `${def.color}14` }}>
           <LucideIcon size={20} style={{ color: def.color }} />
         </div>
         <span className={`agc-status-tag ${status}`}>{statusLabel(status)}</span>
+        {displayElapsed && status !== "idle" && (
+          <span className="agc-elapsed">{displayElapsed}</span>
+        )}
       </div>
       <div className="agc-name">{def.label}</div>
       <div className="agc-role">{def.role}</div>
-      <div className="agc-desc">{desc}</div>
+      <div className={`agc-desc ${hasContent ? "has-content" : ""}`}>
+        {status === "error" && live?.content ? (
+          <span className="agc-error-text">{live.content}</span>
+        ) : status === "skipped" ? (
+          <span className="agc-skipped-text">{skippedHint}</span>
+        ) : (
+          desc
+        )}
+      </div>
       {(hasContent || status === "done") && <div className="agc-hint">{clickToView}</div>}
-      {status === "running" && <div className="agc-progress" />}
+      {isCurrentlyRunning && (
+        <div className="agc-loading-bar">
+          <div className="agc-loading-bar-inner" />
+        </div>
+      )}
     </button>
   );
 }
@@ -230,12 +284,15 @@ export default function AnalyzePage() {
             setRiskLevel(evt.data);
           }
           if (evt.event === "agent_start") {
+            const now = Date.now();
             setAgents((prev) =>
               upsertAgent(prev, evt.data.agent, {
                 label: evt.data.label,
                 icon: evt.data.icon,
                 status: "running",
                 content: "",
+                startedAt: now,
+                finishedAt: undefined,
               }),
             );
           }
@@ -249,7 +306,41 @@ export default function AnalyzePage() {
             );
           }
           if (evt.event === "agent_done") {
-            setAgents((prev) => upsertAgent(prev, evt.data.agent, { status: "done" }));
+            setAgents((prev) =>
+              upsertAgent(prev, evt.data.agent, {
+                status: "done",
+                finishedAt: Date.now(),
+                // 用后端 duration_ms 覆盖 startedAt 以显示服务端真实耗时
+                startedAt: evt.data.duration_ms !== undefined
+                  ? Date.now() - evt.data.duration_ms
+                  : undefined,
+              }),
+            );
+          }
+          if (evt.event === "agent_error") {
+            setAgents((prev) =>
+              upsertAgent(prev, evt.data.agent, {
+                label: evt.data.label,
+                icon: evt.data.icon,
+                status: "error",
+                content: evt.data.message,
+                startedAt: evt.data.duration_ms !== undefined
+                  ? Date.now() - evt.data.duration_ms
+                  : undefined,
+                finishedAt: Date.now(),
+              }),
+            );
+          }
+          if (evt.event === "agent_skipped") {
+            setAgents((prev) =>
+              upsertAgent(prev, evt.data.agent, {
+                label: evt.data.label,
+                icon: evt.data.icon,
+                status: "skipped",
+                content: "",
+                finishedAt: Date.now(),
+              }),
+            );
           }
           if (evt.event === "analysis_complete") {
             setAgents((prev) => {
@@ -290,9 +381,11 @@ export default function AnalyzePage() {
     }
   }
 
-  function statusLabel(status: "idle" | "running" | "done") {
+  function statusLabel(status: "idle" | "running" | "done" | "error" | "skipped") {
     if (status === "running") return t("analyze.statusAnalyzing");
     if (status === "done") return t("analyze.statusComplete");
+    if (status === "error") return t("analyze.statusError");
+    if (status === "skipped") return t("analyze.statusSkipped");
     return t("analyze.statusStandby");
   }
 
@@ -314,6 +407,7 @@ export default function AnalyzePage() {
             clickToView={t("analyze.clickToView")}
             descStandingBy={t("analyze.descStandingBy")}
             descReady={t("analyze.descReady")}
+            skippedHint={t("analyze.skippedHint")}
             onSelect={handleAgentClick}
           />
         ))}

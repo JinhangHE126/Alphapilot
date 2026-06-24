@@ -63,7 +63,9 @@ export type StreamEvent =
   | { event: "evidence_packet"; data: EvidencePacketData }
   | { event: "agent_start"; data: { agent: string; label: string; icon: string } }
   | { event: "agent_output"; data: { agent: string; content: string } }
-  | { event: "agent_done"; data: { agent: string } }
+  | { event: "agent_done"; data: { agent: string; duration_ms: number } }
+  | { event: "agent_error"; data: { agent: string; label: string; icon: string; message: string; duration_ms: number } }
+  | { event: "agent_skipped"; data: { agent: string; label: string; icon: string } }
   | { event: "analysis_complete"; data: { final_report: string; recommendation?: string; guard_check?: GuardCheck; target_price?: TargetPriceData | null; risk_level?: RiskLevelData | null } }
   | { event: "target_price"; data: TargetPriceData }
   | { event: "risk_level"; data: RiskLevelData }

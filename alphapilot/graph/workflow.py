@@ -483,6 +483,7 @@ def orchestrator_node(state: GraphState) -> dict:
     messages = state.get("messages", [])
     executed = state.get("executed_agents", [])
     stock_symbol = state.get("stock_symbol", "TSLA")
+    skipped: list[str] = []
 
     user_instruction = next(
         (
@@ -578,7 +579,7 @@ def orchestrator_node(state: GraphState) -> dict:
             print(f"   Executed: {executed}")
             print(f"   Next: []")
             print(f"   Reasoning: {reasoning}\n")
-            return {"next": "__end__", "orchestrator_reasoning": reasoning}
+            return {"next": "__end__", "orchestrator_reasoning": reasoning, "skipped_agents": []}
 
         corrections = guard_check.get("corrections", [])
         correction_msg = "\n".join(f"- {c}" for c in corrections) if corrections else "Address the identified issues."
@@ -615,12 +616,16 @@ def orchestrator_node(state: GraphState) -> dict:
 
         if allowed_level in ("insufficient_evidence", "data_summary_only"):
             STAGES: list[list[str]] = []
+            skipped = ["market_data_expert", "fundamental_expert", "news_sentiment_expert",
+                       "debate_stage", "strategy_expert", "risk_expert",
+                       "portfolio_agent", "backtesting_agent", "recommendation_agent"]
         elif allowed_level == "limited_analysis":
             STAGES = [
                 ["market_data_expert", "fundamental_expert", "news_sentiment_expert"],
                 ["strategy_expert"],
                 ["risk_expert"],
             ]
+            skipped = ["debate_stage", "portfolio_agent", "backtesting_agent", "recommendation_agent"]
         else:
             STAGES = [
                 ["market_data_expert", "fundamental_expert", "news_sentiment_expert"],
@@ -630,6 +635,7 @@ def orchestrator_node(state: GraphState) -> dict:
                 ["portfolio_agent"],
                 ["backtesting_agent"],
             ]
+            skipped: list[str] = []
 
         executed_set = set(executed)
         next_agents = []
@@ -687,12 +693,13 @@ def orchestrator_node(state: GraphState) -> dict:
     print(f"   Reasoning: {reasoning}\n")
 
     if not next_agents:
-        return {"next": "__end__", "orchestrator_reasoning": reasoning}
+        return {"next": "__end__", "orchestrator_reasoning": reasoning, "skipped_agents": skipped}
 
     result = {
         "next": next_agents,
         "executed_agents": executed + next_agents,
         "orchestrator_reasoning": reasoning,
+        "skipped_agents": skipped,
     }
     if guard_failed:
         result["guard_check"] = {}

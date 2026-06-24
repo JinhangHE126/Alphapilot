@@ -103,6 +103,8 @@ export type TranslationDict = {
     statusAnalyzing: string;
     statusComplete: string;
     statusStandby: string;
+    statusError: string;
+    statusSkipped: string;
     descStandingBy: string;
     descReady: string;
     finalReport: string;
@@ -121,6 +123,7 @@ export type TranslationDict = {
     guardReasoning: string;
     sessionTitle: string;
     clickToView: string;
+    skippedHint: string;
     agentDetail: string;
     noOutput: string;
     closeDetail: string;
