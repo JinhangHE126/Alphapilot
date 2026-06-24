@@ -2132,3 +2132,261 @@ select option {
   color: rgba(255, 255, 255, 0.3);
 }
 
+/* ── Valuation Summary Card ── */
+.valuation-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.vs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.vs-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.vs-evidence-score {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.38);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+.vs-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 0;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 0.82rem;
+}
+
+.vs-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* Price + risk row */
+.vs-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vs-price-block {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.vs-price-label {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.38);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vs-price-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.94);
+  font-variant-numeric: tabular-nums;
+}
+
+.vs-price-change {
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.vs-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* Target price section */
+.vs-target-section {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 0.7rem;
+}
+
+.vs-target-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.vs-target-placeholder-tag {
+  font-size: 0.58rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  margin-left: auto;
+}
+
+.vs-target-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.vs-target-item {
+  text-align: center;
+  padding: 0.4rem 0.2rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.vs-target-item.vs-target-mid {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vs-target-label {
+  display: block;
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.15rem;
+}
+
+.vs-target-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+  font-variant-numeric: tabular-nums;
+}
+
+.vs-target-na {
+  color: rgba(255, 255, 255, 0.2) !important;
+  font-weight: 400;
+}
+
+.vs-target-pct {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 600;
+  margin-top: 0.1rem;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+}
+
+.vs-target-hint {
+  margin-top: 0.4rem;
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.2);
+  line-height: 1.45;
+}
+
+/* Bottom: guard + consensus */
+.vs-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vs-guard-row {
+  display: flex;
+  gap: 0.8rem;
+}
+
+.vs-guard-stat {
+  flex: 1;
+  min-width: 0;
+}
+
+.vs-guard-label {
+  display: block;
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.2rem;
+}
+
+.vs-guard-value {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  font-variant-numeric: tabular-nums;
+}
+
+.vs-guard-bar-wrap {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  margin: 0.25rem 0 0.15rem;
+}
+
+.vs-guard-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.vs-guard-score {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.vs-score-note {
+  margin: -0.2rem 0 0;
+  font-size: 0.62rem;
+  line-height: 1.45;
+  color: rgba(148, 163, 184, 0.72);
+}
+
+.vs-consensus {
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vs-consensus-label {
+  display: block;
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.25rem;
+}
+
+.vs-consensus-text {
+  margin: 0;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.55;
+}
+

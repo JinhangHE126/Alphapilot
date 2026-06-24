@@ -37,41 +37,45 @@
 
 ## 2. 技术栈总览
 
-| 层级 | 技术 | 说明 |
-|------|------|------|
-| 前端框架 | React 18 + Vite + TypeScript | SPA, Vite proxy 代理 API |
-| 样式 | 手写 CSS 暗色主题 | 无第三方 UI 库依赖 |
-| 后端框架 | FastAPI + Uvicorn | 异步 REST + SSE 流式 |
-| 多智能体 | LangGraph (StateGraph) | Evidence Builder + Orchestrator 编排 14 Agent（含 Bull/Bear 辩论） |
-| LLM 路由 | Gemini / DeepSeek / Grok | 按 Agent 类型分模型 |
-| 数据库 | SQLite (WAL 模式) | 业务表 + LangGraph checkpointer |
-| 向量检索 | FAISS (all-MiniLM-L6-v2) + ChromaDB | FAISS 为主流程动态事实缓存，Chroma 保留为辅助模块 |
-| 防幻觉 | Evidence Packet + Guard hard rules | 输出等级门控、字段级来源追溯、冷启动拒答/降级 |
-| 认证 | JWT (HS256) | register / login / refresh / me |
-| 实时通信 | SSE (Server-Sent Events) | agent_start / agent_output / agent_done |
-| 数据采集 | yfinance + SEC/HKEX 辅助 | 当前主链路仍以 yfinance 为主，下一阶段接 Polygon/Tiingo/Alpha Vantage |
-| CI/CD | GitHub Actions + GHCR + Docker | 前后端独立镜像 + SSH 部署 |
+
+| 层级     | 技术                                  | 说明                                                          |
+| ------ | ----------------------------------- | ----------------------------------------------------------- |
+| 前端框架   | React 18 + Vite + TypeScript        | SPA, Vite proxy 代理 API                                      |
+| 样式     | 手写 CSS 暗色主题                         | 无第三方 UI 库依赖                                                 |
+| 后端框架   | FastAPI + Uvicorn                   | 异步 REST + SSE 流式                                            |
+| 多智能体   | LangGraph (StateGraph)              | Evidence Builder + Orchestrator 编排 14 Agent（含 Bull/Bear 辩论） |
+| LLM 路由 | Gemini / DeepSeek / Grok            | 按 Agent 类型分模型                                               |
+| 数据库    | SQLite (WAL 模式)                     | 业务表 + LangGraph checkpointer                                |
+| 向量检索   | FAISS (all-MiniLM-L6-v2) + ChromaDB | FAISS 为主流程动态事实缓存，Chroma 保留为辅助模块                             |
+| 防幻觉    | Evidence Packet + Guard hard rules  | 输出等级门控、字段级来源追溯、冷启动拒答/降级                                     |
+| 认证     | JWT (HS256)                         | register / login / refresh / me                             |
+| 实时通信   | SSE (Server-Sent Events)            | agent_start / agent_output / agent_done                     |
+| 数据采集   | yfinance + SEC/HKEX 辅助              | 当前主链路仍以 yfinance 为主，下一阶段接 Polygon/Tiingo/Alpha Vantage      |
+| CI/CD  | GitHub Actions + GHCR + Docker      | 前后端独立镜像 + SSH 部署                                            |
+
 
 ## 3. 14 智能体体系
 
 ### 3.1 Agent 角色矩阵
 
-| Agent | 节点名 | LLM | 工具策略 | 结构化输出 |
-|-------|--------|-----|------|-----------|
-| **Market** | `market_data_expert` | DeepSeek | `tools=[]`，只读 Evidence Packet | ❌ 自然语言 |
-| **Fundamental** | `fundamental_expert` | DeepSeek | `tools=[]`，只读 Evidence Packet | ❌ 自然语言 |
-| **News** | `news_sentiment_expert` | DeepSeek | `tools=[]`，只读 Evidence Packet | ❌ 自然语言 |
-| **Bull Researcher** | `bull_researcher` (inside `debate_stage`) | DeepSeek | `tools=[]`，构建做多论点 | ❌ 自然语言 |
-| **Bear Researcher** | `bear_researcher` (inside `debate_stage`) | DeepSeek | `tools=[]`，构建做空论点 | ❌ 自然语言 |
-| **Strategy** | `strategy_expert` | DeepSeek | `tools=[]`，综合已验证事实、辩论论点与上游输出 | ❌ 自然语言 |
-| **Risk** | `risk_expert` | DeepSeek | `tools=[]`，按证据等级输出风险 | JSON/自然语言混合 |
-| **Portfolio** | `portfolio_agent` | DeepSeek | `tools=[]`，仅 full analysis 链路使用 | ❌ 自然语言 |
-| **Backtesting** | `backtesting_agent` | DeepSeek | 内部价格下载，limited/eval 场景跳过 | ❌ 自然语言 |
-| **Comparison** | `comparison_agent` | DeepSeek | `tools=[]`，专项对比入口 | ❌ 自然语言 |
-| **Alert** | `alert_agent` | DeepSeek | `tools=[]`，基于 Packet 指标生成告警 | ❌ 自然语言 |
-| **Portfolio Opt** | `portfolio_optimization_agent` | DeepSeek | `tools=[]`，专项组合优化入口 | ❌ 自然语言 |
-| **Recommendation** | `recommendation_agent` | DeepSeek | `tools=[]`，仅 full analysis 或个性化入口使用 | ❌ 自然语言 |
-| **Guard** | `guard_agent` | Python hard rules | 不调工具，基于 Evidence Packet 确定性校验 | ✅ dict (is_valid, confidence, issues, corrections) |
+
+| Agent               | 节点名                                       | LLM               | 工具策略                                | 结构化输出                                              |
+| ------------------- | ----------------------------------------- | ----------------- | ----------------------------------- | -------------------------------------------------- |
+| **Market**          | `market_data_expert`                      | DeepSeek          | `tools=[]`，只读 Evidence Packet       | ❌ 自然语言                                             |
+| **Fundamental**     | `fundamental_expert`                      | DeepSeek          | `tools=[]`，只读 Evidence Packet       | ❌ 自然语言                                             |
+| **News**            | `news_sentiment_expert`                   | DeepSeek          | `tools=[]`，只读 Evidence Packet       | ❌ 自然语言                                             |
+| **Bull Researcher** | `bull_researcher` (inside `debate_stage`) | DeepSeek          | `tools=[]`，构建做多论点                   | ❌ 自然语言                                             |
+| **Bear Researcher** | `bear_researcher` (inside `debate_stage`) | DeepSeek          | `tools=[]`，构建做空论点                   | ❌ 自然语言                                             |
+| **Strategy**        | `strategy_expert`                         | DeepSeek          | `tools=[]`，综合已验证事实、辩论论点与上游输出        | ❌ 自然语言                                             |
+| **Risk**            | `risk_expert`                             | DeepSeek          | `tools=[]`，按证据等级输出风险                | JSON/自然语言混合                                        |
+| **Portfolio**       | `portfolio_agent`                         | DeepSeek          | `tools=[]`，仅 full analysis 链路使用     | ❌ 自然语言                                             |
+| **Backtesting**     | `backtesting_agent`                       | DeepSeek          | 内部价格下载，limited/eval 场景跳过            | ❌ 自然语言                                             |
+| **Comparison**      | `comparison_agent`                        | DeepSeek          | `tools=[]`，专项对比入口                   | ❌ 自然语言                                             |
+| **Alert**           | `alert_agent`                             | DeepSeek          | `tools=[]`，基于 Packet 指标生成告警         | ❌ 自然语言                                             |
+| **Portfolio Opt**   | `portfolio_optimization_agent`            | DeepSeek          | `tools=[]`，专项组合优化入口                 | ❌ 自然语言                                             |
+| **Recommendation**  | `recommendation_agent`                    | DeepSeek          | `tools=[]`，仅 full analysis 或个性化入口使用 | ❌ 自然语言                                             |
+| **Guard**           | `guard_agent`                             | Python hard rules | 不调工具，基于 Evidence Packet 确定性校验       | ✅ dict (is_valid, confidence, issues, corrections) |
+
 
 ### 3.2 Agent 依赖拓扑
 
@@ -111,6 +115,7 @@ strategy_expert (消费辩论历史 + 上游输出)
 ### 3.3 模型路由架构
 
 系统通过 `config/llm.py` 的 `AGENT_LLM_ROUTES` 为每个 Agent 分配独立的 LLM profile，支持：
+
 - **多 Provider**: Gemini / DeepSeek / Grok (OpenAI 兼容)
 - **多端口代理**: 按 Agent 类型拆分入口流量 (sing-box mixed inbound)
 - **差异化参数**: 每个 Agent 独立 temperature / max_retries / timeout
@@ -119,31 +124,33 @@ strategy_expert (消费辩论历史 + 上游输出)
 
 所有 Agent 通过 `GraphState` (TypedDict) 共享数据，核心字段：
 
-| 字段 | 类型 | 职责 |
-|------|------|------|
-| `stock_symbol` | str | 当前分析股票代码 |
-| `messages` | list[BaseMessage] | LangGraph 消息流 (add_messages reducer) |
-| `evidence_packet` | dict | Evidence Builder 生成的字段级证据包 |
-| `cold_start` | bool | 是否触发冷启动采集 |
-| `ingestion_result` | dict | Evidence Packet 回写 FAISS 的统计结果 |
-| `market_data` | str | Market Agent 输出 |
-| `fundamental_data` | str | Fundamental Agent 输出 |
-| `news_sentiment` | str | News Agent 输出 |
-| `bull_argument` | str | Bull Researcher 输出 |
-| `bear_argument` | str | Bear Researcher 输出 |
-| `debate_rounds` | int | 当前辩论轮数 |
-| `max_debate_rounds` | int | 最大辩论轮数（默认 2） |
-| `strategy_recommendation` | str | Strategy Agent 输出 |
-| `risk_assessment` | str | Risk Agent 输出 |
-| `executed_agents` | list[str] | 已执行 Agent 列表 (防重复) |
-| `final_report` | str | 最终分析报告 |
-| `final_recommendation` | str | Buy/Hold/Sell |
-| `user_profile` | dict | 用户画像 (risk_preference, horizon) |
-| `guard_check` | dict | Guard 校验结果 |
-| `guard_retry_count` | int | Guard 重试计数 (上限 2) |
-| `confidence_score` | int | 最终置信度 0-100 |
-| `sources` | list[str] | 引用来源列表 |
-| `memory` | dict | 跨会话长期记忆 |
+
+| 字段                        | 类型                | 职责                                   |
+| ------------------------- | ----------------- | ------------------------------------ |
+| `stock_symbol`            | str               | 当前分析股票代码                             |
+| `messages`                | list[BaseMessage] | LangGraph 消息流 (add_messages reducer) |
+| `evidence_packet`         | dict              | Evidence Builder 生成的字段级证据包           |
+| `cold_start`              | bool              | 是否触发冷启动采集                            |
+| `ingestion_result`        | dict              | Evidence Packet 回写 FAISS 的统计结果       |
+| `market_data`             | str               | Market Agent 输出                      |
+| `fundamental_data`        | str               | Fundamental Agent 输出                 |
+| `news_sentiment`          | str               | News Agent 输出                        |
+| `bull_argument`           | str               | Bull Researcher 输出                   |
+| `bear_argument`           | str               | Bear Researcher 输出                   |
+| `debate_rounds`           | int               | 当前辩论轮数                               |
+| `max_debate_rounds`       | int               | 最大辩论轮数（默认 2）                         |
+| `strategy_recommendation` | str               | Strategy Agent 输出                    |
+| `risk_assessment`         | str               | Risk Agent 输出                        |
+| `executed_agents`         | list[str]         | 已执行 Agent 列表 (防重复)                   |
+| `final_report`            | str               | 最终分析报告                               |
+| `final_recommendation`    | str               | Buy/Hold/Sell                        |
+| `user_profile`            | dict              | 用户画像 (risk_preference, horizon)      |
+| `guard_check`             | dict              | Guard 校验结果                           |
+| `guard_retry_count`       | int               | Guard 重试计数 (上限 2)                    |
+| `confidence_score`        | int               | 最终置信度 0-100                          |
+| `sources`                 | list[str]         | 引用来源列表                               |
+| `memory`                  | dict              | 跨会话长期记忆                              |
+
 
 ## 5. 工作流编排
 
@@ -207,23 +214,27 @@ stream_analysis_events()
 
 ### 6.1 SQLite 表结构
 
-| 表 | 用途 | 关键字段 |
-|----|------|---------|
-| `users` | 用户认证 | id, username, password_hash, last_login |
-| `sessions` | 分析会话 | id (UUID), user_id, title, updated_at |
-| `messages` | 对话历史 | session_id, role, content, node_name |
-| `analysis_history` | 分析记录 | user_id, stock_symbol, report, recommendation, status, final_score |
-| `analysis_events` | 流式事件日志 | analysis_id, seq_num, agent_name, event_type, content |
+
+| 表                  | 用途     | 关键字段                                                               |
+| ------------------ | ------ | ------------------------------------------------------------------ |
+| `users`            | 用户认证   | id, username, password_hash, last_login                            |
+| `sessions`         | 分析会话   | id (UUID), user_id, title, updated_at                              |
+| `messages`         | 对话历史   | session_id, role, content, node_name                               |
+| `analysis_history` | 分析记录   | user_id, stock_symbol, report, recommendation, status, final_score |
+| `analysis_events`  | 流式事件日志 | analysis_id, seq_num, agent_name, event_type, content              |
+
 
 ### 6.2 LangGraph Checkpointer
 
 `graph/checkpointer.py` 使用 SQLite 作为 LangGraph 的状态持久化后端 (`langgraph.checkpoint.sqlite.SqliteSaver`)，实现：
+
 - 会话恢复：同一 thread_id 可继续未完成的分析
 - 断点续传：工作流中断后可从中断点恢复
 
 ### 6.3 用户画像
 
 `graph/user_profile.py` 通过 JSON 文件持久化：
+
 - `risk_preference`: low / medium / high → 影响推荐策略激进程度
 - `horizon`: short / medium / long → 影响选股时间框架
 - 通过 `GET/PUT /profile` API 管理，分析时自动注入工作流
@@ -232,18 +243,21 @@ stream_analysis_events()
 
 ### 7.1 路由结构
 
-| 路径 | 页面 | 功能 |
-|------|------|------|
-| `/login` | LoginPage | 登录/注册双模式 |
-| `/` | DashboardPage | 统计总览 + 最近分析 |
-| `/analyze` | AnalyzePage | SSE 实时分析 + Agent 进度卡片 |
-| `/history` | HistoryPage | 分页列表 + 股票筛选 + 删除 |
-| `/history/:id` | AnalysisDetailPage | 单次分析事件时间线 |
-| `/settings` | SettingsPage | 用户画像配置 |
+
+| 路径             | 页面                 | 功能                    |
+| -------------- | ------------------ | --------------------- |
+| `/login`       | LoginPage          | 登录/注册双模式              |
+| `/`            | DashboardPage      | 统计总览 + 最近分析           |
+| `/analyze`     | AnalyzePage        | SSE 实时分析 + Agent 进度卡片 |
+| `/history`     | HistoryPage        | 分页列表 + 股票筛选 + 删除      |
+| `/history/:id` | AnalysisDetailPage | 单次分析事件时间线             |
+| `/settings`    | SettingsPage       | 用户画像配置                |
+
 
 ### 7.2 SSE 客户端
 
 `services/sse.ts` 基于 `fetch` + `ReadableStream` 手动解析 SSE，无需 EventSource（EventSource 不支持 POST + 自定义 headers）：
+
 1. 读取字节流 → 按 `\n\n` 分割事件
 2. 解析 `event:` 和 `data:` 行
 3. 触发回调更新 React state
@@ -289,6 +303,7 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 **原理**：在 Orchestrator 路由前构造统一证据对象，所有下游 Agent 都只读 `state.evidence_packet`。
 
 **实现**：
+
 - `evidence_packet_builder` 先调用 FAISS RAG 检索，过滤 symbol mismatch。
 - RAG 不足时触发 `collect_all(symbol)` 冷启动采集。
 - `collect_all()` 当前聚合 yfinance 市场/基本面/新闻，辅以 SEC/HKEX collector。
@@ -303,14 +318,16 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 
 核心字段：
 
-| 字段 | 说明 |
-|------|------|
-| `field` | 标准化事实字段名，例如 `current_price`, `pe_ratio` |
-| `value` | 原始值，不允许 LLM 自行补全 |
-| `source` | 数据来源，例如 yfinance / SEC_EDGAR / HKEX / RAG |
-| `as_of_date` | 数据对应日期 |
-| `confidence` | 字段级置信度 |
+
+| 字段                | 说明                                           |
+| ----------------- | -------------------------------------------- |
+| `field`           | 标准化事实字段名，例如 `current_price`, `pe_ratio`      |
+| `value`           | 原始值，不允许 LLM 自行补全                             |
+| `source`          | 数据来源，例如 yfinance / SEC_EDGAR / HKEX / RAG    |
+| `as_of_date`      | 数据对应日期                                       |
+| `confidence`      | 字段级置信度                                       |
 | `confidence_tier` | `machine` / `llm_extracted` / `llm_inferred` |
+
 
 **文件**：`schemas/evidence_packet.py`
 
@@ -320,12 +337,14 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 
 输出等级：
 
-| 等级 | 允许行为 |
-|------|----------|
-| `full_analysis` | 可运行完整分析链路 |
-| `limited_analysis` | 允许谨慎分析，但禁止目标价/强推荐/未来源化数值 |
-| `data_summary_only` | 只能输出事实摘要和缺失字段 |
-| `insufficient_evidence` | 直接拒答或请求补充数据 |
+
+| 等级                      | 允许行为                     |
+| ----------------------- | ------------------------ |
+| `full_analysis`         | 可运行完整分析链路                |
+| `limited_analysis`      | 允许谨慎分析，但禁止目标价/强推荐/未来源化数值 |
+| `data_summary_only`     | 只能输出事实摘要和缺失字段            |
+| `insufficient_evidence` | 直接拒答或请求补充数据              |
+
 
 评分因素包括 source diversity、recency、completeness、field confidence。缺少关键字段或存在冲突时会降级。
 
@@ -343,6 +362,11 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 ### 9.6 Layer 4：Guard hard rules ★核心防线
 
 **这是 AlphaPilot 防致幻体系的最后一道关**，位于工作流输出前。Guard 当前以确定性规则为主，不再依赖 RAG 工具交叉验证。
+
+1. **证据级熔断**：无 Packet、symbol mismatch、`insufficient_evidence` → 硬拒
+2. **输出级约束**：limited 级别禁止目标价、强推荐等
+3. **Keyword grounding**（仅非 full）：输出提到某类指标 → Packet 里必须有对应 field
+4. **数值 grounding**（部分）：提到指标且 Packet 有值 → 报告里的数要对得上
 
 #### 工作流程
 
@@ -384,25 +408,29 @@ Agent 输出
 
 #### 关键设计决策
 
-| 决策 | 理由 |
-|------|------|
-| 冷启动无 machine fact 直接拒答 | 数据不足不是重跑 LLM 能解决的问题 |
-| `limited_analysis` 禁止目标价和强推荐 | 防止证据不足时输出强投资结论 |
-| Grounding 扫描关键字段和数值 | 报告提到 P/E、目标价、增长率等必须有 Packet fact |
-| soft failure 才允许 retry | 仅 ungrounded claim / prohibited keyword 可通过重写修复 |
-| 最大重试次数 = 2 | 防止死循环 |
+
+| 决策                           | 理由                                              |
+| ---------------------------- | ----------------------------------------------- |
+| 冷启动无 machine fact 直接拒答       | 数据不足不是重跑 LLM 能解决的问题                             |
+| `limited_analysis` 禁止目标价和强推荐 | 防止证据不足时输出强投资结论                                  |
+| Grounding 扫描关键字段和数值          | 报告提到 P/E、目标价、增长率等必须有 Packet fact                |
+| soft failure 才允许 retry       | 仅 ungrounded claim / prohibited keyword 可通过重写修复 |
+| 最大重试次数 = 2                   | 防止死循环                                           |
+
 
 **文件**：`agents/guard_agent.py`, `graph/workflow.py`
 
 ### 9.7 防线效果矩阵
 
-| 防线 | 拦截的幻觉类型 | LLM 依赖 | 误杀率 | 当前状态 |
-|------|---------------|---------|--------|---------|
-| Layer 0 Evidence Builder | 冷启动纯 LLM 分析 | 非 LLM 规则 + 数据工具 | 低 | ✅ 生效 |
-| Layer 1 Fact Schema | 无来源事实、字段不完整 | Pydantic | 极低 | ✅ 生效 |
-| Layer 2 Output Level | 证据不足时强结论 | 纯 Python 规则 | 低 | ✅ 生效 |
-| Layer 3 Agent Packet-only | Agent 私自采集/编造事实 | prompt + tools=[] | 中 | ✅ 生效 |
-| Layer 4 Guard hard rules | 未追溯事实、目标价、symbol mismatch | 纯 Python 规则为主 | 中 | ✅ 生效 |
+
+| 防线                        | 拦截的幻觉类型                   | LLM 依赖            | 误杀率 | 当前状态 |
+| ------------------------- | ------------------------- | ----------------- | --- | ---- |
+| Layer 0 Evidence Builder  | 冷启动纯 LLM 分析               | 非 LLM 规则 + 数据工具   | 低   | ✅ 生效 |
+| Layer 1 Fact Schema       | 无来源事实、字段不完整               | Pydantic          | 极低  | ✅ 生效 |
+| Layer 2 Output Level      | 证据不足时强结论                  | 纯 Python 规则       | 低   | ✅ 生效 |
+| Layer 3 Agent Packet-only | Agent 私自采集/编造事实           | prompt + tools=[] | 中   | ✅ 生效 |
+| Layer 4 Guard hard rules  | 未追溯事实、目标价、symbol mismatch | 纯 Python 规则为主     | 中   | ✅ 生效 |
+
 
 ---
 
@@ -460,13 +488,15 @@ Normalized Fact Store (SQLite / Postgres)
 
 ### 11.1 Provider 优先级建议
 
-| 数据类型 | 主源 | 备用源 | 说明 |
-|----------|------|--------|------|
-| 美股财报与增长率 | SEC EDGAR | Alpha Vantage / Polygon | 官方来源优先，用于 `revenue_growth_yoy`、`eps_growth_yoy` |
-| 实时/延迟行情 | Polygon / Tiingo | yfinance / Alpha Vantage | 减少 yfinance 单点失败 |
-| 基础估值 | Alpha Vantage / Polygon | yfinance | 补 `pe_ratio`、`market_cap`、`pb_ratio` |
-| 港股公告与公司资料 | HKEX | yfinance | 港股 yfinance 覆盖不稳定 |
-| 新闻 | Tiingo / Polygon | yfinance news | 新闻单源需标记未交叉验证 |
+
+| 数据类型      | 主源                      | 备用源                      | 说明                                              |
+| --------- | ----------------------- | ------------------------ | ----------------------------------------------- |
+| 美股财报与增长率  | SEC EDGAR               | Alpha Vantage / Polygon  | 官方来源优先，用于 `revenue_growth_yoy`、`eps_growth_yoy` |
+| 实时/延迟行情   | Polygon / Tiingo        | yfinance / Alpha Vantage | 减少 yfinance 单点失败                                |
+| 基础估值      | Alpha Vantage / Polygon | yfinance                 | 补 `pe_ratio`、`market_cap`、`pb_ratio`            |
+| 港股公告与公司资料 | HKEX                    | yfinance                 | 港股 yfinance 覆盖不稳定                               |
+| 新闻        | Tiingo / Polygon        | yfinance news            | 新闻单源需标记未交叉验证                                    |
+
 
 ### 11.2 冷启动判定升级
 

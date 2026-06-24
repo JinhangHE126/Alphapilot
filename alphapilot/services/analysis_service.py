@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any, Generator
 
 from graph.workflow import app as langgraph_app
@@ -73,6 +74,75 @@ def _format_agent_content(raw: str) -> str:
         return raw
 
 
+def _extract_json_block(text: str) -> dict | None:
+    """Extract the last JSON code block or raw JSON object from an agent's output text."""
+    if not text:
+        return None
+    # Try fenced JSON blocks first, preferring the last metadata block.
+    blocks = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    for block in reversed(blocks):
+        try:
+            parsed = json.loads(block.strip())
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+    # Try raw JSON object (find outermost braces on their own)
+    start = text.rfind("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end + 1].strip())
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return None
+
+
+def _strip_json_blocks(text: str) -> str:
+    """Remove machine-readable JSON blocks before showing agent text in the UI/report."""
+    if not text:
+        return ""
+    without_blocks = re.sub(r"```(?:json)?\s*[\s\S]*?\s*```", "", text).strip()
+    without_blocks = re.sub(r"\n?\s*\{[\s\S]*\}\s*$", "", without_blocks).strip()
+    if without_blocks.startswith("{") and without_blocks.endswith("}"):
+        return ""
+    return without_blocks
+
+
+def _to_float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_valuation_scenario(raw: dict | None) -> dict | None:
+    """Normalize valuation JSON from Recommendation Agent into a stable SSE payload."""
+    if not isinstance(raw, dict):
+        return None
+
+    low = _to_float_or_none(raw.get("valuation_low", raw.get("target_price_low")))
+    mid = _to_float_or_none(raw.get("valuation_mid", raw.get("target_price_mid")))
+    high = _to_float_or_none(raw.get("valuation_high", raw.get("target_price_high")))
+    if low is None and mid is None and high is None:
+        return None
+
+    return {
+        "target_price_low": low,
+        "target_price_mid": mid,
+        "target_price_high": high,
+        "valuation_low": low,
+        "valuation_mid": mid,
+        "valuation_high": high,
+        "upside_pct": _to_float_or_none(raw.get("upside_pct")),
+        "downside_pct": _to_float_or_none(raw.get("downside_pct")),
+        "consensus_summary": str(raw.get("consensus_summary", "")).strip() or None,
+        "source": "recommendation_agent_valuation_scenario",
+    }
+
+
 def _extract_text(update: dict) -> str:
     if update.get("final_report"):
         return str(update["final_report"])
@@ -117,7 +187,7 @@ def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, threa
             if update.get("final_report"):
                 final_report = str(update["final_report"])
             if node_name == "recommendation_agent" and update.get("messages"):
-                recommendation = _safe_text(update["messages"][-1])
+                recommendation = _strip_json_blocks(_safe_text(update["messages"][-1]))
 
     return {
         "final_report": final_report or "\u5206\u6790\u5b8c\u6210",
@@ -208,6 +278,8 @@ def stream_analysis_events(
     })
 
     emitted_agents: set[str] = set()
+    target_price: dict | None = None
+    risk_level: dict | None = None
 
     for chunk in langgraph_app.stream(initial_state, config=config, stream_mode="updates"):
         for node_name, update in chunk.items():
@@ -254,6 +326,16 @@ def stream_analysis_events(
             is_guard = node_name in ("guard_agent", "guard")
             has_guard = isinstance(update.get("guard_check"), dict) and update["guard_check"]
 
+            if node_name == "recommendation_agent" and update.get("messages"):
+                raw_recommendation = _safe_text(update["messages"][-1])
+                rec_json = _extract_json_block(raw_recommendation)
+                valuation = _coerce_valuation_scenario(rec_json)
+                if valuation:
+                    target_price = valuation
+                    yield _sse("target_price", target_price)
+                recommendation = _strip_json_blocks(raw_recommendation) or raw_recommendation
+                content = recommendation
+
             if content and not is_guard:
                 yield _sse("agent_output", {
                     "agent": node_name,
@@ -262,8 +344,13 @@ def stream_analysis_events(
 
             if update.get("final_report"):
                 final_report = str(update["final_report"])
-            if node_name == "recommendation_agent" and update.get("messages"):
-                recommendation = _safe_text(update["messages"][-1])
+            if node_name == "risk_expert" and update.get("messages"):
+                # risk_agent 输出是纯 JSON，尝试解析
+                risk_text = _safe_text(update["messages"][-1])
+                risk_json = _extract_json_block(risk_text)
+                if risk_json and "overall_risk_score" in risk_json:
+                    risk_level = risk_json
+                    yield _sse("risk_level", risk_level)
             if is_guard and has_guard:
                 guard_check = update["guard_check"]
                 output_level = update.get("output_level", "")
@@ -288,6 +375,8 @@ def stream_analysis_events(
         "final_report": final_report or "\u5206\u6790\u5b8c\u6210",
         "recommendation": recommendation,
         "guard_check": guard_check,
+        "target_price": target_price,
+        "risk_level": risk_level,
     }
 
     ep = guard_check.get("evidence_packet", {}) if guard_check else {}

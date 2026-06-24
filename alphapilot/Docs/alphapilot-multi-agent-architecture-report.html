@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AlphaPilot 多代理架构 Insights Report</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #172033;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --line: #334155;
+      --accent: #60a5fa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --info: #38bdf8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.25;
+    }
+
+    h1 {
+      font-size: 32px;
+      letter-spacing: -0.03em;
+    }
+
+    h2 {
+      margin-top: 34px;
+      font-size: 22px;
+    }
+
+    h3 {
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    p {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    code {
+      padding: 2px 5px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: rgba(148, 163, 184, 0.12);
+      color: #dbeafe;
+      font-size: 0.92em;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.4fr 0.6fr;
+      gap: 24px;
+      align-items: start;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--text);
+      background: rgba(148, 163, 184, 0.08);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .badge.success { border-color: rgba(52, 211, 153, 0.5); color: var(--success); }
+    .badge.warning { border-color: rgba(251, 191, 36, 0.5); color: var(--warning); }
+    .badge.info { border-color: rgba(56, 189, 248, 0.5); color: var(--info); }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    .card.highlight {
+      border-color: rgba(96, 165, 250, 0.8);
+      background: rgba(96, 165, 250, 0.08);
+    }
+
+    .stat-value {
+      margin-top: 8px;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .flow-step {
+      min-height: 170px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .step-num {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.8);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      color: var(--text);
+      background: var(--panel-2);
+      font-size: 13px;
+      letter-spacing: 0.02em;
+    }
+
+    td {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .tone-success td:first-child,
+    .tone-success td:nth-child(2) {
+      color: var(--success);
+    }
+
+    .tone-warning td:first-child,
+    .tone-warning td:nth-child(2) {
+      color: var(--warning);
+    }
+
+    .tone-danger td:first-child,
+    .tone-danger td:nth-child(2) {
+      color: var(--danger);
+    }
+
+    .score-bars {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 150px 1fr 48px;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .bar-track {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.18);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: rgba(96, 165, 250, 0.08);
+    }
+
+    .source-list {
+      columns: 2;
+      margin: 8px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    .source-list li {
+      break-inside: avoid;
+      margin: 4px 0;
+    }
+
+    footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .hero,
+      .grid.cols-2,
+      .grid.cols-3,
+      .grid.cols-4,
+      .grid.cols-5 {
+        grid-template-columns: 1fr;
+      }
+
+      .source-list {
+        columns: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Architecture Review</div>
+        <h1>AlphaPilot 多代理架构 Insights Report</h1>
+        <p>
+          本报告基于对 <code>graph/workflow.py</code>、<code>graph/state.py</code>、
+          <code>agents/*</code>、<code>schemas/evidence_packet.py</code>、
+          <code>tools/data_collector.py</code> 等核心模块的静态分析生成。
+        </p>
+        <div class="badge-row">
+          <span class="badge success">Evidence-first</span>
+          <span class="badge info">LangGraph orchestration</span>
+          <span class="badge success">Zero-tool specialist agents</span>
+          <span class="badge warning">Message-centric state</span>
+        </div>
+      </div>
+      <div class="card highlight">
+        <h3>Executive Summary</h3>
+        <p>
+          AlphaPilot 当前更像一个证据驱动的金融分析流水线，而不是自由协作型 agent swarm。
+          这个取舍适合金融场景：先集中构造可信 Evidence Packet，再让各专家 agent 在证据边界内生成输出，
+          最后由 Guard 做确定性事实和权限校验。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>1. Key Architecture Metrics</h2>
+      <div class="grid cols-4">
+        <div class="card">
+          <h3>Primary Pattern</h3>
+          <div class="stat-value">Evidence-first</div>
+          <p>先构证据包，再让 agent 在边界内推理。</p>
+        </div>
+        <div class="card">
+          <h3>Tool Policy</h3>
+          <div class="stat-value">tools=[]</div>
+          <p>核心分析 agent 基本不直接调用工具，取数集中在 collector。</p>
+        </div>
+        <div class="card">
+          <h3>Routing Style</h3>
+          <div class="stat-value">Deterministic</div>
+          <p>Orchestrator 使用 output level 和阶段表路由。</p>
+        </div>
+        <div class="card">
+          <h3>Main Risk</h3>
+          <div class="stat-value">Messages</div>
+          <p>结构化 state 字段存在，但很多结果仍主要沉淀在对话消息里。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. System Flow</h2>
+      <div class="grid cols-5">
+        <div class="card flow-step">
+          <div>
+            <div class="step-num">Step 1</div>
+            <h3>API / Service</h3>
+            <p><code>analysis_service</code> 构造 <code>initial_state</code>，通过 <code>langgraph_app.stream</code> 输出 SSE。</p>
+          </div>
+          <p><code>services/analysis_service.py</code></p>
+        </div>
+        <div class="card flow-step highlight">
+          <div>
+            <div class="step-num">Step 2</div>
+            <h3>Evidence Builder</h3>
+            <p>RAG、Fact Store、外部数据源统一收敛为 Evidence Packet。</p>
+          </div>
+          <p><code>graph/workflow.py</code></p>
+        </div>
+        <div class="card flow-step">
+          <div>
+            <div class="step-num">Step 3</div>
+            <h3>Orchestrator</h3>
+            <p>根据 <code>allowed_output_level</code> 和 <code>executed_agents</code> 做阶段路由。</p>
+          </div>
+          <p><code>graph/workflow.py</code></p>
+        </div>
+        <div class="card flow-step">
+          <div>
+            <div class="step-num">Step 4</div>
+            <h3>Specialist Agents</h3>
+            <p>Market、Fundamental、News、Strategy、Risk 等读取证据包生成领域输出。</p>
+          </div>
+          <p><code>agents/*.py</code></p>
+        </div>
+        <div class="card flow-step">
+          <div>
+            <div class="step-num">Step 5</div>
+            <h3>Guard / Retry</h3>
+            <p>硬规则检查错标的、越权建议、未 grounded claim，并控制重试或终止。</p>
+          </div>
+          <p><code>agents/guard_agent.py</code></p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Core Components</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Role</th>
+              <th>Key State / API</th>
+              <th>Insight</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GraphState</td>
+              <td>共享状态</td>
+              <td><code>messages</code>, <code>evidence_packet</code>, <code>executed_agents</code>, <code>guard_check</code>, <code>user_profile</code></td>
+              <td>状态字段较全，但多数 agent 实际仍以 <code>messages</code> 为主要结果载体。</td>
+            </tr>
+            <tr>
+              <td>Evidence Packet</td>
+              <td>证据边界</td>
+              <td><code>facts</code>, <code>missing_fields</code>, <code>conflicts</code>, <code>evidence_score</code>, <code>allowed_output_level</code></td>
+              <td>防幻觉核心，决定哪些 agent 可以产出多强的结论。</td>
+            </tr>
+            <tr>
+              <td>Orchestrator</td>
+              <td>调度器</td>
+              <td>Deterministic stages + conditional edges</td>
+              <td>相比 LLM supervisor 更可控、可解释，适合金融分析流水线。</td>
+            </tr>
+            <tr>
+              <td>Specialist Agents</td>
+              <td>领域推理</td>
+              <td><code>create_react_agent(..., tools=[])</code></td>
+              <td>工具权限收敛，降低 agent 自行取数导致的幻觉。</td>
+            </tr>
+            <tr>
+              <td>Guard Agent</td>
+              <td>质量闸门</td>
+              <td>schema、symbol、output level、ungrounded claim checks</td>
+              <td>强规则优先，LLM 不参与核心安全判定。</td>
+            </tr>
+            <tr>
+              <td>Checkpointer</td>
+              <td>状态持久化</td>
+              <td>SQLite <code>SqliteSaver</code> / <code>InMemorySaver</code> fallback</td>
+              <td>支持基于 <code>thread_id</code> 的会话恢复和断点续跑。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. Evidence Score Model</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>Weighted Inputs</h3>
+          <div class="score-bars">
+            <div class="bar-row">
+              <span>Source diversity</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 25%"></div></div>
+              <span>25%</span>
+            </div>
+            <div class="bar-row">
+              <span>Recency</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 25%"></div></div>
+              <span>25%</span>
+            </div>
+            <div class="bar-row">
+              <span>Completeness</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 30%"></div></div>
+              <span>30%</span>
+            </div>
+            <div class="bar-row">
+              <span>Field confidence</span>
+              <div class="bar-track"><div class="bar-fill" style="width: 20%"></div></div>
+              <span>20%</span>
+            </div>
+          </div>
+          <p>来源：<code>schemas/evidence_packet.py</code> 的 <code>compute_evidence_score</code>。</p>
+        </div>
+        <div class="callout">
+          <h3>Output Level 判定逻辑</h3>
+          <p>
+            系统不是只看总分，还会检查 facts 是否为空、冷启动是否有 machine facts、critical fields 是否缺失、
+            substitute 是否可接受，以及是否存在 conflicts。最终输出等级包括
+            <code>insufficient_evidence</code>、<code>data_summary_only</code>、
+            <code>limited_analysis</code>、<code>limited_analysis_partial</code> 和
+            <code>full_analysis</code>。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>5. Output-Level Routing Matrix</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Output Level</th>
+              <th>Analysis Path</th>
+              <th>Terminal Path</th>
+              <th>Architectural Meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="tone-danger">
+              <td>insufficient_evidence</td>
+              <td>跳过分析 agent</td>
+              <td>Guard rejection</td>
+              <td>证据不足时直接熔断。</td>
+            </tr>
+            <tr class="tone-warning">
+              <td>data_summary_only</td>
+              <td>跳过分析 agent</td>
+              <td>Guard rejection</td>
+              <td>只允许数据摘要，不允许建议。</td>
+            </tr>
+            <tr>
+              <td>limited_analysis</td>
+              <td>Market + Fundamental + News → Strategy → Risk</td>
+              <td>Guard</td>
+              <td>跳过 portfolio/backtest/recommendation。</td>
+            </tr>
+            <tr>
+              <td>limited_analysis_partial</td>
+              <td>完整主线大多可运行</td>
+              <td>Recommendation + Guard</td>
+              <td>要求 <code>data_quality</code> 等额外约束。</td>
+            </tr>
+            <tr class="tone-success">
+              <td>full_analysis</td>
+              <td>专家组 → Debate → Strategy → Risk → Portfolio → Backtest</td>
+              <td>Recommendation + Guard</td>
+              <td>完整流水线。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>6. Agent Behavior Map</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>File</th>
+              <th>Primary Input</th>
+              <th>Notable Guardrail</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Market</td>
+              <td><code>market_agent.py</code></td>
+              <td>Evidence Packet 技术指标</td>
+              <td>LLM 输出太短或 NOT AVAILABLE 时，用 fallback 生成模板报告。</td>
+            </tr>
+            <tr>
+              <td>Fundamental</td>
+              <td><code>fundamental_agent.py</code></td>
+              <td>基本面 facts</td>
+              <td>关键基本面字段全缺失时直接 NOT AVAILABLE。</td>
+            </tr>
+            <tr>
+              <td>News</td>
+              <td><code>news_agent.py</code></td>
+              <td><code>news_headline</code> facts</td>
+              <td>禁止跨域总结技术面或基本面。</td>
+            </tr>
+            <tr>
+              <td>Risk</td>
+              <td><code>risk_agent.py</code></td>
+              <td>前序 messages + evidence level</td>
+              <td>JSON 输出，limited 模式强制 <code>data_quality</code> 与保守分数。</td>
+            </tr>
+            <tr>
+              <td>Backtesting</td>
+              <td><code>backtesting_agent.py</code></td>
+              <td>程序化价格序列</td>
+              <td>指标由 Python 计算，LLM 只解释固定数字。</td>
+            </tr>
+            <tr>
+              <td>Recommendation</td>
+              <td><code>recommendation_agent.py</code></td>
+              <td><code>user_profile</code> + 已产生的 messages</td>
+              <td>低证据等级下拒绝个性化推荐。</td>
+            </tr>
+            <tr>
+              <td>Guard</td>
+              <td><code>guard_agent.py</code></td>
+              <td>Evidence Packet + final/all output text</td>
+              <td>确定性检查符号错配、越权建议、未 grounded claim。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>7. Top Insights</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>Strengths</h3>
+          <p><strong>Evidence-first 架构：</strong>数据采集和事实边界集中化，agent 不直接拿工具，明显降低金融分析场景中的幻觉面。</p>
+          <p><strong>Deterministic Orchestration：</strong>路由由 output level 和 executed agents 控制，排查路径比 LLM supervisor 简单。</p>
+          <p><strong>Hard-rule Guard：</strong>Guard 不依赖 LLM 判断核心安全性，适合金融场景的可审计要求。</p>
+        </div>
+        <div class="card">
+          <h3>Risks</h3>
+          <p><strong>messages 过载：</strong>多数 agent 返回 messages，而 <code>GraphState</code> 中的结构化字段未充分使用。</p>
+          <p><strong>策略边界不完全一致：</strong>部分 prompt 禁止建议，另一些 agent 仍输出 position size、stop loss，Guard 需要继续承担协调压力。</p>
+          <p><strong>Evidence Builder 复杂度高：</strong>RAG、Fact Store、collector、fallback 和 score 逻辑集中在 <code>workflow.py</code>，后续维护成本会上升。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. Recommended Next Moves</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Priority</th>
+              <th>Move</th>
+              <th>Expected Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="tone-danger">
+              <td>High</td>
+              <td>拆分 Evidence Builder</td>
+              <td>将 RAG 匹配、Fact Store merge、collector merge、score 计算拆成独立模块并补单测。</td>
+            </tr>
+            <tr class="tone-danger">
+              <td>High</td>
+              <td>让 agent 写结构化 state 字段</td>
+              <td>例如 <code>market_data</code>、<code>risk_assessment</code>、<code>backtest_metrics</code>，减少后续 agent 从 messages 反向解析。</td>
+            </tr>
+            <tr class="tone-warning">
+              <td>Medium</td>
+              <td>统一投资建议权限模型</td>
+              <td>明确哪些 output level 允许 position sizing、stop loss、personalized action plan，避免 prompt 互相拉扯。</td>
+            </tr>
+            <tr class="tone-warning">
+              <td>Medium</td>
+              <td>增强 Guard 的引用级检查</td>
+              <td>从 final message 扩展到每个 agent 输出，记录 issue 所属 agent 与对应 field。</td>
+            </tr>
+            <tr class="tone-warning">
+              <td>Medium</td>
+              <td>为路由表做 golden tests</td>
+              <td>覆盖每个 output level、guard soft/hard failure、alert/optimization/personalized 分支。</td>
+            </tr>
+            <tr>
+              <td>Low</td>
+              <td>把 provider health 暴露到监控</td>
+              <td>registry 已有 cooldown 和 failure_count，可进入 metrics/reporting 形成数据源可靠性视图。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>9. Source Files Reviewed</h2>
+      <ul class="source-list">
+        <li><code>alphapilot/graph/workflow.py</code></li>
+        <li><code>alphapilot/graph/state.py</code></li>
+        <li><code>alphapilot/agents/guard_agent.py</code></li>
+        <li><code>alphapilot/agents/market_agent.py</code></li>
+        <li><code>alphapilot/agents/fundamental_agent.py</code></li>
+        <li><code>alphapilot/agents/news_agent.py</code></li>
+        <li><code>alphapilot/agents/risk_agent.py</code></li>
+        <li><code>alphapilot/agents/recommendation_agent.py</code></li>
+        <li><code>alphapilot/agents/backtesting_agent.py</code></li>
+        <li><code>alphapilot/schemas/evidence_packet.py</code></li>
+        <li><code>alphapilot/tools/data_collector.py</code></li>
+        <li><code>alphapilot/tools/providers/registry.py</code></li>
+        <li><code>alphapilot/db/fact_store.py</code></li>
+        <li><code>alphapilot/services/analysis_service.py</code></li>
+      </ul>
+    </section>
+
+    <footer>
+      Generated for AlphaPilot architecture review. This report is based on static code inspection and should be paired with runtime traces for latency, failure-rate, and data-quality measurements.
+    </footer>
+  </main>
+</body>
+</html>

@@ -133,7 +133,7 @@ AGENT_LLM_ROUTES = {
         "timeout": 90,
     },
     "recommendation": {
-        "profile": "deepseek_reasoner",
+        "profile": "deepseek_fast",
         "temperature": 0.15,
         "max_retries": 5,
         "timeout": 120,

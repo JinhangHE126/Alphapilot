@@ -514,7 +514,8 @@ def render_packet_for_agent(packet: EvidencePacket, language: str = "") -> str:
     lines.append("- [?] facts are speculative, not definitive.")
     lines.append("- If a data point is missing, explicitly state it is unavailable.")
     lines.append("- Do NOT generate investment recommendations when output level is data_summary_only or insufficient_evidence.")
-    lines.append("- DO NOT output any target price, price target, 目标价, 价位, or 介入点. These are never grounded in Evidence Packet facts.")
+    lines.append("- DO NOT output target price, price target, 目标价, 价位, or 介入点 in human-readable analysis text.")
+    lines.append("- If a downstream UI needs a valuation scenario, emit it only as machine-readable metadata and mark values null when evidence is insufficient.")
     lines.append("- When mentioning a numeric fact (price, PE, etc.), quote the EXACT value from the facts list. Do NOT round, approximate, or use 约/大概/approximately/roughly.")
     lines.append("- SUBSTITUTE FIELDS: 'revenue' / 'eps' are absolute values, NOT year-over-year growth rates. When revenue_growth_yoy or eps_growth_yoy is missing with a substitute, explain that trend analysis is limited to absolute values, and do NOT fabricate growth percentages.")
 

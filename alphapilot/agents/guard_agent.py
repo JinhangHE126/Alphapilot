@@ -9,6 +9,13 @@ from schemas.evidence_packet import (
 import re
 
 
+def _strip_machine_json_blocks(text: str) -> str:
+    """Ignore fenced JSON metadata blocks when checking user-visible report text."""
+    if not text:
+        return ""
+    return re.sub(r"```(?:json)?\s*[\s\S]*?\s*```", "", text).strip()
+
+
 def _detect_symbol_mismatch(packet_symbol: str, state_symbol: str, facts: list) -> list[str]:
     """检测标的错配：packet symbol 不一致 或 rag 内容引用其他股票。"""
     issues = []
@@ -77,10 +84,10 @@ def _find_ungrounded_claims(ep: EvidencePacket, output_text: str) -> list[str]:
     """
     规则型 grounding 检查：
     1) 报告提到某类关键字段，但 packet 中没有该字段 -> ungrounded
-    2) 报告含 target price/目标价等高风险结论 -> ungrounded
+    2) 人类可读报告含 target price/目标价等高风险结论 -> ungrounded
     """
     issues = []
-    text = output_text or ""
+    text = _strip_machine_json_blocks(output_text or "")
     lines = text.split("\n")
     _negation = re.compile(
         r"缺少|缺乏|缺失|无法|不提供|禁止|不允许|不得|没有|不可用|不可获取|不可计算|无意义|"
@@ -189,7 +196,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
             "buy recommendation", "sell recommendation", "strong buy",
             "target price", "price target",
         ]
-        output_lower = final_output_text.lower()
+        output_lower = _strip_machine_json_blocks(final_output_text).lower()
         for kw in prohibited_keywords:
             if kw.lower() in output_lower:
                 issues.append(

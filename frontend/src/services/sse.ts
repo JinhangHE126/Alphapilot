@@ -36,13 +36,37 @@ export type EvidencePacketData = {
   chart_data: ChartPoint[];
 };
 
+export type TargetPriceData = {
+  target_price_low: number | null;
+  target_price_mid: number | null;
+  target_price_high: number | null;
+  valuation_low?: number | null;
+  valuation_mid?: number | null;
+  valuation_high?: number | null;
+  upside_pct: number | null;
+  downside_pct: number | null;
+  consensus_summary?: string;
+  source?: string;
+};
+
+export type RiskLevelData = {
+  overall_risk_score: number;
+  volatility_risk?: string;
+  macro_risk?: string;
+  stop_loss_suggestion?: number | string;
+  position_suggestion?: string;
+  risk_reasoning?: string;
+};
+
 export type StreamEvent =
   | { event: "analysis_start"; data: { session_id: string; thread_id: string; stock_symbol: string; analysis_type: string } }
   | { event: "evidence_packet"; data: EvidencePacketData }
   | { event: "agent_start"; data: { agent: string; label: string; icon: string } }
   | { event: "agent_output"; data: { agent: string; content: string } }
   | { event: "agent_done"; data: { agent: string } }
-  | { event: "analysis_complete"; data: { final_report: string; recommendation?: string; guard_check?: GuardCheck } }
+  | { event: "analysis_complete"; data: { final_report: string; recommendation?: string; guard_check?: GuardCheck; target_price?: TargetPriceData | null; risk_level?: RiskLevelData | null } }
+  | { event: "target_price"; data: TargetPriceData }
+  | { event: "risk_level"; data: RiskLevelData }
   | { event: "error"; data: { detail: string } };
 
 function encodeBody(body: Record<string, unknown>) {

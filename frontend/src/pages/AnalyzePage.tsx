@@ -13,9 +13,10 @@ import {
 } from "../constants/agents";
 import MarkdownContent from "../components/MarkdownContent";
 import StockOverviewPanel from "../components/StockOverviewPanel";
+import ValuationSummaryCard from "../components/ValuationSummaryCard";
 import { useTranslation } from "../i18n";
 import { createSession } from "../services/api";
-import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData } from "../services/sse";
+import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, TargetPriceData, RiskLevelData } from "../services/sse";
 
 function detectLanguage(text: string): string {
   const stripped = text.replace(/\s/g, "");
@@ -144,6 +145,8 @@ export default function AnalyzePage() {
   const [error, setError] = useState("");
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [evidencePacket, setEvidencePacket] = useState<EvidencePacketData | null>(null);
+  const [targetPrice, setTargetPrice] = useState<TargetPriceData | null>(null);
+  const [riskLevel, setRiskLevel] = useState<RiskLevelData | null>(null);
   const prevDefaultPrompt = useRef(t("analyze.defaultPrompt"));
 
   useEffect(() => {
@@ -205,6 +208,8 @@ export default function AnalyzePage() {
     setRecommendation("");
     setGuardCheck(null);
     setEvidencePacket(null);
+    setTargetPrice(null);
+    setRiskLevel(null);
     try {
       const sessionId = await ensureSession();
       await streamAnalyze(
@@ -217,6 +222,12 @@ export default function AnalyzePage() {
         (evt: StreamEvent) => {
           if (evt.event === "evidence_packet") {
             setEvidencePacket(evt.data);
+          }
+          if (evt.event === "target_price") {
+            setTargetPrice(evt.data);
+          }
+          if (evt.event === "risk_level") {
+            setRiskLevel(evt.data);
           }
           if (evt.event === "agent_start") {
             setAgents((prev) =>
@@ -257,6 +268,12 @@ export default function AnalyzePage() {
               setRecommendation(evt.data.recommendation ?? "");
               if (evt.data.guard_check) {
                 setGuardCheck(evt.data.guard_check);
+              }
+              if (evt.data.target_price) {
+                setTargetPrice(evt.data.target_price);
+              }
+              if (evt.data.risk_level) {
+                setRiskLevel(evt.data.risk_level);
               }
               return prev;
             });
@@ -455,6 +472,19 @@ export default function AnalyzePage() {
               </div>
             )}
           </section>
+
+          {/* 估值与结论摘要卡：分析完成后展示核心结论 */}
+          {guardCheck && (
+            <section className="card">
+              <ValuationSummaryCard
+                evidence={evidencePacket}
+                guard={guardCheck}
+                recommendation={recommendation}
+                targetPrice={targetPrice}
+                riskLevel={riskLevel}
+              />
+            </section>
+          )}
 
           <section className="card">
             <h3 className="card-title">{t("analyze.finalReport")}</h3>

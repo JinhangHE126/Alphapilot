@@ -1,7 +1,8 @@
-from langgraph.prebuilt import create_react_agent
-from langchain_core.prompts import ChatPromptTemplate
+import json
+
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from config.llm import get_llm
-from graph.lang_labels import get_label, inject_language
+from graph.lang_labels import get_label
 
 _LANG_INSTRUCTION: dict[str, str] = {
     "zh": "你必须全程使用简体中文回复。",
@@ -11,6 +12,131 @@ _LANG_INSTRUCTION: dict[str, str] = {
 
 def _lang_instruction(language: str) -> str:
     return _LANG_INSTRUCTION.get(language, "")
+
+
+_SUMMARY_AGENT_NAMES = (
+    "market_data_expert",
+    "fundamental_expert",
+    "news_sentiment_expert",
+    "bull_researcher",
+    "bear_researcher",
+    "strategy_expert",
+    "risk_expert",
+    "portfolio_agent",
+    "backtesting_agent",
+)
+
+
+def _safe_content(message) -> str:
+    if isinstance(message, dict):
+        content = message.get("content", "")
+    else:
+        content = getattr(message, "content", "")
+    if isinstance(content, list):
+        return "\n".join(
+            item.get("text", "") if isinstance(item, dict) else str(item)
+            for item in content
+        )
+    return str(content or "")
+
+
+def _message_name(message) -> str:
+    if isinstance(message, dict):
+        return str(message.get("name") or message.get("additional_kwargs", {}).get("name") or "")
+    return str(getattr(message, "name", "") or "")
+
+
+def _clip(text: str, limit: int = 1200) -> str:
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "\n...[truncated]"
+
+
+def _render_fact_summary(ep: dict) -> str:
+    facts = ep.get("facts", []) if isinstance(ep, dict) else []
+    priority = {
+        "current_price",
+        "price_change_pct",
+        "market_cap",
+        "pe_ratio",
+        "pb_ratio",
+        "rsi_14",
+        "macd",
+        "volatility_20d_annualized",
+        "avg_volume_20d",
+        "revenue",
+        "eps",
+    }
+    ordered = sorted(
+        facts,
+        key=lambda f: 0 if isinstance(f, dict) and f.get("field") in priority else 1,
+    )
+    lines = [
+        f"Evidence Score: {ep.get('evidence_score', 0)}/100",
+        f"Output Level: {ep.get('allowed_output_level', 'unknown')}",
+        "Verified facts:",
+    ]
+    for fact in ordered[:32]:
+        if not isinstance(fact, dict):
+            continue
+        lines.append(
+            f"- {fact.get('field')}: {fact.get('value')} {fact.get('unit', '')} "
+            f"(source={fact.get('source', 'N/A')}, as_of={fact.get('as_of_date', 'N/A')})"
+        )
+    return "\n".join(lines)
+
+
+def _collect_agent_summaries(messages) -> str:
+    latest: dict[str, str] = {}
+    for message in messages or []:
+        name = _message_name(message)
+        if name in _SUMMARY_AGENT_NAMES:
+            latest[name] = _clip(_safe_content(message), 1400)
+
+    if not latest:
+        fallback_chunks = []
+        for message in reversed(messages or []):
+            role = message.get("role", "") if isinstance(message, dict) else getattr(message, "type", "")
+            if role in {"user", "human", "system"}:
+                continue
+            content = _clip(_safe_content(message), 1000)
+            if content:
+                fallback_chunks.append(content)
+            if len(fallback_chunks) >= 6:
+                break
+        if fallback_chunks:
+            return "\n\n".join(
+                f"### recent_agent_output_{i + 1}\n{content}"
+                for i, content in enumerate(reversed(fallback_chunks))
+            )
+        return "No prior agent outputs were found in the workflow messages."
+
+    chunks = []
+    for name in _SUMMARY_AGENT_NAMES:
+        content = latest.get(name)
+        if content:
+            chunks.append(f"### {name}\n{content}")
+    return "\n\n".join(chunks)
+
+
+def _fallback_json(reason: str) -> str:
+    return json.dumps({
+        "valuation_low": None,
+        "valuation_mid": None,
+        "valuation_high": None,
+        "upside_pct": None,
+        "downside_pct": None,
+        "consensus_summary": reason,
+    }, ensure_ascii=False)
+
+
+def _invoke_recommendation_model(system_prompt: str, compact_context: str) -> str:
+    response = get_llm("recommendation").invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=compact_context),
+    ])
+    return _safe_content(response)
 
 
 def recommendation_agent(state):
@@ -32,38 +158,27 @@ def recommendation_agent(state):
             if language in ("zh", "yue", "")
             else f'Output level is "{output_level}" (not full_analysis or limited_analysis_partial); personalized recommendation is withheld.'
         )
-        system_prompt = f"""
-You are Recommendation Agent.
-
-Evidence score: {ep_score}/100.
-Output level: "{output_level}" (requires "full_analysis" for personalized advice).
-
-Your ONLY task: output a concise notice that personalized recommendation cannot be generated yet.
-
-You have NO tools. Do NOT attempt to call any tool or function.
-Respond with plain text only, no tool calls, no XML tags.
-
-Output format:
-{get_label('reco_na_title', language)}
-- {reason}
-- {get_label('reco_na_action', language)}
-"""
+        fallback_json = _fallback_json(reason)
+        content = (
+            f"{get_label('reco_na_title', language)}\n"
+            f"- {reason}\n"
+            f"- {get_label('reco_na_action', language)}\n\n"
+            "```json\n"
+            f"{fallback_json}\n"
+            "```"
+        )
+        return {"messages": [AIMessage(content=content, name="recommendation_agent")]}
     elif ep_score < 70:
-        system_prompt = f"""
-You are Recommendation Agent.
-
-CRITICAL: Evidence score is {ep_score}/100 (below 70 threshold).
-
-Your ONLY task: output a concise notice that personalized recommendation cannot be generated.
-
-You have NO tools. Do NOT attempt to call any tool or function.
-Respond with plain text only, no tool calls, no XML tags.
-
-Output format:
-{get_label('reco_na_title', language)}
-- {get_label('reco_na_reason', language).format(score=ep_score, level=output_level)}
-- {get_label('reco_na_action', language)}
-"""
+        fallback_json = _fallback_json(f"Evidence score {ep_score}/100 too low for reliable recommendation.")
+        content = (
+            f"{get_label('reco_na_title', language)}\n"
+            f"- {get_label('reco_na_reason', language).format(score=ep_score, level=output_level)}\n"
+            f"- {get_label('reco_na_action', language)}\n\n"
+            "```json\n"
+            f"{fallback_json}\n"
+            "```"
+        )
+        return {"messages": [AIMessage(content=content, name="recommendation_agent")]}
     else:
         system_prompt = f"""
 You are Recommendation Agent - AlphaPilot personalized investment recommendation expert.
@@ -81,10 +196,9 @@ STRICT PROHIBITIONS:
 - If Comparison Agent did not run, do NOT create a "Comparison" analysis column.
 - If Backtesting Agent output is "NOT AVAILABLE", do NOT fabricate backtesting metrics.
 - Only use data from agents that actually produced output.
-- DO NOT output any target price, price target, 目标价, 价位, or 介入点.
+- Do NOT put target prices, price targets, 目标价, or expected-return percentages in the human-readable text.
 - DO NOT use vague approximators: 约, 左右, 大概, approximately, roughly, about.
 - Every numeric claim MUST copy the exact value from the Evidence Packet facts (with decimal).
-- DO NOT output stock ratings (买入/卖出/持有/Buy/Sell/Hold). Analyze without rating.
 - {_lang_instruction(language)}
 
 Required structured output:
@@ -94,21 +208,32 @@ Required structured output:
 - Risk warnings
 - Short-term / Medium-term / Long-term action plan
 
-You have NO tools. Do NOT attempt to call any tool. Respond with plain text only.
+After your plain-text response, append ONE machine-readable JSON block (inside ```json ... ```) containing a valuation scenario. This JSON block is UI metadata only and is not part of the report text:
+```json
+{{
+  "valuation_low": <number or null>,
+  "valuation_mid": <number or null>,
+  "valuation_high": <number or null>,
+  "upside_pct": <number or null>,
+  "downside_pct": <number or null>,
+  "consensus_summary": "<one-sentence multi-agent synthesis>"
+}}
+```
+- valuation_low/mid/high: scenario valuation range, based only on verified current_price and compact agent summaries. Set all three to null if evidence is insufficient.
+- upside_pct: (valuation_mid - current_price) / current_price * 100. Set to null if valuation_mid is null.
+- downside_pct: (current_price - valuation_low) / current_price * 100. Set to null if valuation_low is null.
+- consensus_summary: 一句话总结 Market/Fundamental/News/Bull/Bear 各 agent 的核心共识。
+
+You have NO tools. Do NOT attempt to call any tool. Respond with plain text first, then the JSON block.
 Style: Professional, cautious, data-driven, like a senior financial advisor.
 """
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("placeholder", "{messages}"),
-    ])
-
-    agent = create_react_agent(
-        model=get_llm("recommendation"),
-        tools=[],
-        prompt=prompt,
-        name="recommendation_agent"
+    compact_context = (
+        "Use only this compact context. Do not infer from omitted text.\n\n"
+        "## Evidence Packet Summary\n"
+        f"{_render_fact_summary(ep if isinstance(ep, dict) else {})}\n\n"
+        "## Prior Agent Outputs\n"
+        f"{_collect_agent_summaries(state.get('messages', []))}"
     )
-    inject_language({"messages": state.get("messages", [])}, language)
-    inject_language(state, language)
-    return agent.invoke(state)
+    content = _invoke_recommendation_model(system_prompt, compact_context)
+    return {"messages": [AIMessage(content=content, name="recommendation_agent")]}
