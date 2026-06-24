@@ -16,12 +16,10 @@ EMBEDDING_PROXY = _EMB_RAW.strip() if (_EMB_RAW and _EMB_RAW.strip()) else None
 def get_proxy_for_agent(agent: str) -> str | None:
     """根据 Agent 类型返回对应代理地址（已按方案一配置）"""
     proxies = {
-        # "market": MARKET_PROXY,
-        "market": None, # 直连
+        "market": MARKET_PROXY or LLM_PROXY,
         "news": NEWS_PROXY,
         "llm": LLM_PROXY,
-        # "fundamental": FUNDAMENTAL_PROXY or LLM_PROXY,   # ← 独立 7901
-        "fundamental": None, # 直连
+        "fundamental": FUNDAMENTAL_PROXY or LLM_PROXY,
         "strategy": REASONER_PROXY or LLM_PROXY,         # ← 独立 7900
         "risk": REASONER_PROXY or LLM_PROXY,             # ← 独立 7900
         "portfolio": REASONER_PROXY or LLM_PROXY,        # 复用推理代理
@@ -30,6 +28,8 @@ def get_proxy_for_agent(agent: str) -> str | None:
         "optimization": REASONER_PROXY or LLM_PROXY,      # 组合优化复用推理代理
         "alert": REASONER_PROXY or LLM_PROXY,              # 警报复用推理代理
         "orchestrator": REASONER_PROXY or LLM_PROXY,
+        "bull_researcher": REASONER_PROXY or LLM_PROXY,
+        "bear_researcher": REASONER_PROXY or LLM_PROXY,
         "embedding": EMBEDDING_PROXY or NEWS_PROXY or REASONER_PROXY or LLM_PROXY,
     }
     proxy = proxies.get(agent)

@@ -9,8 +9,36 @@ export type GuardCheck = {
   final_reasoning: string;
 };
 
+export type EvidenceFact = {
+  field: string;
+  value: number | string;
+  unit: string;
+  period: string;
+  source: string;
+  as_of_date?: string;
+  confidence?: number;
+};
+
+export type ChartPoint = {
+  t: string;
+  o?: number;
+  h?: number;
+  l?: number;
+  c: number;
+  v?: number;
+};
+
+export type EvidencePacketData = {
+  symbol: string;
+  facts: EvidenceFact[];
+  evidence_score: number;
+  allowed_output_level: string;
+  chart_data: ChartPoint[];
+};
+
 export type StreamEvent =
   | { event: "analysis_start"; data: { session_id: string; thread_id: string; stock_symbol: string; analysis_type: string } }
+  | { event: "evidence_packet"; data: EvidencePacketData }
   | { event: "agent_start"; data: { agent: string; label: string; icon: string } }
   | { event: "agent_output"; data: { agent: string; content: string } }
   | { event: "agent_done"; data: { agent: string } }

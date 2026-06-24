@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import time
+import os
 from datetime import date
 from typing import Optional
+from contextlib import contextmanager
 
 from tools.news_tools import _fetch_news_list, _extract_news_item
 from tools.technical_indicators import compute_kdj, compute_bollinger
+from config.proxy import get_proxy_for_agent
 
 COLLECTOR_TIMEOUT = 15
 
@@ -16,6 +19,15 @@ _SUPPLEMENT_FIELDS = frozenset({
     "eps_growth_yoy",
     "news_headline",
 })
+
+_PROXY_ENV_KEYS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+)
 
 
 def _collect_fields(results: dict, *categories: str) -> set[str]:
@@ -68,6 +80,59 @@ def _currency_for(symbol: str) -> str:
     if upper.endswith(".L"):
         return "GBP"
     return "USD"
+
+
+@contextmanager
+def _temporary_proxy_env(proxy: str | None):
+    snapshot = {k: os.environ.get(k) for k in _PROXY_ENV_KEYS}
+    try:
+        if proxy:
+            for k in _PROXY_ENV_KEYS:
+                os.environ[k] = proxy
+        yield
+    finally:
+        for k, v in snapshot.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def _to_float(value) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_ticker_payload(symbol: str) -> tuple[dict, dict]:
+    import yfinance as yf
+
+    ticker = yf.Ticker(symbol)
+    info = ticker.info or {}
+    try:
+        fast_info = dict(ticker.fast_info or {})
+    except Exception:
+        fast_info = {}
+
+    # Retry with configured fundamental proxy when key fields are missing.
+    if info.get("marketCap") is None and info.get("trailingPE") is None:
+        proxy = get_proxy_for_agent("fundamental")
+        if proxy:
+            with _temporary_proxy_env(proxy):
+                ticker2 = yf.Ticker(symbol)
+                info2 = ticker2.info or {}
+                if info2:
+                    info = info2
+                try:
+                    fast2 = dict(ticker2.fast_info or {})
+                    if fast2:
+                        fast_info = fast2
+                except Exception:
+                    pass
+    return info, fast_info
 
 
 def collect_market_facts(symbol: str) -> list[dict]:
@@ -301,9 +366,7 @@ def collect_market_facts(symbol: str) -> list[dict]:
 def collect_fundamental_facts(symbol: str) -> list[dict]:
     today = date.today().isoformat()
     try:
-        import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        info = ticker.info or {}
+        info, fast_info = _safe_ticker_payload(symbol)
     except Exception:
         return []
 
@@ -352,8 +415,33 @@ def collect_fundamental_facts(symbol: str) -> list[dict]:
                 "confidence_tier": "machine",
             })
 
-    _add("market_cap", info.get("marketCap"), _currency_for(symbol))
-    _add_ratio("pe_ratio", info.get("trailingPE"))
+    market_cap = _to_float(info.get("marketCap"))
+    if market_cap is None:
+        market_cap = _to_float(fast_info.get("market_cap"))
+    if market_cap is None:
+        shares = _to_float(info.get("sharesOutstanding")) or _to_float(fast_info.get("shares"))
+        px = (
+            _to_float(info.get("currentPrice"))
+            or _to_float(info.get("regularMarketPrice"))
+            or _to_float(fast_info.get("last_price"))
+        )
+        if shares and px:
+            market_cap = shares * px
+    _add("market_cap", market_cap, _currency_for(symbol))
+
+    pe_ratio = _to_float(info.get("trailingPE"))
+    if pe_ratio is None:
+        pe_ratio = _to_float(fast_info.get("trailing_pe"))
+    if pe_ratio is None:
+        trailing_eps = _to_float(info.get("trailingEps"))
+        px = (
+            _to_float(info.get("currentPrice"))
+            or _to_float(info.get("regularMarketPrice"))
+            or _to_float(fast_info.get("last_price"))
+        )
+        if trailing_eps and px and trailing_eps != 0:
+            pe_ratio = px / trailing_eps
+    _add_ratio("pe_ratio", pe_ratio)
     _add_ratio("forward_pe", info.get("forwardPE"))
     _add_ratio("pb_ratio", info.get("priceToBook"))
     _add("dividend_yield", info.get("dividendYield"), "percent")

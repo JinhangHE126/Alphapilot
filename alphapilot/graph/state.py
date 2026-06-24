@@ -15,6 +15,7 @@ class GraphState(TypedDict, total=False):
     evidence_packet: Optional[dict]
     cold_start: bool
     ingestion_result: dict
+    chart_data: list[dict]
 
     # Orchestrator / 工作流控制
     next: str

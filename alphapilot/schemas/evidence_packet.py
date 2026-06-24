@@ -8,12 +8,26 @@ from pydantic import BaseModel, Field
 
 
 class ConfidenceTier(str, Enum):
+    """
+    置信度等级枚举。
+    1. MACHINE：机器级置信度
+    2. LLM_EXTRACTED：LLM 提取的置信度
+    3. LLM_INFERRED：LLM 推理的置信度
+    """
     MACHINE = "machine"
     LLM_EXTRACTED = "llm_extracted"
     LLM_INFERRED = "llm_inferred"
 
 
 class OutputLevel(str, Enum):
+    """
+    输出等级枚举。
+    1. FULL_ANALYSIS：完整分析
+    2. LIMITED_ANALYSIS_PARTIAL：部分分析（包含缺失字段）
+    3. LIMITED_ANALYSIS：部分分析（不包含缺失字段）
+    4. DATA_SUMMARY_ONLY：仅返回数据摘要
+    5. INSUFFICIENT_EVIDENCE：证据不足
+    """
     FULL_ANALYSIS = "full_analysis"
     LIMITED_ANALYSIS_PARTIAL = "limited_analysis_partial"
     LIMITED_ANALYSIS = "limited_analysis"
@@ -22,6 +36,14 @@ class OutputLevel(str, Enum):
 
 
 class Fact(BaseModel):
+    """
+    事实数据模型。
+    1. field：标准化字段名，枚举约束
+    2. value：原始值，不应让 LLM 自行补全
+    3. unit：单位，如 USD、HKD、percent、shares、ratio 等
+    4. period：时间周期，如 latest、FY2025、Q1_2026、TTM 等
+    5. source：来源，枚举值，不允许空来源
+    """
     field: str = Field(description="标准化字段名，枚举约束")
     value: float | str = Field(description="原始值，不应让 LLM 自行补全")
     unit: str = Field(description="USD、HKD、percent、shares、ratio 等")
@@ -34,12 +56,25 @@ class Fact(BaseModel):
 
 
 class MissingField(BaseModel):
+    """
+    缺失字段模型。
+    1. field：缺失字段名，枚举约束
+    2. reason：缺失原因，如 "数据缺失"、"字段未采集"
+    3. substitute：替代字段名，如 "current_price"、"revenue"
+    """
     field: str
     reason: str
     substitute: Optional[str] = None
 
 
 class Conflict(BaseModel):
+    """
+    冲突模型。
+    1. field：冲突字段名，枚举约束
+    2. values：冲突值列表
+    3. sources：冲突来源列表
+    4. resolution：冲突解决状态，如 "unresolved"、"resolved"
+    """
     field: str
     values: list = Field(default_factory=list)
     sources: list = Field(default_factory=list)
@@ -47,6 +82,14 @@ class Conflict(BaseModel):
 
 
 class Coverage(BaseModel):
+    """
+    数据覆盖模型。
+    1. rag_context：RAG 上下文，如 "公司介绍"、"行业分析"
+    2. market_data：市场数据，如 "股票价格"、"股票成交量"
+    3. fundamental_data：基本面数据，如 "EPS"、"ROE"
+    4. news_data：新闻数据，如 "新闻标题"、"新闻内容"
+    5. filings：文件数据，如 "公司报告"、"公司公告"
+    """
     rag_context: str = "missing"
     market_data: str = "missing"
     fundamental_data: str = "missing"
@@ -55,6 +98,19 @@ class Coverage(BaseModel):
 
 
 class EvidencePacket(BaseModel):
+    """
+    证据包模型。
+    1. symbol：股票代码，如 "AAPL"
+    2. company_name：公司名称，如 "Apple Inc."
+    3. generated_at：生成时间，如 "2025-01-01 12:00:00"
+    4. as_of_date：数据对应日期，如 "2025-01-01"
+    5. request_type：请求类型，如 "comprehensive_analysis"
+    6. is_cold_start：是否冷冷启动，如 False
+    7. coverage：数据覆盖模型
+    8. facts：事实数据列表
+    9. missing_fields：缺失字段列表
+    10. conflicts：冲突列表
+    """
     symbol: str
     company_name: str = ""
     generated_at: str = ""
@@ -72,6 +128,13 @@ class EvidencePacket(BaseModel):
 
 @dataclass
 class GuardResult:
+    """
+    守卫结果模型。
+    1. allowed_output_level：允许的输出等级
+    2. reason：拒绝原因
+    3. evidence_score：证据分数
+    4. evidence_score_breakdown：证据分数分解
+    """
     allowed_output_level: OutputLevel
     reason: str
     evidence_score: int
@@ -128,6 +191,12 @@ _TIER_WEIGHT = {
 
 
 def compute_evidence_score(packet: EvidencePacket) -> EvidencePacket:
+    """
+    计算证据分数。
+    1. 从 Evidence Packet 中获取事实
+    2. 计算证据分数
+    3. 返回 Evidence Packet
+    """
     facts = packet.facts
     request_type = packet.request_type
     expected_sources = _REQUEST_SOURCE_EXPECTATIONS.get(request_type, 2)
@@ -196,6 +265,12 @@ def compute_evidence_score(packet: EvidencePacket) -> EvidencePacket:
 
 
 def determine_output_level(packet: EvidencePacket) -> GuardResult:
+    """
+    确定输出等级。
+    1. 从 Evidence Packet 中获取证据分数
+    2. 根据证据分数确定输出等级
+    3. 返回 GuardResult
+    """
 
     if not packet.facts:
         return GuardResult(
@@ -387,6 +462,18 @@ def _language_instruction(language: str) -> str:
 
 
 def render_packet_for_agent(packet: EvidencePacket, language: str = "") -> str:
+    """
+    渲染 Evidence Packet 为代理输入格式。
+    1. 从 Evidence Packet 中获取数据
+    2. 根据输出等级和语言要求渲染代理输入格式
+    3. 返回渲染输入
+    """
+    """
+    为 Agent 渲染 Evidence Packet。
+    1. 从 Evidence Packet 中获取 GuardResult
+    2. 构建渲染字符串
+    3. 返回渲染字符串
+    """
     guard_result = determine_output_level(packet)
 
     lines = [

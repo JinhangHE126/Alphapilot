@@ -102,6 +102,15 @@ def _debate_continue(state: GraphState) -> str:
 
 
 def _build_debate_subgraph() -> StateGraph:
+    """
+    构建 Bull vs Bear Debate Subgraph。
+    1. Bull 研究员
+    2. Bear 研究员
+    3. 守卫代理
+    4. 推荐代理
+    5. 脚本优化代理
+    6. 警告代理
+    """
     debate = StateGraph(GraphState)
     debate.add_node("bull_researcher", bull_researcher)
     debate.add_node("bear_researcher", bear_researcher)
@@ -147,6 +156,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
     today = date.today().isoformat()
     query = f"{symbol} {user_instruction[:200]}"
 
+# find the top 10 relevant results and use the top 5 with the highest similarity
     rag_results = retriever.retrieve_with_scores(query, k=10)
 
     matched_rag = [
@@ -158,28 +168,35 @@ def evidence_packet_builder(state: GraphState) -> dict:
     if mismatched_count > 0:
         print(f"   ⚠️ {mismatched_count} RAG results filtered out (symbol mismatch with {symbol})")
 
+
+
     is_cold_start = False
     rag_facts = []
     fact_store_hit = False
-
+# check fact store coverage for current_price
     from db.fact_store import get_fact_store
     store = get_fact_store()
     if store.has_coverage(symbol, ["current_price"]):
         stored_active = store.get_active_facts(symbol)
         stored_fields = {r["field"] for r in stored_active}
         has_fundamentals = bool(stored_fields & _FUNDAMENTAL_STORE_FIELDS)
+        # check if the fact store has enough data and decide to use it
+        # if the fact store has at least 3 facts and all required fields, use it
         if len(stored_active) >= 3 and has_fundamentals:
             fact_store_hit = True
             is_cold_start = False
             print(
-                f"   📦 Fact Store hit: {len(stored_active)} active facts for {symbol} "
+                f"    Fact Store hit: {len(stored_active)} active facts for {symbol} "
                 f"(market+fundamental cache), refreshing live data"
             )
         elif len(stored_active) >= 3:
             print(
-                f"   📦 Fact Store partial: {len(stored_active)} facts for {symbol} "
+                f"    Fact Store partial: {len(stored_active)} facts for {symbol} "
                 f"but missing fundamentals — will fetch live data"
             )
+    # if fact store is not hit, check RAG results
+    # if RAG results are not enough, use live data
+    # if RAG results are enough, use fact store
     if not fact_store_hit and matched_rag:
         top_similarity = matched_rag[0].similarity
         has_metadata = any(
@@ -189,7 +206,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
             is_cold_start = True
     elif not fact_store_hit:
         is_cold_start = True
-
+# if RAG results are enough, use fact store
     if not is_cold_start:
         for r in matched_rag[:5]:
             rag_facts.append({
@@ -203,7 +220,8 @@ def evidence_packet_builder(state: GraphState) -> dict:
                 "confidence": min(r.similarity, 0.95),
                 "confidence_tier": "llm_extracted",
             })
-
+# if fact store is hit, use fact store
+# if fact store is not hit, use RAG results
     stored_fact_dicts: list[dict] = []
     if fact_store_hit or store.has_coverage(symbol, ["current_price"]):
         stored_facts = store.get_active_facts(symbol)
@@ -233,6 +251,9 @@ def evidence_packet_builder(state: GraphState) -> dict:
     filings_raw = collector_results.get("filings", [])
     hkex_raw = collector_results.get("hkex", [])
 
+# fill in facts from fact store
+# if fact store is hit, use fact store
+# if fact store is not hit, use RAG results
     if stored_fact_dicts:
         market_facts_raw = _fill_category_from_store(
             market_facts_raw, stored_fact_dicts, _MARKET_STORE_FIELDS,
@@ -399,11 +420,61 @@ def evidence_packet_builder(state: GraphState) -> dict:
             f"skipped={ingestion_result.get('skipped', 0)}"
         )
 
+    # ── 获取 OHLCV 价格走势数据用于前端图表（K线 + 成交量）──
+    chart_data: list[dict] = []
+    try:
+        # Use cached multi-provider fetch path so chart data is consistent with analysis path.
+        from tools.data_collector import fetch_price_history
+        df_chart, _ = fetch_price_history(symbol)
+        if df_chart is not None and not df_chart.empty:
+            import pandas as pd
+
+            def _series(col_name: str):
+                if col_name not in df_chart.columns:
+                    return None
+                col = df_chart[col_name]
+                if isinstance(col, pd.DataFrame):
+                    col = col.iloc[:, 0]
+                return pd.to_numeric(col, errors="coerce")
+
+            open_col = _series("Open")
+            high_col = _series("High")
+            low_col = _series("Low")
+            close_col = _series("Close")
+            volume_col = _series("Volume")
+
+            if close_col is not None:
+                frame = pd.DataFrame({
+                    "o": open_col if open_col is not None else close_col,
+                    "h": high_col if high_col is not None else close_col,
+                    "l": low_col if low_col is not None else close_col,
+                    "c": close_col,
+                    "v": volume_col if volume_col is not None else 0,
+                }).dropna(subset=["c"])
+
+                frame = frame.tail(120)
+                chart_data = [
+                    {
+                        "t": str(idx.date()) if hasattr(idx, "date") else str(idx),
+                        "o": round(float(row["o"]), 2),
+                        "h": round(float(row["h"]), 2),
+                        "l": round(float(row["l"]), 2),
+                        "c": round(float(row["c"]), 2),
+                        "v": int(float(row["v"])) if pd.notna(row["v"]) else 0,
+                    }
+                    for idx, row in frame.iterrows()
+                ]
+                if chart_data:
+                    print(f"   📈 Chart data prepared for {symbol}: {len(chart_data)} points")
+    except Exception:
+        pass
+
     return {
         "evidence_packet": packet.model_dump(mode="json"),
         "cold_start": is_cold_start,
         "ingestion_result": ingestion_result,
         "messages": [{"role": "system", "content": rendered}],
+        "chart_data": chart_data,
     }
 
 
@@ -503,7 +574,7 @@ def orchestrator_node(state: GraphState) -> dict:
                 f"Guard hard-failure (evidence-level, retry {guard_retry}/{GUARD_MAX_RETRIES}). "
                 f"Re-running agents cannot fix this. Ending pipeline."
             )
-            print(f"\n🎛️ Orchestrator Decision:")
+            print(f"\n Orchestrator Decision:")
             print(f"   Executed: {executed}")
             print(f"   Next: []")
             print(f"   Reasoning: {reasoning}\n")
@@ -562,14 +633,19 @@ def orchestrator_node(state: GraphState) -> dict:
 
         executed_set = set(executed)
         next_agents = []
+        # - 遍历 STAGES，找到 第一个还有未执行 agent 的 stage
+        #  - 如果找到，就执行这个 stage 的 agent，然后跳出循环
         for stage in STAGES:
             missing = [agent for agent in stage if agent not in executed_set]
             if missing:
                 next_agents = missing
                 break
-
+# 如果所有 stage 都已完成，检查守卫代理是否被调用
+# 如果守卫代理未被调用，说明所有分析都已完成
+# 如果守卫代理被调用，说明有错误的分析结果
         if not next_agents:
             if allowed_level in ("insufficient_evidence", "data_summary_only"):
+                #  证据不足模式，直接路由到守卫代理
                 if "guard_agent" not in executed_set:
                     next_agents = ["guard_agent"]
                     reasoning = (
@@ -579,6 +655,8 @@ def orchestrator_node(state: GraphState) -> dict:
                 else:
                     reasoning = "Evidence insufficient, guard passed. Pipeline complete."
             elif allowed_level == "limited_analysis":
+                #  限制分析模式，直接路由到守卫代理
+                #  如果守卫代理未被调用，说明所有分析都已完成
                 if "guard_agent" not in executed_set:
                     next_agents = ["guard_agent"]
                     reasoning = (
@@ -588,6 +666,8 @@ def orchestrator_node(state: GraphState) -> dict:
                 else:
                     reasoning = "Limited analysis + guard complete. Pipeline done."
             else:
+                #  完整分析模式，直接路由到守卫代理
+                #  如果守卫代理未被调用，说明所有分析都已完成
                 if "recommendation_agent" not in executed_set:
                     next_agents = ["recommendation_agent"]
                     reasoning = "Full analysis done. Routing to recommendation for personalized advice."

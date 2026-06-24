@@ -44,6 +44,7 @@ Strict rules:
 
 
 def _build_market_fallback(ep: dict, language: str = "") -> str:
+
     facts = {f["field"]: f for f in ep.get("facts", [])}
     lang = language or "en"
 

@@ -12,9 +12,10 @@ import {
   type WorkflowNodeId,
 } from "../constants/agents";
 import MarkdownContent from "../components/MarkdownContent";
+import StockOverviewPanel from "../components/StockOverviewPanel";
 import { useTranslation } from "../i18n";
 import { createSession } from "../services/api";
-import { streamAnalyze, StreamEvent, GuardCheck } from "../services/sse";
+import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData } from "../services/sse";
 
 function detectLanguage(text: string): string {
   const stripped = text.replace(/\s/g, "");
@@ -142,6 +143,7 @@ export default function AnalyzePage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [evidencePacket, setEvidencePacket] = useState<EvidencePacketData | null>(null);
   const prevDefaultPrompt = useRef(t("analyze.defaultPrompt"));
 
   useEffect(() => {
@@ -202,16 +204,20 @@ export default function AnalyzePage() {
     setReport("");
     setRecommendation("");
     setGuardCheck(null);
+    setEvidencePacket(null);
     try {
       const sessionId = await ensureSession();
       await streamAnalyze(
         {
           session_id: sessionId,
           message,
-          stock_symbol: stockSymbol,
+          stock_symbol: stockSymbol.trim().toUpperCase(),
           language: detectLanguage(message),
         },
         (evt: StreamEvent) => {
+          if (evt.event === "evidence_packet") {
+            setEvidencePacket(evt.data);
+          }
           if (evt.event === "agent_start") {
             setAgents((prev) =>
               upsertAgent(prev, evt.data.agent, {
@@ -354,6 +360,16 @@ export default function AnalyzePage() {
         </div>
 
         <div className="analyze-main">
+          {/* 股票概览面板：放在主内容区顶部 */}
+          {(evidencePacket || running) && (
+            <section className="card">
+              <StockOverviewPanel
+                data={evidencePacket}
+                stockSymbol={stockSymbol.trim().toUpperCase()}
+              />
+            </section>
+          )}
+
           <section className="card">
             <div className="collab-header">
               <h3 className="card-title">{t("analyze.agentCollab")}</h3>

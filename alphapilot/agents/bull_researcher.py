@@ -1,6 +1,7 @@
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import END
 from config.llm import get_llm
+from graph.state import GraphState
 from graph.lang_labels import inject_language
 
 model = get_llm("bull_researcher")
@@ -38,7 +39,13 @@ OUTPUT: Plain text bull argument with section headers. No JSON. No tool calls.""
 )
 
 
-def bull_researcher(state):
+def bull_researcher(state: GraphState) -> dict:
+    """
+    Bull 研究员。
+    1. 从 Orchestrator 路由的 Evidence Packet 中获取数据
+    2. 调用 Bull 研究员模型，生成 Bull 论文
+    3. 返回 Bull 论文
+    """
     ep = state.get("evidence_packet", {}) or {}
     output_level = ep.get("allowed_output_level", "")
 

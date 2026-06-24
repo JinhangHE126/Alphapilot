@@ -1,6 +1,7 @@
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import END
 from config.llm import get_llm
+from graph.state import GraphState
 from graph.lang_labels import inject_language
 
 model = get_llm("bear_researcher")
@@ -38,7 +39,13 @@ OUTPUT: Plain text bear argument with section headers. No JSON. No tool calls.""
 )
 
 
-def bear_researcher(state):
+def bear_researcher(state: GraphState) -> dict:
+    """
+    Bear 研究员。
+    1. 从 Orchestrator 路由的 Evidence Packet 中获取数据
+    2. 调用 Bear 研究员模型，生成 Bear 论文
+    3. 返回 Bear 论文
+    """
     ep = state.get("evidence_packet", {}) or {}
     output_level = ep.get("allowed_output_level", "")
 

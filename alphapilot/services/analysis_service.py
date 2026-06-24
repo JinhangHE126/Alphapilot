@@ -88,16 +88,21 @@ def _extract_text(update: dict) -> str:
     return ""
 
 
+def _normalize_symbol(symbol: str | None) -> str:
+    return (symbol or "").strip().upper()
+
+
 def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, thread_id: str, language: str | None = None) -> dict[str, Any]:
     """Run LangGraph workflow synchronously and return final results."""
+    normalized_symbol = _normalize_symbol(stock_symbol)
     final_report = ""
     recommendation = None
 
     lang_instruction = _language_instruction(language)
-    enriched_message = f"[股票代码: {stock_symbol}] {user_message}{lang_instruction}"
+    enriched_message = f"[股票代码: {normalized_symbol}] {user_message}{lang_instruction}"
 
     initial_state = {
-        "stock_symbol": stock_symbol,
+        "stock_symbol": normalized_symbol,
         "language": language or "",
         "messages": [{"role": "user", "content": enriched_message}],
         "user_profile": load_user_profile(user_id),
@@ -175,16 +180,17 @@ def stream_analysis_events(
     session_id: str,
     language: str | None = None,
 ) -> Generator[str, None, dict[str, Any]]:
+    normalized_symbol = _normalize_symbol(stock_symbol)
     final_report = ""
     recommendation = None
     guard_check = None
     output_level = ""
 
     lang_instruction = _language_instruction(language)
-    enriched_message = f"[股票代码: {stock_symbol}] {user_message}{lang_instruction}"
+    enriched_message = f"[股票代码: {normalized_symbol}] {user_message}{lang_instruction}"
 
     initial_state = {
-        "stock_symbol": stock_symbol,
+        "stock_symbol": normalized_symbol,
         "language": language or "",
         "messages": [{"role": "user", "content": enriched_message}],
         "user_profile": load_user_profile(user_id),
@@ -197,7 +203,7 @@ def stream_analysis_events(
     yield _sse("analysis_start", {
         "session_id": session_id,
         "thread_id": thread_id,
-        "stock_symbol": stock_symbol,
+        "stock_symbol": normalized_symbol,
         "analysis_type": "analyze",
     })
 
@@ -216,6 +222,33 @@ def stream_analysis_events(
                     "label": label,
                     "icon": icon,
                 })
+
+            # 当 evidence_packet_builder 完成时，向前端发射 evidence_packet 事件
+            if node_name == "evidence_packet_builder" and "evidence_packet" in update:
+                ep = update["evidence_packet"]
+                chart = update.get("chart_data", [])
+                yield _sse("evidence_packet", {
+                    "symbol": ep.get("symbol", ""),
+                    "facts": ep.get("facts", []),
+                    "evidence_score": ep.get("evidence_score", 0),
+                    "allowed_output_level": ep.get("allowed_output_level", ""),
+                    "chart_data": chart,
+                })
+
+            # 当 orchestrator 决定好下一批要运行的 agent 时，立即发出 agent_start，
+            # 让前端在 agent 执行期间（可能耗时 30-120s）就显示 "运行中" 状态
+            if node_name == "orchestrator":
+                next_agents = update.get("next")
+                if isinstance(next_agents, list):
+                    for agent_id in next_agents:
+                        if agent_id not in emitted_agents:
+                            emitted_agents.add(agent_id)
+                            meta = AGENT_LABELS.get(agent_id, {"label": agent_id, "icon": "\U0001f916"})
+                            yield _sse("agent_start", {
+                                "agent": agent_id,
+                                "label": meta["label"],
+                                "icon": meta["icon"],
+                            })
 
             content = _extract_text(update)
             is_guard = node_name in ("guard_agent", "guard")
