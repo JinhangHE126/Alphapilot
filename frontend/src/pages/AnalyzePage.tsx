@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, Check, ChevronRight, FileText, X, Zap } from "lucide-react";
+import { Activity, ArrowRight, Check, ChevronRight, Download, FileDown, FileText, X, Zap } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AGENT_VISUAL,
@@ -16,10 +16,11 @@ import StockOverviewPanel from "../components/StockOverviewPanel";
 import ValuationSummaryCard from "../components/ValuationSummaryCard";
 import FinancialTrendsPanel from "../components/FinancialTrendsPanel";
 import RiskGauge from "../components/RiskGauge";
+import { generateMarkdownReport, downloadMarkdownReport, downloadPDFReport } from "../services/reportExporter";
 import DebatePanel from "../components/DebatePanel";
 import { useTranslation } from "../i18n";
 import { createSession } from "../services/api";
-import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, TargetPriceData, RiskLevelData } from "../services/sse";
+import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, TargetPriceData, RiskLevelData, parseRiskLevelFromContent } from "../services/sse";
 
 function detectLanguage(text: string): string {
   const stripped = text.replace(/\s/g, "");
@@ -303,10 +304,13 @@ export default function AnalyzePage() {
             setAgents((prev) =>
               upsertAgent(prev, evt.data.agent, {
                 status: "running",
-                content:
-                  (prev.find((a) => a.agent === evt.data.agent)?.content ?? "") + evt.data.content,
+                content: evt.data.content,
               }),
             );
+            if (evt.data.agent === "risk_expert") {
+              const parsed = parseRiskLevelFromContent(evt.data.content);
+              if (parsed) setRiskLevel(parsed);
+            }
           }
           if (evt.event === "agent_done") {
             setAgents((prev) =>
@@ -619,7 +623,52 @@ export default function AnalyzePage() {
           )}
 
           <section className="card">
-            <h3 className="card-title">{t("analyze.finalReport")}</h3>
+            <div className="card-header-row">
+              <h3 className="card-title">{t("analyze.finalReport")}</h3>
+              {report && !running && (
+                <div className="btn-export-group">
+                  <button
+                    className="btn-export"
+                    onClick={() => {
+                      const md = generateMarkdownReport({
+                        stockSymbol,
+                        finalReport: report,
+                        recommendation,
+                        evidence: evidencePacket,
+                        guard: guardCheck,
+                        riskLevel,
+                        targetPrice,
+                        agents,
+                      });
+                      downloadMarkdownReport(md, stockSymbol);
+                    }}
+                    title="导出 Markdown 报告"
+                  >
+                    <FileDown size={14} />
+                    <span>.md</span>
+                  </button>
+                  <button
+                    className="btn-export"
+                    onClick={async () => {
+                      await downloadPDFReport({
+                        stockSymbol,
+                        finalReport: report,
+                        recommendation,
+                        evidence: evidencePacket,
+                        guard: guardCheck,
+                        riskLevel,
+                        targetPrice,
+                        agents,
+                      });
+                    }}
+                    title="导出 PDF 报告"
+                  >
+                    <Download size={14} />
+                    <span>PDF</span>
+                  </button>
+                </div>
+              )}
+            </div>
             {!report && !running ? (
               <div className="analyze-empty">
                 <FileText size={36} className="analyze-empty-icon" />

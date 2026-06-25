@@ -23,6 +23,9 @@ AGENT_LABELS: dict[str, dict[str, str]] = {
     "portfolio_optimization_agent": {"label": "Portfolio Optimization", "icon": "\U0001f4a0"},
     "supervisor": {"label": "Supervisor", "icon": "\U0001f9e0"},
     "guard_agent": {"label": "Guard", "icon": "\U0001f6e1\ufe0f"},
+    "debate_stage": {"label": "Debate", "icon": "\u2694\ufe0f"},
+    "bull_researcher": {"label": "Bull Researcher", "icon": "\U0001f4c8"},
+    "bear_researcher": {"label": "Bear Researcher", "icon": "\U0001f4c9"},
 }
 
 REPORT_EXCLUDE_NODES = frozenset({
@@ -118,6 +121,76 @@ def _to_float_or_none(value: Any) -> float | None:
         return None
 
 
+def _normalize_risk_level_payload(payload: dict) -> dict | None:
+    """Normalize risk agent JSON into a stable SSE payload."""
+    if not isinstance(payload, dict):
+        return None
+
+    overall = payload.get("overall_risk_score")
+    if overall is None:
+        overall = payload.get("risk_score")
+    if overall is None:
+        return None
+
+    try:
+        score = max(0, min(100, int(round(float(overall)))))
+    except (TypeError, ValueError):
+        return None
+
+    if score == 0 and str(payload.get("volatility_risk", "")).upper() == "N/A":
+        return None
+
+    key_risks = payload.get("key_risks", [])
+    if not isinstance(key_risks, list):
+        key_risks = []
+
+    return {
+        "overall_risk_score": score,
+        "volatility_risk": str(payload.get("volatility_risk", "")).strip() or None,
+        "macro_risk": str(payload.get("macro_risk", "")).strip() or None,
+        "stop_loss_suggestion": payload.get("stop_loss_suggestion"),
+        "position_suggestion": str(payload.get("position_suggestion", "")).strip() or None,
+        "risk_reasoning": str(payload.get("risk_reasoning", "")).strip() or None,
+        "key_risks": [str(r).strip() for r in key_risks if str(r).strip()],
+    }
+
+
+def _extract_risk_level(update: dict) -> dict | None:
+    """Parse risk_expert output; prefer raw JSON over markdown conversion."""
+    messages = update.get("messages")
+    if not messages:
+        return None
+    text = _safe_text(messages[-1]).strip()
+    if not text:
+        return None
+
+    if text.startswith("{"):
+        try:
+            payload = json.loads(text)
+            if isinstance(payload, dict):
+                normalized = _normalize_risk_level_payload(payload)
+                if normalized:
+                    return normalized
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    payload = _extract_json_block(text)
+    if isinstance(payload, dict):
+        return _normalize_risk_level_payload(payload)
+    return None
+
+
+def _extract_risk_raw_content(update: dict) -> str:
+    """Preserve risk agent JSON for agent detail panel."""
+    messages = update.get("messages")
+    if not messages:
+        return _extract_text(update)
+    text = _safe_text(messages[-1]).strip()
+    if text.startswith("{"):
+        return text
+    return _extract_text(update)
+
+
 def _coerce_valuation_scenario(raw: dict | None) -> dict | None:
     """Normalize valuation JSON from Recommendation Agent into a stable SSE payload."""
     if not isinstance(raw, dict):
@@ -143,12 +216,27 @@ def _coerce_valuation_scenario(raw: dict | None) -> dict | None:
     }
 
 
-def _extract_text(update: dict) -> str:
+def _extract_text(update: dict, agent_name: str = "") -> str:
     if update.get("final_report"):
         return str(update["final_report"])
     messages = update.get("messages")
     if messages and isinstance(messages, list) and len(messages) > 0:
-        text = _safe_text(messages[-1])
+        # 按 agent name 过滤消息，避免跨智能体内容污染
+        target_msg = None
+        if agent_name:
+            for m in reversed(messages):
+                msg_name = ""
+                if hasattr(m, "name"):
+                    msg_name = (getattr(m, "name") or "").strip()
+                elif isinstance(m, dict):
+                    msg_name = str(m.get("name", "") or m.get("additional_kwargs", {}).get("name", "")).strip()
+                if msg_name == agent_name:
+                    target_msg = m
+                    break
+        if target_msg is None:
+            target_msg = messages[-1]
+
+        text = _safe_text(target_msg)
         stripped = text.strip()
         if stripped.startswith("{") and stripped.endswith("}"):
             return _format_agent_content(stripped)
@@ -156,6 +244,124 @@ def _extract_text(update: dict) -> str:
             return _format_agent_content(stripped)
         return text
     return ""
+
+
+def _serialize_debate_side(update: dict, side: str) -> str:
+    """Build SSE payload for bull/bear from debate subgraph state."""
+    data_key = f"{side}_debate_data"
+    arg_key = f"{side}_argument"
+
+    debate_data = update.get(data_key)
+    if isinstance(debate_data, dict):
+        claims = debate_data.get("claims")
+        if isinstance(claims, list) and claims:
+            return json.dumps(debate_data, ensure_ascii=False)
+        summary = debate_data.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return json.dumps(debate_data, ensure_ascii=False)
+
+    argument = update.get(arg_key)
+    if isinstance(argument, str) and argument.strip():
+        return argument.strip()
+
+    messages = update.get("messages")
+    if messages and isinstance(messages, list):
+        raw = _safe_text(messages[-1]).strip()
+        if raw:
+            return raw
+    return ""
+
+
+def _format_strategy_markdown(raw_json: str) -> str:
+    """Convert strategy JSON into a well-structured Markdown report for frontend display."""
+    import json as _json
+    try:
+        obj = _json.loads(raw_json)
+    except (_json.JSONDecodeError, ValueError):
+        return raw_json  # not valid JSON, return as-is
+
+    rec = obj.get("recommendation", "N/A")
+    score = obj.get("confidence_score", 0)
+    reasoning = obj.get("reasoning", "")
+    weight = obj.get("weight_summary", "")
+    missing = obj.get("missing_data", [])
+
+    # recommendation badge
+    badge_map = {
+        "Buy": "买入",
+        "Sell": "卖出",
+        "Hold": "持有",
+        "N/A": "暂无法评估",
+    }
+    rec_label = badge_map.get(rec, rec)
+    rec_icon_map = {"Buy": "🟢", "Sell": "🔴", "Hold": "🟡", "N/A": "⚪"}
+    rec_icon = rec_icon_map.get(rec, "⚪")
+
+    lines = [
+        "---",
+        f"## 策略裁决",
+        "",
+        f"| 项目 | 内容 |",
+        f"|------|------|",
+        f"| **最终建议** | {rec_icon} **{rec_label}** |",
+        f"| **置信度评分** | **{score}/100** |",
+    ]
+
+    if missing:
+        lines.append(f"| **缺失数据** | {', '.join(missing)} |")
+
+    lines.append("")
+
+    if reasoning:
+        lines.append("### 决策推理")
+        lines.append("")
+        lines.append(reasoning.strip())
+        lines.append("")
+
+    if weight:
+        lines.append("### 因子权重分配")
+        lines.append("")
+        lines.append(weight.strip())
+        lines.append("")
+
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def _extract_strategy_content(update: dict) -> str:
+    """Format strategy JSON as Markdown for frontend display."""
+    messages = update.get("messages")
+    if not messages:
+        return _extract_text(update, agent_name="strategy_expert")
+    raw = _safe_text(messages[-1]).strip()
+    if raw.startswith("{"):
+        return _format_strategy_markdown(raw)
+    return _extract_text(update, agent_name="strategy_expert")
+
+
+def _extract_agent_content(node_name: str, update: dict) -> str:
+    """Extract agent output; preserve JSON for structured downstream parsers."""
+    if node_name == "strategy_expert":
+        return _extract_strategy_content(update)
+    if node_name == "risk_expert":
+        return _extract_risk_raw_content(update)
+    if node_name in ("bull_researcher", "bear_researcher"):
+        side = "bull" if node_name == "bull_researcher" else "bear"
+        debate_content = _serialize_debate_side(update, side)
+        if debate_content:
+            return debate_content
+    return _extract_text(update, agent_name=node_name)
+
+
+def _iter_stream_chunks(chunk: Any):
+    """Normalize LangGraph stream chunks (with or without subgraph namespaces)."""
+    if isinstance(chunk, tuple) and len(chunk) == 2:
+        _, payload = chunk
+        if isinstance(payload, dict):
+            yield from payload.items()
+        return
+    if isinstance(chunk, dict):
+        yield from chunk.items()
 
 
 def _normalize_symbol(symbol: str | None) -> str:
@@ -278,6 +484,7 @@ def stream_analysis_events(
     })
 
     emitted_agents: set[str] = set()
+    debate_sides_emitted: set[str] = set()
     agent_start_times: dict[str, float] = {}
     target_price: dict | None = None
     risk_level: dict | None = None
@@ -285,109 +492,153 @@ def stream_analysis_events(
     import time as _time
     current_node_name: str | None = None
     try:
-        for chunk in langgraph_app.stream(initial_state, config=config, stream_mode="updates"):
-            for node_name, update in chunk.items():
+        for chunk in langgraph_app.stream(
+            initial_state,
+            config=config,
+            stream_mode="updates",
+            subgraphs=True,
+        ):
+            for node_name, update in _iter_stream_chunks(chunk):
                 current_node_name = node_name
                 agent_meta = AGENT_LABELS.get(node_name, {"label": node_name, "icon": "\U0001f916"})
-            label = agent_meta["label"]
-            icon = agent_meta["icon"]
+                label = agent_meta["label"]
+                icon = agent_meta["icon"]
 
-            if node_name not in emitted_agents:
-                emitted_agents.add(node_name)
-                agent_start_times[node_name] = _time.time()
-                yield _sse("agent_start", {
-                    "agent": node_name,
-                    "label": label,
-                    "icon": icon,
-                })
+                if node_name not in emitted_agents:
+                    emitted_agents.add(node_name)
+                    agent_start_times[node_name] = _time.time()
+                    yield _sse("agent_start", {
+                        "agent": node_name,
+                        "label": label,
+                        "icon": icon,
+                    })
 
-            # === evidence_packet ===
-            if node_name == "evidence_packet_builder" and "evidence_packet" in update:
-                ep = update["evidence_packet"]
-                chart = update.get("chart_data", [])
-                yield _sse("evidence_packet", {
-                    "symbol": ep.get("symbol", ""),
-                    "facts": ep.get("facts", []),
-                    "evidence_score": ep.get("evidence_score", 0),
-                    "allowed_output_level": ep.get("allowed_output_level", ""),
-                    "chart_data": chart,
-                })
+                # === evidence_packet ===
+                if node_name == "evidence_packet_builder" and "evidence_packet" in update:
+                    ep = update["evidence_packet"]
+                    chart = update.get("chart_data", [])
+                    yield _sse("evidence_packet", {
+                        "symbol": ep.get("symbol", ""),
+                        "facts": ep.get("facts", []),
+                        "evidence_score": ep.get("evidence_score", 0),
+                        "allowed_output_level": ep.get("allowed_output_level", ""),
+                        "chart_data": chart,
+                    })
 
-            # 当 orchestrator 决定好下一批要运行的 agent 时，立即发出 agent_start，
-            # 让前端在 agent 执行期间（可能耗时 30-120s）就显示 "运行中" 状态
-            if node_name == "orchestrator":
-                next_agents = update.get("next")
-                if isinstance(next_agents, list):
-                    for agent_id in next_agents:
-                        if agent_id not in emitted_agents:
-                            emitted_agents.add(agent_id)
-                            meta = AGENT_LABELS.get(agent_id, {"label": agent_id, "icon": "\U0001f916"})
+                # 当 orchestrator 决定好下一批要运行的 agent 时，立即发出 agent_start，
+                # 让前端在 agent 执行期间（可能耗时 30-120s）就显示 "运行中" 状态
+                if node_name == "orchestrator":
+                    next_agents = update.get("next")
+                    if isinstance(next_agents, list):
+                        for agent_id in next_agents:
+                            if agent_id not in emitted_agents:
+                                emitted_agents.add(agent_id)
+                                meta = AGENT_LABELS.get(agent_id, {"label": agent_id, "icon": "\U0001f916"})
+                                yield _sse("agent_start", {
+                                    "agent": agent_id,
+                                    "label": meta["label"],
+                                    "icon": meta["icon"],
+                                })
+                    # 发射被跳过的 agent
+                    skipped_agents = update.get("skipped_agents")
+                    if isinstance(skipped_agents, list):
+                        for sid in skipped_agents:
+                            if sid not in emitted_agents and sid != "__end__":
+                                emitted_agents.add(sid)
+                                meta = AGENT_LABELS.get(sid, {"label": sid, "icon": "\U0001f916"})
+                                yield _sse("agent_skipped", {
+                                    "agent": sid,
+                                    "label": meta["label"],
+                                    "icon": meta["icon"],
+                                })
+
+                content = _extract_agent_content(node_name, update)
+                is_guard = node_name in ("guard_agent", "guard")
+                has_guard = isinstance(update.get("guard_check"), dict) and update["guard_check"]
+                debate_subagents_emitted = False
+
+                # debate_stage 子图在 subgraphs=False 时只上报顶层节点，此处作兜底拆包
+                if node_name == "debate_stage":
+                    for sub_agent, side in (
+                        ("bull_researcher", "bull"),
+                        ("bear_researcher", "bear"),
+                    ):
+                        if sub_agent in debate_sides_emitted:
+                            continue
+                        sub_content = _serialize_debate_side(update, side)
+                        if not sub_content:
+                            continue
+                        debate_subagents_emitted = True
+                        sub_meta = AGENT_LABELS.get(
+                            sub_agent,
+                            {"label": sub_agent, "icon": "\U0001f916"},
+                        )
+                        if sub_agent not in emitted_agents:
+                            emitted_agents.add(sub_agent)
+                            agent_start_times[sub_agent] = _time.time()
                             yield _sse("agent_start", {
-                                "agent": agent_id,
-                                "label": meta["label"],
-                                "icon": meta["icon"],
+                                "agent": sub_agent,
+                                "label": sub_meta["label"],
+                                "icon": sub_meta["icon"],
                             })
-                # 发射被跳过的 agent
-                skipped_agents = update.get("skipped_agents")
-                if isinstance(skipped_agents, list):
-                    for sid in skipped_agents:
-                        if sid not in emitted_agents and sid != "__end__":
-                            emitted_agents.add(sid)
-                            meta = AGENT_LABELS.get(sid, {"label": sid, "icon": "\U0001f916"})
-                            yield _sse("agent_skipped", {
-                                "agent": sid,
-                                "label": meta["label"],
-                                "icon": meta["icon"],
-                            })
+                        yield _sse("agent_output", {
+                            "agent": sub_agent,
+                            "content": sub_content,
+                        })
+                        debate_sides_emitted.add(sub_agent)
+                        yield _sse("agent_done", {
+                            "agent": sub_agent,
+                            "duration_ms": round(
+                                (_time.time() - agent_start_times.get(sub_agent, _time.time())) * 1000
+                            ),
+                        })
 
-            content = _extract_text(update)
-            is_guard = node_name in ("guard_agent", "guard")
-            has_guard = isinstance(update.get("guard_check"), dict) and update["guard_check"]
+                if node_name == "recommendation_agent" and update.get("messages"):
+                    raw_recommendation = _safe_text(update["messages"][-1])
+                    rec_json = _extract_json_block(raw_recommendation)
+                    valuation = _coerce_valuation_scenario(rec_json)
+                    if valuation:
+                        target_price = valuation
+                        yield _sse("target_price", target_price)
+                    recommendation = _strip_json_blocks(raw_recommendation) or raw_recommendation
+                    content = recommendation
 
-            if node_name == "recommendation_agent" and update.get("messages"):
-                raw_recommendation = _safe_text(update["messages"][-1])
-                rec_json = _extract_json_block(raw_recommendation)
-                valuation = _coerce_valuation_scenario(rec_json)
-                if valuation:
-                    target_price = valuation
-                    yield _sse("target_price", target_price)
-                recommendation = _strip_json_blocks(raw_recommendation) or raw_recommendation
-                content = recommendation
+                if content and not is_guard and not (
+                    node_name == "debate_stage" and debate_subagents_emitted
+                ):
+                    yield _sse("agent_output", {
+                        "agent": node_name,
+                        "content": content,
+                    })
+                    if node_name in ("bull_researcher", "bear_researcher"):
+                        debate_sides_emitted.add(node_name)
 
-            if content and not is_guard:
-                yield _sse("agent_output", {
+                if update.get("final_report"):
+                    final_report = str(update["final_report"])
+                if node_name == "risk_expert":
+                    coerced_risk = _extract_risk_level(update)
+                    if coerced_risk:
+                        risk_level = coerced_risk
+                        yield _sse("risk_level", risk_level)
+                if is_guard and has_guard:
+                    guard_check = update["guard_check"]
+                    output_level = update.get("output_level", "")
+                    gc = guard_check
+                    guard_text = (
+                        f"- **Valid**: {gc.get('is_valid', 'N/A')}\n"
+                        f"- **Confidence Score**: {gc.get('confidence_score', 'N/A')}/100\n"
+                        f"- **Issues**: {', '.join(gc.get('issues', [])) if gc.get('issues') else 'none'}\n"
+                        f"- **Reasoning**: {gc.get('final_reasoning', 'N/A')}"
+                    )
+                    yield _sse("agent_output", {
+                        "agent": node_name,
+                        "content": guard_text,
+                    })
+
+                yield _sse("agent_done", {
                     "agent": node_name,
-                    "content": content,
+                    "duration_ms": round((_time.time() - agent_start_times.get(node_name, _time.time())) * 1000),
                 })
-
-            if update.get("final_report"):
-                final_report = str(update["final_report"])
-            if node_name == "risk_expert" and update.get("messages"):
-                # risk_agent 输出是纯 JSON，尝试解析
-                risk_text = _safe_text(update["messages"][-1])
-                risk_json = _extract_json_block(risk_text)
-                if risk_json and "overall_risk_score" in risk_json:
-                    risk_level = risk_json
-                    yield _sse("risk_level", risk_level)
-            if is_guard and has_guard:
-                guard_check = update["guard_check"]
-                output_level = update.get("output_level", "")
-                gc = guard_check
-                guard_text = (
-                    f"- **Valid**: {gc.get('is_valid', 'N/A')}\n"
-                    f"- **Confidence Score**: {gc.get('confidence_score', 'N/A')}/100\n"
-                    f"- **Issues**: {', '.join(gc.get('issues', [])) if gc.get('issues') else 'none'}\n"
-                    f"- **Reasoning**: {gc.get('final_reasoning', 'N/A')}"
-                )
-                yield _sse("agent_output", {
-                    "agent": node_name,
-                    "content": guard_text,
-                })
-
-            yield _sse("agent_done", {
-                "agent": node_name,
-                "duration_ms": round((_time.time() - agent_start_times.get(node_name, _time.time())) * 1000),
-            })
 
     except Exception as exc:
         import traceback

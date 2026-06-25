@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 import os
 from datetime import date
@@ -39,8 +40,64 @@ def _collect_fields(results: dict, *categories: str) -> set[str]:
     return fields
 
 
+def _tencent_hk_fallback_pe_mcap(symbol: str) -> list[dict]:
+    """Tertiary fallback for HK stocks: fetch pe_ratio / market_cap from Tencent quote API."""
+    if not symbol.endswith(".HK"):
+        return []
+
+    import requests as _requests
+    code = symbol.replace(".HK", "").zfill(5)
+    url = f"https://qt.gtimg.cn/q=r_hk{code}"
+    try:
+        resp = _requests.get(url, timeout=10)
+        resp.encoding = "gbk"
+        m = re.search(r'"(.+)"', resp.text)
+        if not m:
+            return []
+        parts = m.group(1).split("~")
+        if len(parts) < 50:
+            return []
+
+        today = date.today().isoformat()
+        facts: list[dict] = []
+
+        pe = float(parts[39]) if parts[39] else 0
+        mcap_raw = float(parts[44]) if parts[44] else 0
+
+        if pe > 0:
+            facts.append({
+                "field": "pe_ratio",
+                "value": pe,
+                "unit": "ratio",
+                "period": "latest",
+                "source": "tencent_hk",
+                "source_url": None,
+                "as_of_date": today,
+                "confidence": 0.80,
+                "confidence_tier": "machine",
+            })
+        if mcap_raw > 0:
+            facts.append({
+                "field": "market_cap",
+                "value": mcap_raw * 1e8,
+                "unit": "HKD",
+                "period": "latest",
+                "source": "tencent_hk",
+                "source_url": None,
+                "as_of_date": today,
+                "confidence": 0.80,
+                "confidence_tier": "machine",
+            })
+
+        if facts:
+            print(f"   🔄 Tencent HK fallback for {symbol}: pe={pe}, market_cap={mcap_raw}亿 HKD")
+        return facts
+    except Exception:
+        return []
+
+
 def _supplement_missing_facts(symbol: str, results: dict, registry, market: str) -> None:
-    """Backfill critical fields from yfinance when higher-priority HK sources omit them."""
+    """Backfill critical fields from yfinance (and Tencent HK for HK stocks) when providers omit them."""
     present = _collect_fields(results, "market", "fundamental", "news")
     missing = _SUPPLEMENT_FIELDS - present
     if not missing:
@@ -51,6 +108,18 @@ def _supplement_missing_facts(symbol: str, results: dict, registry, market: str)
     if fund_missing:
         for fact in collect_fundamental_facts(symbol):
             if fact.get("field") in fund_missing:
+                results["fundamental"].append(fact)
+                added = True
+
+    # Tertiary fallback for HK stocks: Tencent quote API for pe_ratio / market_cap
+    # Recompute still-missing fields after yfinance attempt
+    still_missing = (
+        _SUPPLEMENT_FIELDS
+        - _collect_fields(results, "market", "fundamental", "news")
+    ) & {"pe_ratio", "market_cap"}
+    if still_missing and symbol.endswith(".HK"):
+        for fact in _tencent_hk_fallback_pe_mcap(symbol):
+            if fact.get("field") in still_missing:
                 results["fundamental"].append(fact)
                 added = True
 
