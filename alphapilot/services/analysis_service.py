@@ -80,6 +80,11 @@ def _format_agent_content(raw: str) -> str:
         obj = json.loads(raw)
         if not isinstance(obj, dict):
             return raw
+
+        # 辩论 JSON (bull/bear researcher): 有 stance_strength + claims → Markdown
+        if "stance_strength" in obj and "claims" in obj:
+            return _format_debate_markdown(raw)
+
         lines = []
         for k, v in obj.items():
             label = k.replace("_", " ").title()
@@ -88,7 +93,18 @@ def _format_agent_content(raw: str) -> str:
             elif isinstance(v, str) and v:
                 lines.append(f"- **{label}**: {v}")
             elif isinstance(v, list):
-                lines.append(f"- **{label}**: {', '.join(str(i) for i in v)}")
+                # 数组中元素是 dict 时逐条渲染，避免 str(dict) 原样 dump
+                if all(isinstance(i, dict) for i in v):
+                    for idx, item in enumerate(v, 1):
+                        lines.append(f"  **{label} #{idx}**")
+                        for ik, iv in item.items():
+                            ikey = ik.replace("_", " ").title()
+                            if isinstance(iv, list):
+                                lines.append(f"    - {ikey}: {', '.join(str(s) for s in iv)}")
+                            else:
+                                lines.append(f"    - {ikey}: {iv}")
+                else:
+                    lines.append(f"- **{label}**: {', '.join(str(i) for i in v)}")
             else:
                 lines.append(f"- **{label}**: {v}")
         return "\n".join(lines)
@@ -638,6 +654,81 @@ def _format_debate_markdown(raw_json: str) -> str:
     return "\n".join(lines)
 
 
+def _try_parse_debate_text(text: str) -> dict | None:
+    """从 deepseek 非 JSON 输出中提取 debate 结构化数据。
+    格式: Stance Strength: N
+          Summary: ...
+          Claims: {'text': ..., ...}, {...}, ...
+    """
+    if not text:
+        return None
+    stance_match = re.search(r"Stance\s*Strength\s*:\s*(\d+)", text, re.IGNORECASE)
+    if not stance_match:
+        return None
+    stance = max(0, min(100, int(stance_match.group(1))))
+
+    summary = ""
+    summary_match = re.search(r"Summary\s*:\s*(.+?)(?=\n+\s*Claims?\s*:)", text, re.IGNORECASE | re.DOTALL)
+    if summary_match:
+        summary = summary_match.group(1).strip()
+
+    claims_raw = ""
+    claims_match = re.search(r"Claims?\s*:\s*(.+)$", text, re.IGNORECASE)
+    if claims_match:
+        claims_raw = claims_match.group(1).strip()
+
+    claims: list[dict] = []
+    if claims_raw:
+        depth = 0
+        buf = ""
+        for ch in claims_raw:
+            buf += ch
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and buf.strip():
+                    claims.append(buf.strip())
+                    buf = ""
+        if not claims:
+            try:
+                claims_list = json.loads(claims_raw.replace("'", '"'))
+                if isinstance(claims_list, list):
+                    claims = claims_list
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+    safe_claims: list[dict] = []
+    for raw_claim in claims:
+        try:
+            claim_json = raw_claim.replace("'", '"')
+            c = json.loads(claim_json)
+            if isinstance(c, dict) and c.get("text"):
+                conf = c.get("confidence", 50)
+                if not isinstance(conf, (int, float)):
+                    conf = 50
+                srcs = c.get("sources", [])
+                if isinstance(srcs, str):
+                    srcs = [srcs]
+                fields = c.get("supporting_fields", [])
+                if isinstance(fields, str):
+                    fields = [fields]
+                safe_claims.append({
+                    "text": str(c["text"]),
+                    "confidence": int(conf),
+                    "sources": [str(s) for s in srcs if s] if isinstance(srcs, list) else [],
+                    "supporting_fields": [str(f) for f in fields if f] if isinstance(fields, list) else [],
+                })
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    return {
+        "stance_strength": stance,
+        "summary": summary,
+        "claims": safe_claims,
+    }
+
+
 def _strip_claims_section(text: str) -> str:
     """移除 debate 文本末尾的 Claims: {...} 原始 JSON/Python dict 块。"""
     # 匹配 "Claims:" 后面跟 JSON 或 Python dict 格式内容
@@ -672,7 +763,7 @@ def _serialize_debate_side(update: dict, side: str) -> str:
             raw_json = raw_json or json.dumps(debate_data, ensure_ascii=False)
 
     if not raw_json:
-        # 结构化数据不可用时，从 argument 或 message 文本中清理显示
+        # 结构化数据不可用时，从 argument 或 message 文本中提取
         text = ""
         argument = update.get(arg_key)
         if isinstance(argument, str) and argument.strip():
@@ -680,13 +771,20 @@ def _serialize_debate_side(update: dict, side: str) -> str:
         else:
             messages = update.get("messages")
             if messages and isinstance(messages, list):
-                raw = _safe_text(messages[-1]).strip()
-                if raw:
-                    text = raw
+                raw_msg = _safe_text(messages[-1]).strip()
+                if raw_msg:
+                    text = raw_msg
         if not text:
             return ""
 
-        # 去掉末尾的 "Claims:" 原始 JSON/Python dict 块
+        # 尝试从原始文本中重新解析 debate 结构化数据（deepseek 非 JSON 输出格式）
+        parsed = _try_parse_debate_text(text)
+        if parsed:
+            raw_json = json.dumps(parsed, ensure_ascii=False)
+            md = _format_debate_markdown(raw_json)
+            return raw_json + "\n\n---\n" + md
+
+        # 实在无法解析，去掉 Claims 块返回纯文本
         text = _strip_claims_section(text)
         return text
 
