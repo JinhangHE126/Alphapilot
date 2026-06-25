@@ -372,8 +372,12 @@ def collect_fundamental_facts(symbol: str) -> list[dict]:
 
     facts = []
 
-    def _add(field: str, value, unit: str, period: str = "latest"):
+    def _add(field: str, value, unit: str, period: str = "latest", allow_zero: bool = True):
         if value is not None:
+            if not allow_zero:
+                numeric = _to_float(value)
+                if numeric is None or numeric == 0:
+                    return
             facts.append({
                 "field": field,
                 "value": value,
@@ -386,11 +390,14 @@ def collect_fundamental_facts(symbol: str) -> list[dict]:
                 "confidence_tier": "machine",
             })
 
-    def _add_pct(field: str, value):
+    def _add_pct(field: str, value, allow_zero: bool = True):
         if value is not None:
+            numeric = _to_float(value)
+            if numeric is None or (not allow_zero and numeric == 0):
+                return
             facts.append({
                 "field": field,
-                "value": round(float(value) * 100, 2),
+                "value": round(numeric * 100, 2),
                 "unit": "percent",
                 "period": "latest",
                 "source": "yfinance",
@@ -448,9 +455,29 @@ def collect_fundamental_facts(symbol: str) -> list[dict]:
     _add_ratio("beta", info.get("beta"))
     _add("sector", info.get("sector"), "text")
     _add("industry", info.get("industry"), "text")
-    _add_pct("revenue_growth_yoy", info.get("revenueGrowth"))
-    _add_pct("eps_growth_yoy", info.get("earningsGrowth"))
+    _add("revenue", _to_float(info.get("totalRevenue")), _currency_for(symbol), allow_zero=False)
+    _add(
+        "net_profit",
+        _to_float(info.get("netIncomeToCommon")) or _to_float(info.get("netIncome")),
+        _currency_for(symbol),
+        allow_zero=False,
+    )
+    _add("eps", _to_float(info.get("trailingEps")), _currency_for(symbol), allow_zero=False)
+    _add("operating_cash_flow", _to_float(info.get("operatingCashflow")), _currency_for(symbol), allow_zero=False)
+    _add("free_cash_flow", _to_float(info.get("freeCashflow")), _currency_for(symbol), allow_zero=False)
+    _add("cash_position", _to_float(info.get("totalCash")), _currency_for(symbol), allow_zero=False)
+    _add("total_debt", _to_float(info.get("totalDebt")), _currency_for(symbol), allow_zero=False)
+    total_cash = _to_float(info.get("totalCash"))
+    total_debt = _to_float(info.get("totalDebt"))
+    if total_cash is not None and total_debt is not None:
+        _add("net_debt", total_debt - total_cash, _currency_for(symbol))
+    _add_pct("revenue_growth_yoy", info.get("revenueGrowth"), allow_zero=False)
+    _add_pct("eps_growth_yoy", info.get("earningsGrowth"), allow_zero=False)
+    _add_pct("net_profit_growth_yoy", info.get("earningsQuarterlyGrowth"), allow_zero=False)
     _add_pct("return_on_equity", info.get("returnOnEquity"))
+    _add_pct("gross_margin", info.get("grossMargins"))
+    _add_pct("operating_margin", info.get("operatingMargins"))
+    _add_pct("net_margin", info.get("profitMargins"))
     _add_ratio("debt_to_equity", info.get("debtToEquity"))
 
     if not any(f["field"] == "pe_ratio" for f in facts):

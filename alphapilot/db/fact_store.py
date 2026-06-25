@@ -123,8 +123,11 @@ class FactStore:
         fundamental_fields = {"revenue_growth_yoy", "eps_growth_yoy", "pe_ratio",
                               "forward_pe", "pb_ratio", "market_cap", "dividend_yield",
                               "beta", "return_on_equity", "debt_to_equity",
-                              "sector", "industry", "company_name", "revenue", "eps",
-                              "revenue_ttm", "profit_margin"}
+                              "sector", "industry", "company_name", "revenue", "net_profit", "eps",
+                              "revenue_ttm", "profit_margin", "gross_margin", "operating_margin",
+                              "net_margin", "debt_to_assets", "net_profit_growth_yoy",
+                              "operating_cash_flow", "free_cash_flow", "cash_position",
+                              "total_debt", "net_debt"}
         news_fields = {"news_headline"}
         filing_fields = {"filing_url", "hkex_announcement"}
 
