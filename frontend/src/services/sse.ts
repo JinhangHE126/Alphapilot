@@ -19,6 +19,7 @@ export type GuardCheck = {
   sources: string[];
   final_reasoning: string;
   checks?: GuardChecks;
+  risk_warnings?: string[];
 };
 
 export type EvidenceFact = {
@@ -68,6 +69,20 @@ export type RiskLevelData = {
   stop_loss_suggestion?: number | string;
   position_suggestion?: string;
   risk_reasoning?: string;
+  key_risks?: string[];
+};
+
+export type DebateClaim = {
+  text: string;
+  confidence: number;
+  sources: string[];
+  supporting_fields: string[];
+};
+
+export type DebateStructuredData = {
+  stance_strength: number;
+  summary: string;
+  claims: DebateClaim[];
 };
 
 export type StreamEvent =

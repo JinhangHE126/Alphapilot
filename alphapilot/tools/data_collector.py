@@ -212,6 +212,13 @@ def collect_market_facts(symbol: str) -> list[dict]:
     returns = close.pct_change().dropna()
     volatility = round(float(returns.std() * (252 ** 0.5) * 100), 2) if len(returns) >= 5 else 0
 
+    # 最大回撤 (从区间最高点到最低点的最大跌幅)
+    max_drawdown = 0.0
+    if len(close) >= 5:
+        cummax = close.cummax()
+        drawdown = (close - cummax) / cummax
+        max_drawdown = round(float(drawdown.min() * 100), 2)  # 负值, 如 -18.5 表示跌了 18.5%
+
     market_facts = [
         {
             "field": "current_price",
@@ -271,6 +278,17 @@ def collect_market_facts(symbol: str) -> list[dict]:
         {
             "field": "volatility_20d_annualized",
             "value": volatility,
+            "unit": "percent",
+            "period": "latest",
+            "source": "yfinance",
+            "source_url": None,
+            "as_of_date": today,
+            "confidence": 0.85,
+            "confidence_tier": "machine",
+        },
+        {
+            "field": "max_drawdown",
+            "value": abs(max_drawdown),  # 存绝对值, 前端展示为 -X% 或 X%
             "unit": "percent",
             "period": "latest",
             "source": "yfinance",

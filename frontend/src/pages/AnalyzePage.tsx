@@ -15,6 +15,8 @@ import MarkdownContent from "../components/MarkdownContent";
 import StockOverviewPanel from "../components/StockOverviewPanel";
 import ValuationSummaryCard from "../components/ValuationSummaryCard";
 import FinancialTrendsPanel from "../components/FinancialTrendsPanel";
+import RiskGauge from "../components/RiskGauge";
+import DebatePanel from "../components/DebatePanel";
 import { useTranslation } from "../i18n";
 import { createSession } from "../services/api";
 import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, TargetPriceData, RiskLevelData } from "../services/sse";
@@ -580,6 +582,18 @@ export default function AnalyzePage() {
             </section>
           )}
 
+          {/* 多空博弈面板：Bull vs Bear 双栏 + 策略裁决 */}
+          {evidencePacket && (
+            <section className="card">
+              <DebatePanel
+                agents={agents}
+                evidence={evidencePacket}
+                guard={guardCheck}
+                recommendation={recommendation}
+              />
+            </section>
+          )}
+
           {/* 估值与结论摘要卡：分析完成后展示核心结论 */}
           {guardCheck && (
             <section className="card">
@@ -588,6 +602,17 @@ export default function AnalyzePage() {
                 guard={guardCheck}
                 recommendation={recommendation}
                 targetPrice={targetPrice}
+                riskLevel={riskLevel}
+              />
+            </section>
+          )}
+
+          {/* 风险可视化仪表盘 */}
+          {guardCheck && (
+            <section className="card">
+              <RiskGauge
+                evidence={evidencePacket}
+                guard={guardCheck}
                 riskLevel={riskLevel}
               />
             </section>

@@ -19,6 +19,7 @@ class RiskAssessment(BaseModel):
     position_suggestion: str = Field(description="Position sizing suggestion (e.g., no more than XX% of total position)")
     overall_risk_score: int = Field(description="Overall risk score 0-100 (higher means more dangerous)")
     risk_reasoning: str = Field(description="Detailed risk reasoning process")
+    key_risks: list[str] = Field(default_factory=list, description="Top 3-5 key risk points, each a short sentence")
 
 
 def _extract_json_text(text: str) -> str:
@@ -70,6 +71,14 @@ def _normalize_payload(payload: dict) -> dict:
 
     for key in ("stop_loss_suggestion", "position_suggestion", "risk_reasoning"):
         normalized[key] = str(payload.get(key, "")).strip()
+
+    # key_risks: ensure it's a list of strings
+    raw_risks = payload.get("key_risks", [])
+    if isinstance(raw_risks, list):
+        normalized["key_risks"] = [str(r).strip() for r in raw_risks if str(r).strip()]
+    else:
+        normalized["key_risks"] = []
+
     return normalized
 
 
@@ -113,7 +122,8 @@ STRICT BOUNDARIES — DO NOT:
 You have NO tools. Do NOT attempt to call any tool or function.
 Respond with JSON only, no markdown, no tool calls, no preamble.
 
-Return JSON only with keys: volatility_risk, macro_risk, stop_loss_suggestion, position_suggestion, overall_risk_score, risk_reasoning
+Return JSON only with keys: volatility_risk, macro_risk, stop_loss_suggestion, position_suggestion, overall_risk_score, risk_reasoning, key_risks
+- key_risks: array of 3-5 short risk points, e.g. ["高波动率 42%", "宏观利率上行压力", "行业政策不确定性"]
 """,
     )
 
@@ -123,7 +133,8 @@ NA_RISK_JSON = (
     '"stop_loss_suggestion":"N/A","position_suggestion":"N/A",'
     '"overall_risk_score":0,'
     '"risk_reasoning":"Risk assessment unavailable: '
-    'output level is limited_analysis or worse"}'
+    'output level is limited_analysis or worse",'
+    '"key_risks":[]}'
 )
 
 _NA_RISK_JSON_SCORE = (
@@ -131,7 +142,8 @@ _NA_RISK_JSON_SCORE = (
     '"stop_loss_suggestion":"N/A","position_suggestion":"N/A",'
     '"overall_risk_score":0,'
     '"risk_reasoning":"Risk assessment unavailable: '
-    'evidence score below threshold (50)"}'
+    'evidence score below threshold (50)",'
+    '"key_risks":[]}'
 )
 
 _PARTIAL_PREFIX = '{"data_quality":"partial",'
@@ -157,8 +169,9 @@ RULES for LIMITED mode:
 - overall_risk_score: 50-80 (elevated due to limited data)
 - risk_reasoning: MUST list missing fields and explain how they limit the assessment
 - Add field "data_quality": "limited"
+- key_risks: array of 3-5 short risk points
 
-Return JSON only with keys: volatility_risk, macro_risk, stop_loss_suggestion, position_suggestion, overall_risk_score, risk_reasoning, data_quality
+Return JSON only with keys: volatility_risk, macro_risk, stop_loss_suggestion, position_suggestion, overall_risk_score, risk_reasoning, data_quality, key_risks
 """,
 )
 

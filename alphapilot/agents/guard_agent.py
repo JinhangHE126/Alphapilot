@@ -151,6 +151,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
                 "symbol_match": {"passed": False, "detail": "无法校验标的匹配"},
                 "unsupported_claim": {"passed": True, "detail": ""},
             },
+            "risk_warnings": [],
         }
 
     try:
@@ -168,6 +169,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
                 "symbol_match": {"passed": False, "detail": "无法校验标的匹配"},
                 "unsupported_claim": {"passed": True, "detail": ""},
             },
+            "risk_warnings": [],
         }
 
     guard_result = determine_output_level(ep)
@@ -189,6 +191,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
                 "symbol_match": {"passed": False, "detail": symbol_issues[0]},
                 "unsupported_claim": {"passed": True, "detail": ""},
             },
+            "risk_warnings": [],
         }
 
     if guard_result.allowed_output_level == OutputLevel.INSUFFICIENT_EVIDENCE:
@@ -204,6 +207,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
                 "symbol_match": {"passed": True, "detail": ""},
                 "unsupported_claim": {"passed": True, "detail": ""},
             },
+            "risk_warnings": ["INSUFFICIENT_EVIDENCE: 数据不足以支持风险评估"],
         }
 
     issues = []
@@ -285,6 +289,13 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
     else:
         reasoning = guard_result.reason
 
+    # 从 issues 中提取风险相关条目
+    risk_keywords = ["risk", "volatil", "drawdown", "警告", "风险", "波动", "回撤", "止损", "仓位", "output level"]
+    risk_warnings = [
+        i for i in issues
+        if any(kw in i.lower() for kw in risk_keywords)
+    ]
+
     return {
         "is_valid": is_valid,
         "confidence_score": confidence,
@@ -294,6 +305,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
         "final_reasoning": reasoning,
         "output_level": level,
         "checks": checks,
+        "risk_warnings": risk_warnings,
     }
 
 

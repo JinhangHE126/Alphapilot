@@ -3017,3 +3017,537 @@ select option {
   white-space: nowrap;
 }
 
+/* ── Risk Gauge ── */
+.risk-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.risk-gauge-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.risk-gauge-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 0;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 0.82rem;
+}
+
+.risk-gauge-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.risk-gauge-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0;
+  position: relative;
+}
+
+.risk-gauge-svg {
+  display: block;
+}
+
+.risk-gauge-level {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin-top: -0.5rem;
+  letter-spacing: 0.04em;
+}
+
+.risk-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.risk-metric-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.risk-metric-label {
+  font-size: 0.66rem;
+  color: rgba(255, 255, 255, 0.45);
+  flex: 1;
+}
+
+.risk-metric-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Key risks list */
+.risk-key-risks {
+  grid-column: 1 / -1;
+  margin-bottom: 0.2rem;
+}
+
+.risk-key-risks-hd {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 0.3rem;
+}
+
+.risk-key-risks-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.risk-key-risks-list li {
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.42);
+  line-height: 1.4;
+  position: relative;
+}
+
+.risk-key-risks-list li::before {
+  content: "●";
+  position: absolute;
+  left: -1rem;
+  color: rgba(245, 158, 11, 0.5);
+  font-size: 0.45rem;
+  top: 0.25rem;
+}
+
+/* Risk Agent advice */
+.risk-agent-advice {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 0.8rem;
+}
+
+.risk-advice-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.55rem;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.risk-advice-label {
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.risk-advice-value {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+  text-align: right;
+}
+
+/* Risk reasoning */
+.risk-reasoning {
+  grid-column: 1 / -1;
+  padding-top: 0.3rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.risk-reasoning-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.38);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.risk-reasoning-text {
+  margin: 0;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.48);
+  line-height: 1.55;
+}
+
+/* Guard risk warnings */
+.risk-guard-warnings {
+  grid-column: 1 / -1;
+  padding-top: 0.3rem;
+  border-top: 1px solid rgba(245, 158, 11, 0.12);
+}
+
+.risk-guard-warn-hd {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 0.3rem;
+}
+
+.risk-guard-warn-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  list-style: none;
+}
+
+.risk-guard-warn-list li {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1.45;
+  position: relative;
+}
+
+.risk-guard-warn-list li::before {
+  content: "●";
+  position: absolute;
+  left: -1rem;
+  color: rgba(245, 158, 11, 0.45);
+  font-size: 0.45rem;
+  top: 0.3rem;
+}
+
+/* ── Debate Panel ── */
+.debate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.dp-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+  flex-wrap: wrap;
+}
+
+.dp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 1.2rem 0;
+  color: rgba(255, 255, 255, 0.22);
+  font-size: 0.8rem;
+}
+
+.dp-empty-sub {
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.14);
+}
+
+/* Ruling badge */
+.dp-ruling-badge {
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.dp-confidence {
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  margin-left: auto;
+}
+
+/* Sources */
+.dp-sources {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.dp-source-badge {
+  font-size: 0.56rem;
+  color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+}
+
+/* Bull vs Bear columns */
+.dp-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.dp-card {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dp-card.bull {
+  border-color: rgba(34, 197, 94, 0.12);
+  background: rgba(34, 197, 94, 0.025);
+}
+
+.dp-card.bear {
+  border-color: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.025);
+}
+
+.dp-card-hd {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem 0;
+}
+
+.dp-card-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex: 1;
+}
+
+.dp-card-title.bull { color: #4ade80; }
+.dp-card-title.bear { color: #f87171; }
+
+.dp-card-badge {
+  font-size: 0.56rem;
+  font-weight: 700;
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dp-card-badge.bull { color: #4ade80; background: rgba(34, 197, 94, 0.1); }
+.dp-card-badge.bear { color: #f87171; background: rgba(239, 68, 68, 0.1); }
+
+.dp-card-body {
+  padding: 0.4rem 0.6rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dp-card-text {
+  margin: 0;
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.48);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.dp-card-empty {
+  padding: 0.6rem;
+  text-align: center;
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.18);
+  font-style: italic;
+}
+
+.dp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.dp-section-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dp-section-title.bull { color: rgba(34, 197, 94, 0.7); }
+.dp-section-title.bear { color: rgba(239, 68, 68, 0.7); }
+
+.dp-section-body {
+  margin: 0;
+  font-size: 0.63rem;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Ruling area */
+.dp-ruling {
+  border-radius: 10px;
+  border: 1px solid rgba(167, 139, 250, 0.15);
+  background: rgba(167, 139, 250, 0.04);
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dp-ruling-hd {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #c4b5fd;
+}
+
+.dp-ruling-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.dp-ruling-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  min-width: 3.8rem;
+}
+
+.dp-ruling-text {
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.dp-ruling-score {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.32);
+  font-variant-numeric: tabular-nums;
+}
+
+.dp-ruling-reasoning {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* ── Claim cards (结构化输出) ── */
+.dp-claim-card {
+  border-radius: 7px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.015);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dp-claim-card.bull {
+  border-color: rgba(34, 197, 94, 0.08);
+}
+
+.dp-claim-card.bear {
+  border-color: rgba(239, 68, 68, 0.08);
+}
+
+.dp-claim-text {
+  margin: 0;
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.52);
+  line-height: 1.45;
+}
+
+.dp-claim-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.dp-claim-conf {
+  font-size: 0.58rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dp-claim-sources {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-wrap: wrap;
+}
+
+.dp-claim-source-badge {
+  font-size: 0.5rem;
+  color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.06rem 0.35rem;
+  border-radius: 999px;
+}
+
+.dp-claim-fields {
+  font-size: 0.5rem;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Stance strength bar ── */
+.dp-stance {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0;
+}
+
+.dp-stance-label {
+  font-size: 0.56rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.3);
+  white-space: nowrap;
+}
+
+.dp-stance-bar-wrap {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.dp-stance-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.dp-stance-val {
+  font-size: 0.56rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
