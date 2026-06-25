@@ -72,6 +72,76 @@ export type RiskLevelData = {
   key_risks?: string[];
 };
 
+function extractBalancedJson(text: string, which: "first" | "last" = "last"): string | null {
+  const starts: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "{") starts.push(i);
+  }
+  const order = which === "first" ? starts : [...starts].reverse();
+  for (const start of order) {
+    let depth = 0;
+    for (let j = start; j < text.length; j++) {
+      if (text[j] === "{") depth++;
+      else if (text[j] === "}") depth--;
+      if (depth === 0) return text.slice(start, j + 1);
+    }
+  }
+  return null;
+}
+
+/** Parse risk_expert JSON / markdown output into RiskLevelData. */
+export function parseRiskLevelFromContent(content: string): RiskLevelData | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+
+  const jsonText = trimmed.startsWith("{")
+    ? trimmed
+    : extractBalancedJson(trimmed, "last");
+  if (!jsonText) return null;
+
+  try {
+    const obj = JSON.parse(jsonText) as Record<string, unknown>;
+    const overall = obj.overall_risk_score ?? obj.risk_score;
+    if (overall === undefined || overall === null) return null;
+
+    const score = Math.round(Number(overall));
+    if (!Number.isFinite(score)) return null;
+    if (score === 0 && String(obj.volatility_risk ?? "").toUpperCase() === "N/A") return null;
+
+    const keyRisks = Array.isArray(obj.key_risks)
+      ? obj.key_risks.map((r) => String(r)).filter(Boolean)
+      : [];
+
+    return {
+      overall_risk_score: Math.min(100, Math.max(0, score)),
+      volatility_risk: typeof obj.volatility_risk === "string" ? obj.volatility_risk : undefined,
+      macro_risk: typeof obj.macro_risk === "string" ? obj.macro_risk : undefined,
+      stop_loss_suggestion: obj.stop_loss_suggestion as number | string | undefined,
+      position_suggestion: typeof obj.position_suggestion === "string" ? obj.position_suggestion : undefined,
+      risk_reasoning: typeof obj.risk_reasoning === "string" ? obj.risk_reasoning : undefined,
+      key_risks: keyRisks,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Estimate risk score from market facts when risk agent score is unavailable. */
+export function estimateRiskScoreFromFacts(volatility?: number, maxDrawdown?: number): number | undefined {
+  if (volatility === undefined) return undefined;
+  let score = Math.round(volatility * 2);
+  if (maxDrawdown !== undefined) {
+    score = Math.round(score * 0.55 + maxDrawdown * 2.2);
+  }
+  return Math.min(100, Math.max(5, score));
+}
+
+export function riskLevelFromScore(score: number): "low" | "medium" | "high" {
+  if (score <= 30) return "low";
+  if (score <= 60) return "medium";
+  return "high";
+}
+
 export type DebateClaim = {
   text: string;
   confidence: number;

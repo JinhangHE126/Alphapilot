@@ -1,5 +1,6 @@
 import { ShieldAlert, TrendingUp, TrendingDown, Gauge, AlertTriangle } from "lucide-react";
 import type { EvidencePacketData, GuardCheck, RiskLevelData } from "../services/sse";
+import { estimateRiskScoreFromFacts, riskLevelFromScore } from "../services/sse";
 
 type RiskGaugeProps = {
   evidence: EvidencePacketData | null;
@@ -16,17 +17,19 @@ function getFactVal(facts: EvidencePacketData["facts"], field: string): number |
   return isNaN(n) ? undefined : n;
 }
 
-function deriveRisk(riskLevel: RiskLevelData | null, evidence: EvidencePacketData | null): RiskLevel {
-  if (riskLevel?.overall_risk_score !== undefined) {
-    const s = riskLevel.overall_risk_score;
-    if (s <= 30) return "low";
-    if (s <= 60) return "medium";
-    return "high";
+function deriveRisk(
+  riskLevel: RiskLevelData | null,
+  displayScore: number | undefined,
+): RiskLevel {
+  if (displayScore !== undefined) {
+    return riskLevelFromScore(displayScore);
   }
-  const score = evidence?.evidence_score ?? 0;
-  if (score >= 80) return "low";
-  if (score >= 60) return "medium";
-  if (score > 0) return "high";
+  if (riskLevel?.volatility_risk) {
+    const v = riskLevel.volatility_risk.toLowerCase();
+    if (v === "low") return "low";
+    if (v === "high") return "high";
+    if (v === "medium") return "medium";
+  }
   return "unknown";
 }
 
@@ -57,7 +60,7 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
   return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
 }
 
-function RiskArc({ score }: { score: number }) {
+function RiskArc({ score, hasScore }: { score: number; hasScore: boolean }) {
   const bg = arcPath(GAUGE_CX, GAUGE_CY, GAUGE_R, ARC_START, ARC_END);
   // colored segments: low (green) 0-30, medium (yellow) 30-60, high (red) 60-100
   const seg30 = ARC_START + ARC_SPAN * 0.3;
@@ -75,7 +78,7 @@ function RiskArc({ score }: { score: number }) {
       <path d={arcPath(GAUGE_CX, GAUGE_CY, GAUGE_R, seg60, segEnd)} fill="none" stroke="#ef4444" strokeWidth="14" strokeLinecap="butt" opacity="0.6" />
 
       {/* active indicator arc */}
-      {score > 0 && (
+      {hasScore && score > 0 && (
         <>
           <path
             d={arcPath(GAUGE_CX, GAUGE_CY, GAUGE_R, ARC_START, ARC_START + ARC_SPAN * (score / 100))}
@@ -98,7 +101,7 @@ function RiskArc({ score }: { score: number }) {
 
       {/* center text */}
       <text x={GAUGE_CX} y={GAUGE_CY - 14} textAnchor="middle" fontSize="26" fontWeight="800" fill="rgba(255,255,255,0.92)" fontFamily="monospace">
-        {score > 0 ? score : "--"}
+        {hasScore ? score : "--"}
       </text>
       <text x={GAUGE_CX} y={GAUGE_CY + 6} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.35)">
         /100
@@ -119,13 +122,18 @@ export default function RiskGauge({ evidence, guard, riskLevel }: RiskGaugeProps
   const sortino = getFactVal(facts, "sortino_ratio_annual");
   const var95 = getFactVal(facts, "var_95_daily");
 
-  const riskScore = riskLevel?.overall_risk_score ?? 0;
-  const riskRating = deriveRisk(riskLevel, evidence);
+  const agentScore = riskLevel?.overall_risk_score;
+  const hasAgentScore = typeof agentScore === "number" && agentScore > 0;
+  const estimatedScore = estimateRiskScoreFromFacts(volatility, maxDrawdown);
+  const displayScore = hasAgentScore ? agentScore : estimatedScore;
+  const hasDisplayScore = displayScore !== undefined && displayScore > 0;
+
+  const riskRating = deriveRisk(riskLevel, displayScore);
   const meta = RISK_META[riskRating];
 
   const guardWarnings = guard?.risk_warnings ?? [];
 
-  const hasData = riskScore > 0 || volatility !== undefined || maxDrawdown !== undefined || riskLevel;
+  const hasData = hasDisplayScore || volatility !== undefined || maxDrawdown !== undefined || riskLevel;
 
   return (
     <div className="risk-gauge">
@@ -143,7 +151,7 @@ export default function RiskGauge({ evidence, guard, riskLevel }: RiskGaugeProps
         <div className="risk-gauge-body">
           {/* 大仪表盘 */}
           <div className="risk-gauge-chart">
-            <RiskArc score={riskScore} />
+            <RiskArc score={displayScore ?? 0} hasScore={hasDisplayScore} />
             <div className="risk-gauge-level" style={{ color: meta.color }}>
               {meta.label}
             </div>

@@ -55,6 +55,8 @@ class GraphState(TypedDict, total=False):
     # Bull vs Bear 多空辩论
     bull_argument: str
     bear_argument: str
+    bull_debate_data: dict
+    bear_debate_data: dict
     debate_rounds: int
     max_debate_rounds: int
 

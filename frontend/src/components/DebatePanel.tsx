@@ -28,23 +28,79 @@ function getContent(agents: AgentInfo[], id: string): string {
   return agents.find((a) => a.agent === id)?.content ?? "";
 }
 
-/** 尝试从 agent 内容解析 JSON，返回结构化数据或 null */
-function tryParseDebateData(content: string): DebateStructuredData | null {
-  const m = content.match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  try {
-    const obj = JSON.parse(m[0]);
-    if (obj && Array.isArray(obj.claims) && obj.claims.length > 0) {
-      return {
-        stance_strength: typeof obj.stance_strength === "number" ? obj.stance_strength : undefined,
-        summary: obj.summary || "",
-        claims: obj.claims,
-      };
+/** 从文本中提取第一个或最后一个平衡的 JSON 对象 */
+function extractBalancedJson(text: string, which: "first" | "last" = "last"): string | null {
+  const starts: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "{") starts.push(i);
+  }
+  const order = which === "first" ? starts : [...starts].reverse();
+  for (const start of order) {
+    let depth = 0;
+    for (let j = start; j < text.length; j++) {
+      if (text[j] === "{") depth++;
+      else if (text[j] === "}") depth--;
+      if (depth === 0) return text.slice(start, j + 1);
     }
-  } catch {
-    // not JSON → fall through
   }
   return null;
+}
+
+function toStringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((v) => String(v)).filter(Boolean);
+  if (typeof value === "string" && value.trim()) {
+    return value.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeClaim(raw: unknown): DebateClaim | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Record<string, unknown>;
+  const text = String(c.text ?? "").trim();
+  if (!text) return null;
+  const confidenceRaw = c.confidence;
+  const confidence =
+    typeof confidenceRaw === "number"
+      ? confidenceRaw
+      : Number.parseFloat(String(confidenceRaw ?? "50")) || 50;
+  return {
+    text,
+    confidence: Math.min(100, Math.max(0, confidence)),
+    sources: toStringList(c.sources),
+    supporting_fields: toStringList(c.supporting_fields),
+  };
+}
+
+/** 尝试从 agent 内容解析 JSON，返回结构化数据或 null */
+function tryParseDebateData(content: string): DebateStructuredData | null {
+  const jsonText = extractBalancedJson(content.trim(), "last");
+  if (!jsonText) return null;
+  try {
+    const obj = JSON.parse(jsonText) as Record<string, unknown>;
+    const rawClaims = Array.isArray(obj.claims) ? obj.claims : [];
+    const claims = rawClaims
+      .map(normalizeClaim)
+      .filter((c): c is DebateClaim => c !== null);
+
+    if (claims.length === 0) {
+      const summary = String(obj.summary ?? "").trim();
+      if (!summary) return null;
+      return {
+        stance_strength: typeof obj.stance_strength === "number" ? obj.stance_strength : undefined,
+        summary,
+        claims: [],
+      };
+    }
+
+    return {
+      stance_strength: typeof obj.stance_strength === "number" ? obj.stance_strength : undefined,
+      summary: String(obj.summary ?? ""),
+      claims,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** 从 Markdown 中提取 **标题** 段落 */
@@ -62,7 +118,23 @@ function parseSections(md: string): { title: string; body: string }[] {
   return sections;
 }
 
-/** 从 strategy agent JSON 中提取裁决 */
+function parseMarkdownRuling(md: string) {
+  const get = (key: string) => {
+    const re = new RegExp(`\\*\\*${key}\\*\\*:\\s*(.+)$`, "im");
+    const m = md.match(re);
+    return m ? m[1].trim() : undefined;
+  };
+  const confRaw = get("Confidence Score");
+  const confidence = confRaw ? Number.parseFloat(confRaw) : undefined;
+  return {
+    recommendation: get("Recommendation"),
+    confidence: Number.isFinite(confidence) ? confidence : undefined,
+    reasoning: get("Reasoning"),
+    weight_summary: get("Weight Summary"),
+  };
+}
+
+/** 从 strategy agent JSON 或 Markdown 中提取裁决 */
 function parseRuling(strategyContent: string) {
   const ruling: {
     recommendation?: string;
@@ -70,18 +142,26 @@ function parseRuling(strategyContent: string) {
     reasoning?: string;
     weight_summary?: string;
   } = {};
-  try {
-    const m = strategyContent.match(/\{[\s\S]*\}/);
-    if (m) {
-      const obj = JSON.parse(m[0]);
-      ruling.recommendation = obj.recommendation;
-      ruling.confidence = obj.confidence_score;
-      ruling.reasoning = obj.reasoning;
-      ruling.weight_summary = obj.weight_summary;
+
+  const jsonText = extractBalancedJson(strategyContent.trim(), "last");
+  if (jsonText) {
+    try {
+      const obj = JSON.parse(jsonText) as Record<string, unknown>;
+      ruling.recommendation = typeof obj.recommendation === "string" ? obj.recommendation : undefined;
+      const conf = obj.confidence_score;
+      ruling.confidence = typeof conf === "number" ? conf : Number.parseFloat(String(conf ?? ""));
+      if (!Number.isFinite(ruling.confidence)) ruling.confidence = undefined;
+      const reasoning = obj.reasoning ?? obj.warning;
+      ruling.reasoning = typeof reasoning === "string" ? reasoning : undefined;
+      ruling.weight_summary = typeof obj.weight_summary === "string" ? obj.weight_summary : undefined;
+      if (ruling.recommendation || ruling.reasoning) return ruling;
+    } catch {
+      // fall through to markdown parser
     }
-  } catch {
-    ruling.reasoning = strategyContent.slice(0, 300);
   }
+
+  const fromMd = parseMarkdownRuling(strategyContent);
+  if (fromMd.recommendation || fromMd.reasoning) return fromMd;
   return ruling;
 }
 
@@ -236,9 +316,14 @@ export default function DebatePanel({ agents, evidence, guard, recommendation }:
                 <StanceBar strength={bullStructured.stance_strength} label="多方" />
               )}
               {bullStructured ? (
-                bullStructured.claims.map((c, i) => (
-                  <ClaimCard key={i} claim={c} tone="bull" />
-                ))
+                <>
+                  {bullStructured.summary && bullStructured.claims.length === 0 && (
+                    <p className="dp-section-body">{bullStructured.summary}</p>
+                  )}
+                  {bullStructured.claims.map((c, i) => (
+                    <ClaimCard key={i} claim={c} tone="bull" />
+                  ))}
+                </>
               ) : bullSections.length > 0 ? (
                 bullSections.map((s, i) => (
                   <div key={i} className="dp-section">
@@ -268,9 +353,14 @@ export default function DebatePanel({ agents, evidence, guard, recommendation }:
                 <StanceBar strength={bearStructured.stance_strength} label="空方" />
               )}
               {bearStructured ? (
-                bearStructured.claims.map((c, i) => (
-                  <ClaimCard key={i} claim={c} tone="bear" />
-                ))
+                <>
+                  {bearStructured.summary && bearStructured.claims.length === 0 && (
+                    <p className="dp-section-body">{bearStructured.summary}</p>
+                  )}
+                  {bearStructured.claims.map((c, i) => (
+                    <ClaimCard key={i} claim={c} tone="bear" />
+                  ))}
+                </>
               ) : bearSections.length > 0 ? (
                 bearSections.map((s, i) => (
                   <div key={i} className="dp-section">
@@ -316,7 +406,7 @@ export default function DebatePanel({ agents, evidence, guard, recommendation }:
               <p className="dp-ruling-text">{ruling.reasoning}</p>
             </div>
           )}
-          {!ruling.recommendation && recommendation && (
+          {!ruling.recommendation && !ruling.reasoning && recommendation && (
             <div className="dp-ruling-reasoning">
               <span className="dp-ruling-label">综合结论</span>
               <p className="dp-ruling-text">{recommendation}</p>

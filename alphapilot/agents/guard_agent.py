@@ -80,13 +80,14 @@ def _number_variants(value) -> set[str]:
     return {v.rstrip("0").rstrip(".") if "." in v else v for v in variants}
 
 
-def _find_ungrounded_claims(ep: EvidencePacket, output_text: str) -> list[str]:
+def _find_ungrounded_claims_v2(ep: EvidencePacket, output_text: str) -> tuple[list[str], list[str]]:
     """
-    规则型 grounding 检查：
-    1) 报告提到某类关键字段，但 packet 中没有该字段 -> ungrounded
-    2) 人类可读报告含 target price/目标价等高风险结论 -> ungrounded
+    规则型 grounding 检查 (v2)。返回 (issues, warnings)。
+    - issues: 报告提到某类字段但 packet 中没有该字段 → 影响 is_valid
+    - warnings: 字段存在但数值未在报告中被逐字引用 → 仅提示，不阻止输出
     """
-    issues = []
+    issues: list[str] = []
+    warnings: list[str] = []
     text = _strip_machine_json_blocks(output_text or "")
     lines = text.split("\n")
     _negation = re.compile(
@@ -98,6 +99,7 @@ def _find_ungrounded_claims(ep: EvidencePacket, output_text: str) -> list[str]:
     lower = "\n".join(clean_lines).lower()
     available_fields = {f.field for f in ep.facts}
 
+    # Level 1: field-level check → issues (影响 is_valid)
     for keyword, required_field in _KEYWORD_FIELD_MAP.items():
         if keyword in lower and required_field not in available_fields:
             issues.append(
@@ -114,7 +116,7 @@ def _find_ungrounded_claims(ep: EvidencePacket, output_text: str) -> list[str]:
             "Ungrounded claim: target price statement is not allowed unless explicitly grounded in Evidence Packet"
         )
 
-    # Optional value-level check for frequently abused numeric fields.
+    # Level 2: value-level check → warnings (不影响 is_valid)
     numeric_fields = {"current_price", "pe_ratio", "pb_ratio", "revenue_growth_yoy", "eps_growth_yoy"}
     numeric_fact_map = {
         f.field: _number_variants(f.value)
@@ -126,11 +128,11 @@ def _find_ungrounded_claims(ep: EvidencePacket, output_text: str) -> list[str]:
             continue
         keyword_hits = [kw for kw, fld in _KEYWORD_FIELD_MAP.items() if fld == field_name and kw in lower]
         if keyword_hits and not any(v and v in lower for v in variants):
-            issues.append(
-                f"Potential ungrounded numeric claim: '{field_name}' is mentioned but numeric value not traceable to packet fact"
+            warnings.append(
+                f"Value-check: '{field_name}' mentioned in report but specific numeric value not found — fact value exists, agent may be paraphrasing"
             )
 
-    return issues
+    return issues, warnings
 
 
 def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = "", all_output_text: str = "") -> dict:
@@ -246,8 +248,13 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
                 "LIMITED_ANALYSIS_PARTIAL: Strategy/Risk output missing 'data_quality' field"
             )
 
+    # grounding 检查分离：
+    # - field-level issues (report 用到了 facts 里不存在的字段) → 影响 is_valid
+    # - value-level warnings (字段存在但数值没被逐字引用) → 不影响 is_valid，仅作提示
+    grounding_issues, grounding_warnings = _find_ungrounded_claims_v2(ep, final_output_text)
+
     if guard_result.allowed_output_level != OutputLevel.FULL_ANALYSIS:
-        issues.extend(_find_ungrounded_claims(ep, final_output_text))
+        issues.extend(grounding_issues)
 
     is_valid = len(issues) == 0
 
