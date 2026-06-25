@@ -146,6 +146,11 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
             "corrections": ["rebuild evidence packet before analysis"],
             "sources": [],
             "final_reasoning": "No evidence packet in state.",
+            "checks": {
+                "data_coverage": {"passed": False, "detail": "evidence packet 缺失"},
+                "symbol_match": {"passed": False, "detail": "无法校验标的匹配"},
+                "unsupported_claim": {"passed": True, "detail": ""},
+            },
         }
 
     try:
@@ -158,6 +163,11 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
             "corrections": [],
             "sources": [],
             "final_reasoning": "Evidence packet failed schema validation.",
+            "checks": {
+                "data_coverage": {"passed": False, "detail": "evidence packet 损坏"},
+                "symbol_match": {"passed": False, "detail": "无法校验标的匹配"},
+                "unsupported_claim": {"passed": True, "detail": ""},
+            },
         }
 
     guard_result = determine_output_level(ep)
@@ -174,6 +184,11 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
             "corrections": ["rebuild evidence packet with correct symbol data"],
             "sources": [f.source for f in ep.facts],
             "final_reasoning": f"Symbol mismatch detected: {symbol_issues[0]}",
+            "checks": {
+                "data_coverage": {"passed": True, "detail": ""},
+                "symbol_match": {"passed": False, "detail": symbol_issues[0]},
+                "unsupported_claim": {"passed": True, "detail": ""},
+            },
         }
 
     if guard_result.allowed_output_level == OutputLevel.INSUFFICIENT_EVIDENCE:
@@ -184,6 +199,11 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
             "corrections": ["cannot produce analysis with current data"],
             "sources": [f.source for f in ep.facts],
             "final_reasoning": guard_result.reason,
+            "checks": {
+                "data_coverage": {"passed": False, "detail": guard_result.reason},
+                "symbol_match": {"passed": True, "detail": ""},
+                "unsupported_claim": {"passed": True, "detail": ""},
+            },
         }
 
     issues = []
@@ -231,6 +251,31 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
     if guard_result.allowed_output_level == OutputLevel.LIMITED_ANALYSIS_PARTIAL:
         confidence = max(0, confidence - 5)
 
+    # 结构化检查项
+    checks = {
+        "data_coverage": {"passed": True, "detail": ""},
+        "symbol_match": {"passed": True, "detail": ""},
+        "unsupported_claim": {"passed": True, "detail": ""},
+    }
+    # data_coverage 不通过：分数不够 或 output_level 受限
+    if guard_result.allowed_output_level != OutputLevel.FULL_ANALYSIS:
+        checks["data_coverage"] = {
+            "passed": False,
+            "detail": f"Evidence score {ep.evidence_score}/100 → output level {guard_result.allowed_output_level.value}",
+        }
+    if ep.evidence_score < 70:
+        checks["data_coverage"] = {
+            "passed": False,
+            "detail": f"Evidence score {ep.evidence_score}/100 (< 70)，数据覆盖不足",
+        }
+    # unsupported_claim 不通过：issue 中包含 UNVERIFIED_CLAIM
+    unverified = [i for i in issues if "UNVERIFIED_CLAIM" in i.upper() or "UNSUPPORTED" in i.upper()]
+    if unverified:
+        checks["unsupported_claim"] = {
+            "passed": False,
+            "detail": "; ".join(unverified),
+        }
+
     level = guard_result.allowed_output_level.value
     if is_valid and level != OutputLevel.FULL_ANALYSIS.value:
         reasoning = (
@@ -248,6 +293,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
         "sources": [f.source for f in ep.facts],
         "final_reasoning": reasoning,
         "output_level": level,
+        "checks": checks,
     }
 
 

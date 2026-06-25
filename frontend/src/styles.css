@@ -2499,3 +2499,521 @@ select option {
   line-height: 1.55;
 }
 
+/* ── Financial Trends Panel ── */
+.fin-trends {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fin-trends-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.fin-trends-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.fin-trends-badge {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(147, 197, 253, 0.85);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 999px;
+  padding: 0.16rem 0.5rem;
+}
+
+.fin-trends-subtitle {
+  margin: -0.45rem 0 0;
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.fin-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.2rem 0;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.22);
+  font-size: 0.82rem;
+}
+
+/* Metric cards row */
+.fin-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.fin-metric-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.6rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.fin-metric-card.positive {
+  border-color: rgba(34, 197, 94, 0.12);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.075), rgba(255, 255, 255, 0.025));
+}
+
+.fin-metric-card.negative {
+  border-color: rgba(248, 113, 113, 0.14);
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.075), rgba(255, 255, 255, 0.025));
+}
+
+.fin-metric-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.fin-metric-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.fin-metric-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.38);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fin-metric-value {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fin-metric-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.38);
+  white-space: nowrap;
+}
+
+.fin-metric-source {
+  font-size: 0.56rem;
+  color: rgba(255, 255, 255, 0.22);
+  margin-top: 0.08rem;
+  white-space: nowrap;
+}
+
+.fin-metric-sub.positive {
+  color: rgba(74, 222, 128, 0.78);
+}
+
+.fin-metric-sub.negative {
+  color: rgba(248, 113, 113, 0.82);
+}
+
+/* Section labels */
+.fin-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+/* Ratio gauges */
+.fin-gauges-section {
+  padding-top: 0.3rem;
+}
+
+.fin-gauges-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.8rem;
+}
+
+.fin-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.fin-gauge-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.fin-gauge-label {
+  font-size: 0.66rem;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.fin-gauge-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-gauge-bar-wrap {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.fin-gauge-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.fin-gauge-ideal {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(34, 197, 94, 0.1);
+  border-left: 1px solid rgba(34, 197, 94, 0.18);
+  border-right: 1px solid rgba(34, 197, 94, 0.18);
+  z-index: 0;
+}
+
+.fin-health-section {
+  padding-top: 0.3rem;
+}
+
+.fin-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+}
+
+.fin-health-item,
+.fin-health-score {
+  min-height: 54px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.fin-health-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.fin-health-item.positive,
+.fin-health-score.positive {
+  border-color: rgba(34, 197, 94, 0.14);
+  background: rgba(34, 197, 94, 0.055);
+}
+
+.fin-health-item.negative,
+.fin-health-score.negative {
+  border-color: rgba(248, 113, 113, 0.16);
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.fin-health-label,
+.fin-health-score-label {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.42);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fin-health-value {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-health-score {
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+}
+
+.fin-health-score-label {
+  margin-right: auto;
+}
+
+.fin-health-score strong {
+  font-size: 1.18rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chart area */
+.fin-chart-area {
+  padding-top: 0.3rem;
+}
+
+.fin-chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.fin-chart-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  min-height: 150px;
+}
+
+.fin-chart-cell-title {
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.38);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.fin-chart-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: rgba(96, 165, 250, 0.28);
+  text-align: center;
+  padding: 0.4rem;
+}
+
+.fin-empty-title {
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.52);
+  font-weight: 600;
+}
+
+.fin-empty-desc {
+  font-size: 0.62rem;
+  color: rgba(148, 163, 184, 0.58);
+  line-height: 1.4;
+  max-width: 210px;
+}
+
+.fin-chart-svg {
+  flex: 1;
+  display: block;
+  min-height: 0;
+}
+
+/* ── Guard 检查项明细 ── */
+.vs-guard-checks {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vs-guard-checks-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 0.35rem;
+}
+
+.vs-guard-checks-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  margin-left: auto;
+}
+.vs-guard-checks-badge.pass {
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.1);
+}
+.vs-guard-checks-badge.fail {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.vs-guard-reasoning {
+  margin: 0 0 0.4rem;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.42);
+  line-height: 1.5;
+}
+
+.vs-guard-checks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.vs-guard-check-cat {
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.vs-guard-check-cat.fail {
+  border-color: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.vs-guard-check-cat-hd {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+.vs-guard-check-cat-icon { display: flex; color: rgba(255, 255, 255, 0.3); }
+.vs-guard-check-cat-count {
+  margin-left: auto;
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+}
+
+.vs-guard-check-cat-reason {
+  margin-left: auto;
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.3);
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-guard-check-items {
+  margin: 0.25rem 0 0;
+  padding-left: 1.4rem;
+  list-style: none;
+}
+.vs-guard-check-items li {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.38);
+  line-height: 1.45;
+  position: relative;
+}
+.vs-guard-check-items li::before {
+  content: "–";
+  position: absolute;
+  left: -0.9rem;
+  color: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Agent 详情数据来源 ── */
+.agent-sources {
+  margin-top: 0.85rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.agent-sources-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.agent-sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.agent-source-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.agent-source-name {
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.52);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.agent-source-fields {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.3);
+  line-height: 1.4;
+}
+
+/* ── Financial 数据来源 ── */
+.fin-sources {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.fin-sources-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.28);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fin-source-badge {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+

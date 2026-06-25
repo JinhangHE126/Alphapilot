@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from datetime import date
+from typing import Any
 
 import requests
 
@@ -15,6 +15,7 @@ from tools.providers.base import DataProvider
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 _SECID_PREFIX_HK = "116"
+_ZERO_INVALID_FIELDS = {"revenue", "net_profit", "eps"}
 
 
 def _curl_get_json(url: str) -> dict | list | None:
@@ -51,6 +52,15 @@ def _resolve_secid_prefix(symbol: str) -> str | None:
         if mkt:
             return str(mkt)
     return None
+
+
+def _to_float(value: Any) -> float | None:
+    if value is None or value == "-" or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _eastmoney_push2_quote(secid: str) -> dict:
@@ -178,6 +188,8 @@ class EastmoneyProvider(DataProvider):
                             continue
                     else:
                         parsed = float(val)
+                        if field_name in _ZERO_INVALID_FIELDS and parsed == 0:
+                            continue
                     facts.append(Fact(
                         field=field_name, value=parsed, unit=fu,
                         period="latest", source="eastmoney_push2",
@@ -226,7 +238,7 @@ def _fetch_gmaindicator(symbol: str, is_hk: bool, today: str) -> list[Fact]:
         "columns": "ALL",
         "filter": f'(SECUCODE="{seccode}")',
         "pageNumber": "1",
-        "pageSize": "1",
+        "pageSize": "5",
         "sortColumns": "REPORT_DATE",
         "sortTypes": "-1",
         "source": "WEB",
@@ -248,7 +260,6 @@ def _fetch_gmaindicator(symbol: str, is_hk: bool, today: str) -> list[Fact]:
     if not rows:
         return facts
 
-    row = rows[0]
     indicator_map = {
         "ROE_AVG": ("return_on_equity", "percent"),
         "NP_GONGLY_YOY": ("eps_growth_yoy", "percent"),
@@ -257,8 +268,10 @@ def _fetch_gmaindicator(symbol: str, is_hk: bool, today: str) -> list[Fact]:
         "NET_PROFIT_RATIO": ("net_margin", "percent"),
         "DEBT_ASSET_RATIO": ("debt_to_assets", "percent"),
     }
+
+    # 第一行 = 最新期（保持现有行为）
     for key, (field_name, unit) in indicator_map.items():
-        val = row.get(key)
+        val = rows[0].get(key)
         if val is None or val == "-" or val == "":
             continue
         try:
@@ -275,3 +288,4 @@ def _fetch_gmaindicator(symbol: str, is_hk: bool, today: str) -> list[Fact]:
             continue
 
     return facts
+

@@ -14,6 +14,7 @@ import {
 import MarkdownContent from "../components/MarkdownContent";
 import StockOverviewPanel from "../components/StockOverviewPanel";
 import ValuationSummaryCard from "../components/ValuationSummaryCard";
+import FinancialTrendsPanel from "../components/FinancialTrendsPanel";
 import { useTranslation } from "../i18n";
 import { createSession } from "../services/api";
 import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, TargetPriceData, RiskLevelData } from "../services/sse";
@@ -562,10 +563,22 @@ export default function AnalyzePage() {
                     content={selectedContent}
                     emptyFallback={t("analyze.noOutput")}
                   />
+                  {/* 数据来源列表 */}
+                  <AgentSources
+                    agentId={selectedAgentId}
+                    facts={evidencePacket?.facts ?? []}
+                  />
                 </div>
               </div>
             )}
           </section>
+
+          {/* 财务基本面快照：只展示已有 facts，不启用多年度趋势图 */}
+          {evidencePacket && (
+            <section className="card">
+              <FinancialTrendsPanel evidence={evidencePacket} />
+            </section>
+          )}
 
           {/* 估值与结论摘要卡：分析完成后展示核心结论 */}
           {guardCheck && (
@@ -667,6 +680,83 @@ export default function AnalyzePage() {
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Agent 详情 — 数据来源列表
+   ══════════════════════════════════════════════════════════════════════ */
+
+type AgentSourcesProps = {
+  agentId: WorkflowNodeId;
+  facts: EvidencePacketData["facts"];
+};
+
+// 各 Agent 关心的 fact field 映射
+const AGENT_FACT_FIELDS: Record<string, string[]> = {
+  market_data_expert: ["current_price", "price_change_pct", "ma_20", "ma_50", "ma_200", "rsi_14", "macd", "volatility_20d_annualized"],
+  fundamental_expert: ["revenue", "total_revenue", "net_profit", "net_income", "eps", "eps_basic", "trailing_eps", "gross_margin", "net_margin", "operating_margin", "return_on_equity", "roe", "debt_to_assets", "debt_to_equity", "market_cap", "operating_cash_flow", "operating_cashflow", "free_cash_flow", "free_cashflow", "cash_position", "total_cash", "total_debt", "net_debt", "revenue_growth_yoy", "net_profit_growth_yoy", "eps_growth_yoy"],
+  news_sentiment_expert: ["news_score", "news_sentiment"],
+  risk_expert: ["volatility_20d_annualized", "sharpe_ratio_annual", "max_drawdown", "var_95_daily", "sortino_ratio_annual"],
+  valuation_expert: ["pe_ratio", "pb_ratio", "ps_ratio", "ev_to_ebitda", "dividend_yield"],
+  strategy_expert: ["current_price", "pe_ratio", "market_cap"],
+  recommendation_agent: ["current_price", "market_cap", "pe_ratio"],
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  current_price: "当前价", price_change_pct: "涨跌幅",
+  revenue: "营收", total_revenue: "营收", net_profit: "净利润", net_income: "净利润",
+  eps: "EPS", eps_basic: "EPS", trailing_eps: "EPS",
+  gross_margin: "毛利率", net_margin: "净利率", operating_margin: "营业利润率",
+  return_on_equity: "ROE", roe: "ROE",
+  debt_to_assets: "资产负债率", debt_to_equity: "负债权益比",
+  market_cap: "市值", pe_ratio: "PE", pb_ratio: "PB",
+  ps_ratio: "PS", ev_to_ebitda: "EV/EBITDA",
+  dividend_yield: "股息率",
+  rsi_14: "RSI(14)", macd: "MACD",
+  volatility_20d_annualized: "波动率(20日)",
+  ma_20: "MA20", ma_50: "MA50", ma_200: "MA200",
+  sharpe_ratio_annual: "夏普比率", max_drawdown: "最大回撤",
+  var_95_daily: "VaR(95%)", sortino_ratio_annual: "索提诺比率",
+  news_score: "新闻评分", news_sentiment: "新闻情绪",
+  operating_cash_flow: "经营现金流", operating_cashflow: "经营现金流",
+  free_cash_flow: "自由现金流", free_cashflow: "自由现金流",
+  cash_position: "现金储备", total_cash: "现金储备",
+  total_debt: "总债务", net_debt: "净债务",
+  revenue_growth_yoy: "营收增速", net_profit_growth_yoy: "净利润增速",
+  net_income_growth_yoy: "净利润增速", eps_growth_yoy: "EPS增速",
+};
+
+function AgentSources({ agentId, facts }: AgentSourcesProps) {
+  const relevantFields = AGENT_FACT_FIELDS[agentId] ?? [];
+  const relevantFacts = facts.filter((f) => relevantFields.includes(f.field));
+
+  if (relevantFacts.length === 0) return null;
+
+  // 按 source 分组
+  const bySource = new Map<string, typeof relevantFacts>();
+  for (const f of relevantFacts) {
+    const src = f.source || "unknown";
+    if (!bySource.has(src)) bySource.set(src, []);
+    bySource.get(src)!.push(f);
+  }
+
+  const sources = Array.from(bySource.entries());
+
+  return (
+    <div className="agent-sources">
+      <div className="agent-sources-label">数据来源</div>
+      <div className="agent-sources-list">
+        {sources.map(([src, items]) => (
+          <div key={src} className="agent-source-group">
+            <span className="agent-source-name">{src}</span>
+            <span className="agent-source-fields">
+              {items.map((f) => FIELD_LABELS[f.field] || f.field).join(" · ")}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

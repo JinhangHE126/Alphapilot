@@ -1,5 +1,16 @@
 import { authHeader } from "./api";
 
+export type GuardCheckItem = {
+  passed: boolean;
+  detail: string;
+};
+
+export type GuardChecks = {
+  data_coverage: GuardCheckItem;
+  symbol_match: GuardCheckItem;
+  unsupported_claim: GuardCheckItem;
+};
+
 export type GuardCheck = {
   is_valid: boolean;
   confidence_score: number;
@@ -7,6 +18,7 @@ export type GuardCheck = {
   corrections: string[];
   sources: string[];
   final_reasoning: string;
+  checks?: GuardChecks;
 };
 
 export type EvidenceFact = {

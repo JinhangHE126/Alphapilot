@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Target, ShieldCheck, TrendingUp, TrendingDown, AlertTriangle, Info } from "lucide-react";
+import { Target, ShieldCheck, TrendingUp, TrendingDown, AlertTriangle, Info, CheckCircle2, XCircle, Search, Database, FileWarning } from "lucide-react";
 import type { EvidencePacketData, GuardCheck, TargetPriceData, RiskLevelData } from "../services/sse";
 
 type ValuationSummaryCardProps = {
@@ -243,9 +243,135 @@ export default function ValuationSummaryCard({ evidence, guard, recommendation, 
                 <p className="vs-consensus-text">{riskLevel.risk_reasoning}</p>
               </div>
             )}
+
+            {/* Guard 检查项明细 */}
+            {guard && (
+              <GuardCheckItems guard={guard} evidenceScore={evidenceScore} />
+            )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Guard 检查项明细面板
+   ══════════════════════════════════════════════════════════════════════ */
+
+type GuardCheckCategory = {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  items: string[];
+  passed: boolean;
+};
+
+function GuardCheckItems({ guard, evidenceScore }: { guard: GuardCheck; evidenceScore: number }) {
+  const checks = guard.checks;
+  const hasStructured = checks && (
+    checks.data_coverage !== undefined ||
+    checks.symbol_match !== undefined ||
+    checks.unsupported_claim !== undefined
+  );
+
+  // 有结构化 checks → 使用后端结构化数据
+  if (hasStructured) {
+    const checkList = [
+      { key: "data_coverage", label: "数据覆盖", icon: <Database size={13} />, ...checks.data_coverage },
+      { key: "symbol_match", label: "标的匹配", icon: <Search size={13} />, ...checks.symbol_match },
+      { key: "unsupported_claim", label: "无依据声明", icon: <FileWarning size={13} />, ...checks.unsupported_claim },
+    ];
+    const allPassed = checkList.every((c) => c.passed);
+
+    return (
+      <div className="vs-guard-checks">
+        <div className="vs-guard-checks-header">
+          <ShieldCheck size={15} style={{ color: allPassed ? "#22c55e" : "#f59e0b" }} />
+          <span>Guard 检查项</span>
+          <span className={`vs-guard-checks-badge ${allPassed ? "pass" : "fail"}`}>
+            {allPassed ? "全部通过" : `${checkList.filter((c) => !c.passed).length} 项未通过`}
+          </span>
+        </div>
+
+        {guard.final_reasoning && (
+          <p className="vs-guard-reasoning">{guard.final_reasoning}</p>
+        )}
+
+        <div className="vs-guard-checks-list">
+          {checkList.map((cat) => (
+            <div key={cat.key} className={`vs-guard-check-cat ${cat.passed ? "pass" : "fail"}`}>
+              <div className="vs-guard-check-cat-hd">
+                {cat.passed ? <CheckCircle2 size={13} color="#22c55e" /> : <XCircle size={13} color="#ef4444" />}
+                <span className="vs-guard-check-cat-icon">{cat.icon}</span>
+                <span className="vs-guard-check-cat-label">{cat.label}</span>
+                <span className="vs-guard-check-cat-reason">
+                  {cat.passed ? "通过" : "未通过"}
+                  {cat.detail && `\u2009\u2014\u2009${cat.detail.slice(0, 80)}`}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback: 无结构化 checks → 从 issues 文本关键词分类
+  const issues = guard.issues ?? [];
+  const corrections = guard.corrections ?? [];
+  const allIssues = [...new Set([...issues, ...corrections])];
+  const categories: GuardCheckCategory[] = useMemo(() => {
+    const cats: Record<string, GuardCheckCategory> = {
+      data_coverage: { key: "data_coverage", label: "数据覆盖", icon: <Database size={13} />, items: [], passed: true },
+      symbol_match: { key: "symbol_match", label: "标的匹配", icon: <Search size={13} />, items: [], passed: true },
+      unsupported: { key: "unsupported", label: "无依据声明", icon: <FileWarning size={13} />, items: [], passed: true },
+      other: { key: "other", label: "其他检查", icon: <Info size={13} />, items: [], passed: true },
+    };
+    for (const iss of allIssues) {
+      const lower = iss.toLowerCase();
+      if (lower.includes("symbol mismatch") || lower.includes("symbol_mismatch")) {
+        cats.symbol_match.items.push(iss); cats.symbol_match.passed = false;
+      } else if (lower.includes("insufficient_evidence") || lower.includes("insufficient evidence") || lower.includes("data_summary") || lower.includes("coverage")) {
+        cats.data_coverage.items.push(iss); cats.data_coverage.passed = false;
+      } else if (lower.includes("unverified_claim") || lower.includes("ungrounded") || lower.includes("unsupported")) {
+        cats.unsupported.items.push(iss); cats.unsupported.passed = false;
+      } else {
+        cats.other.items.push(iss); cats.other.passed = false;
+      }
+    }
+    return Object.values(cats).filter((c) => c.items.length > 0);
+  }, [allIssues]);
+
+  const allPassed = categories.length === 0 || categories.every((c) => c.passed);
+
+  return (
+    <div className="vs-guard-checks">
+      <div className="vs-guard-checks-header">
+        <ShieldCheck size={15} style={{ color: allPassed ? "#22c55e" : "#f59e0b" }} />
+        <span>Guard 检查项</span>
+        <span className={`vs-guard-checks-badge ${allPassed ? "pass" : "fail"}`}>
+          {allPassed ? "全部通过" : `${categories.filter((c) => !c.passed).length} 项未通过`}
+        </span>
+      </div>
+      {guard.final_reasoning && (
+        <p className="vs-guard-reasoning">{guard.final_reasoning}</p>
+      )}
+      <div className="vs-guard-checks-list">
+        {categories.map((cat) => (
+          <div key={cat.key} className={`vs-guard-check-cat ${cat.passed ? "pass" : "fail"}`}>
+            <div className="vs-guard-check-cat-hd">
+              {cat.passed ? <CheckCircle2 size={13} color="#22c55e" /> : <XCircle size={13} color="#ef4444" />}
+              <span className="vs-guard-check-cat-icon">{cat.icon}</span>
+              <span className="vs-guard-check-cat-label">{cat.label}</span>
+              <span className="vs-guard-check-cat-count">{cat.items.length}</span>
+            </div>
+            <ul className="vs-guard-check-items">
+              {cat.items.map((item, j) => (<li key={j}>{item}</li>))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
