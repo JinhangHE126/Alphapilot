@@ -28,14 +28,14 @@ function getContent(agents: AgentInfo[], id: string): string {
   return agents.find((a) => a.agent === id)?.content ?? "";
 }
 
-/** 从文本中提取第一个或最后一个平衡的 JSON 对象 */
-function extractBalancedJson(text: string, which: "first" | "last" = "last"): string | null {
+/** 从文本中提取 JSON 对象（优先最外层完整 JSON） */
+function extractBalancedJson(text: string): string | null {
   const starts: number[] = [];
   for (let i = 0; i < text.length; i++) {
     if (text[i] === "{") starts.push(i);
   }
-  const order = which === "first" ? starts : [...starts].reverse();
-  for (const start of order) {
+  // 从最外层（第一个 {）开始匹配，避免嵌套对象干扰
+  for (const start of starts) {
     let depth = 0;
     for (let j = start; j < text.length; j++) {
       if (text[j] === "{") depth++;
@@ -74,7 +74,7 @@ function normalizeClaim(raw: unknown): DebateClaim | null {
 
 /** 尝试从 agent 内容解析 JSON，返回结构化数据或 null */
 function tryParseDebateData(content: string): DebateStructuredData | null {
-  const jsonText = extractBalancedJson(content.trim(), "last");
+  const jsonText = extractBalancedJson(content.trim());
   if (!jsonText) return null;
   try {
     const obj = JSON.parse(jsonText) as Record<string, unknown>;
@@ -118,7 +118,47 @@ function parseSections(md: string): { title: string; body: string }[] {
   return sections;
 }
 
+/** 从 Markdown 表格中提取 key 对应的值 */
+function extractTableValue(md: string, key: string): string | undefined {
+  // 匹配 | **key** | 内容 |
+  const re = new RegExp(`\\|\\s*\\*\\*${key}\\*\\*\\s*\\|\\s*(.+?)\\s*\\|`, "im");
+  const m = md.match(re);
+  if (!m) return undefined;
+  // 去掉可能的内嵌 markdown 标记（**粗体**、emoji等）取纯文本
+  return m[1].replace(/\*\*/g, "").replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2700}-\u{27BF}]/gu, "").trim();
+}
+
+/** 从中文 Markdown 标题后提取段落内容 */
+function extractSectionBody(md: string, heading: string): string | undefined {
+  const re = new RegExp(`###\\s+${heading}\\s*\\n+([\\s\\S]*?)(?=\\n###\\s|\\n---|$)`, "im");
+  const m = md.match(re);
+  return m ? m[1].trim() : undefined;
+}
+
+/** 中文建议 → 英文枚举映射 */
+function recCnToEn(label: string): string | undefined {
+  const map: Record<string, string> = { "买入": "Buy", "卖出": "Sell", "持有": "Hold", "暂无法评估": "N/A" };
+  return map[label] ?? (label in map ? undefined : label);
+}
+
 function parseMarkdownRuling(md: string) {
+  // 优先按新中文格式解析
+  const cnRec = extractTableValue(md, "最终建议");
+  const cnConf = extractTableValue(md, "置信度评分");
+  const cnReasoning = extractSectionBody(md, "决策推理");
+  const cnWeight = extractSectionBody(md, "因子权重分配");
+
+  if (cnRec || cnConf || cnReasoning || cnWeight) {
+    const confNum = cnConf ? Number.parseFloat(cnConf) : undefined;
+    return {
+      recommendation: cnRec ? recCnToEn(cnRec) : undefined,
+      confidence: Number.isFinite(confNum) ? confNum : undefined,
+      reasoning: cnReasoning,
+      weight_summary: cnWeight,
+    };
+  }
+
+  // 回退旧英文格式
   const get = (key: string) => {
     const re = new RegExp(`\\*\\*${key}\\*\\*:\\s*(.+)$`, "im");
     const m = md.match(re);
@@ -406,10 +446,10 @@ export default function DebatePanel({ agents, evidence, guard, recommendation }:
               <p className="dp-ruling-text">{ruling.reasoning}</p>
             </div>
           )}
-          {!ruling.recommendation && !ruling.reasoning && recommendation && (
+          {!ruling.recommendation && !ruling.reasoning && (
             <div className="dp-ruling-reasoning">
-              <span className="dp-ruling-label">综合结论</span>
-              <p className="dp-ruling-text">{recommendation}</p>
+              <span className="dp-ruling-label">策略裁决</span>
+              <p className="dp-ruling-text">暂未生成策略裁决数据</p>
             </div>
           )}
         </div>

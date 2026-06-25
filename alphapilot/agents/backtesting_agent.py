@@ -39,15 +39,23 @@ def backtesting_agent(state):
     ep = state.get("evidence_packet", {})
     ep_score = int(ep.get("evidence_score", 0)) if ep else 0
     symbol = state.get("stock_symbol", "")
+    language = state.get("language", "")
+
+    def _t(key_en, key_zh, key_yue):
+        if language == "zh":
+            return {"en": key_en, "zh": key_zh, "yue": key_yue}.get(language, key_en)
+        if language == "yue":
+            return {"en": key_en, "zh": key_zh, "yue": key_yue}.get(language, key_en)
+        return key_en
 
     if ep_score < 50:
         return {
             "messages": [{
                 "role": "assistant",
                 "content": (
-                    "## Backtesting Report: NOT AVAILABLE\n"
-                    f"- Reason: Evidence score {ep_score}/100 insufficient for backtesting\n"
-                    "- Required: evidence_score >= 50"
+                    f"## {_t('Backtesting Report: NOT AVAILABLE', '回测报告：暂不可用', '回測報告：暫不可用')}\n"
+                    f"- {_t('Reason', '原因', '原因')}: {_t(f'Evidence score {ep_score}/100 insufficient for backtesting', f'证据评分为 {ep_score}/100，不满足回测最低要求', f'證據評分為 {ep_score}/100，唔滿足回測最低要求')}\n"
+                    f"- {_t('Required: evidence_score >= 50', '最低要求: evidence_score >= 50', '最低要求: evidence_score >= 50')}"
                 ),
             }],
         }
@@ -62,9 +70,9 @@ def backtesting_agent(state):
             "messages": [{
                 "role": "assistant",
                 "content": (
-                    "## Backtesting Report: NOT AVAILABLE\n"
-                    f"- Reason: Insufficient price data for {symbol}\n"
-                    "- Required: 20+ trading days of OHLCV data"
+                    f"## {_t('Backtesting Report: NOT AVAILABLE', '回测报告：暂不可用', '回測報告：暫不可用')}\n"
+                    f"- {_t(f'Reason: Insufficient price data for {symbol}', f'原因：{symbol} 价格数据不足', f'原因：{symbol} 價格數據不足')}\n"
+                    f"- {_t('Required: 20+ trading days of OHLCV data', '最低要求: 至少20个交易日的OHLCV数据', '最低要求: 最少20個交易日嘅OHLCV數據')}"
                 ),
             }],
         }
@@ -81,9 +89,9 @@ def backtesting_agent(state):
             "messages": [{
                 "role": "assistant",
                 "content": (
-                    "## Backtesting Report: NOT AVAILABLE\n"
-                    f"- Reason: Insufficient valid returns for {symbol}\n"
-                    "- Required: 20+ valid daily returns"
+                    f"## {_t('Backtesting Report: NOT AVAILABLE', '回测报告：暂不可用', '回測報告：暫不可用')}\n"
+                    f"- {_t(f'Reason: Insufficient valid returns for {symbol}', f'原因：{symbol} 有效收益率数据不足', f'原因：{symbol} 有效收益率數據不足')}\n"
+                    f"- {_t('Required: 20+ valid daily returns', '最低要求: 至少20个有效日收益率', '最低要求: 最少20個有效日收益率')}"
                 ),
             }],
         }
@@ -98,6 +106,15 @@ def backtesting_agent(state):
         f"- Data Points: {metrics['data_points']} trading days"
     )
 
+    lang_instruction = ""
+    if language and language != "en":
+        label_map = {"zh": "简体中文", "yue": "粤语 (Cantonese)"}
+        label = label_map.get(language, language)
+        lang_instruction = (
+            f"\n\n[语言要求] 请全程使用 {label} 回复。"
+            f"所有报告内容、指标解读、评论都必须用 {label} 输出。\n"
+        )
+
     llm = get_llm("backtesting")
     prompt = (
         f"You are a backtesting report writer. Below are PROGRAMMATICALLY COMPUTED metrics for {symbol}. "
@@ -106,6 +123,7 @@ def backtesting_agent(state):
         f"Output a structured backtesting report with these exact numbers, "
         f"adding brief commentary on what each metric means for a trader. "
         f"Do NOT invent additional metrics or make investment recommendations."
+        f"{lang_instruction}"
     )
 
     try:

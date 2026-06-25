@@ -180,14 +180,90 @@ def _extract_risk_level(update: dict) -> dict | None:
     return None
 
 
+def _format_risk_markdown(raw_json: str) -> str:
+    """Convert risk agent JSON into a well-structured Markdown report."""
+    import json as _json
+    try:
+        obj = _json.loads(raw_json)
+    except (_json.JSONDecodeError, ValueError):
+        return raw_json
+
+    overall = obj.get("overall_risk_score", obj.get("overall_risk", ""))
+    vol = obj.get("volatility_risk", "")
+    macro = obj.get("macro_risk", "")
+    stop = obj.get("stop_loss_suggestion", "")
+    position = obj.get("position_suggestion", "")
+    reasoning = obj.get("risk_reasoning", "")
+    risks = obj.get("key_risks", [])
+
+    # risk level badge
+    if isinstance(overall, (int, float)):
+        if overall >= 80:
+            level = ("🔴", "极高")
+        elif overall >= 60:
+            level = ("🟠", "较高")
+        elif overall >= 40:
+            level = ("🟡", "中等")
+        else:
+            level = ("🟢", "较低")
+        score_str = f"{overall}/100"
+    else:
+        level = ("⚪", "—")
+        score_str = str(overall) if overall else "—"
+
+    lines = [
+        "---",
+        "## 风险评估",
+        "",
+        "| 项目 | 内容 |",
+        "|------|------|",
+        f"| **综合风险评分** | {level[0]} **{level[1]} ({score_str})** |",
+    ]
+
+    if isinstance(vol, (int, float)):
+        lines.append(f"| **波动率风险** | **{vol}/100** |")
+    if isinstance(macro, (int, float)):
+        lines.append(f"| **宏观风险** | **{macro}/100** |")
+
+    lines.append("")
+
+    if stop:
+        lines.append("### 止损建议")
+        lines.append("")
+        lines.append(stop.strip())
+        lines.append("")
+
+    if position:
+        lines.append("### 仓位建议")
+        lines.append("")
+        lines.append(position.strip())
+        lines.append("")
+
+    if reasoning:
+        lines.append("### 风险分析")
+        lines.append("")
+        lines.append(reasoning.strip())
+        lines.append("")
+
+    if risks:
+        lines.append("### 关键风险点")
+        lines.append("")
+        for i, r in enumerate(risks, 1):
+            lines.append(f"{i}. {r}")
+        lines.append("")
+
+    lines.append("---")
+    return "\n".join(lines)
+
+
 def _extract_risk_raw_content(update: dict) -> str:
-    """Preserve risk agent JSON for agent detail panel."""
+    """Format risk agent JSON as Markdown for frontend display."""
     messages = update.get("messages")
     if not messages:
         return _extract_text(update)
     text = _safe_text(messages[-1]).strip()
     if text.startswith("{"):
-        return text
+        return _format_risk_markdown(text)
     return _extract_text(update)
 
 
