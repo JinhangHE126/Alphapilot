@@ -424,8 +424,8 @@ def evidence_packet_builder(state: GraphState) -> dict:
     chart_data: list[dict] = []
     try:
         # Use cached multi-provider fetch path so chart data is consistent with analysis path.
-        from tools.data_collector import fetch_price_history
-        df_chart, _ = fetch_price_history(symbol)
+        from tools.data_collector import fetch_chart_history
+        df_chart, _ = fetch_chart_history(symbol)
         if df_chart is not None and not df_chart.empty:
             import pandas as pd
 
@@ -452,7 +452,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
                     "v": volume_col if volume_col is not None else 0,
                 }).dropna(subset=["c"])
 
-                frame = frame.tail(120)
+                frame = frame.tail(504)
                 chart_data = [
                     {
                         "t": str(idx.date()) if hasattr(idx, "date") else str(idx),

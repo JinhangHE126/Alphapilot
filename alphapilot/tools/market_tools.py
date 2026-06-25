@@ -208,6 +208,39 @@ def _download_price_frame_fast(symbol: str):
     return None, "empty"
 
 
+def _download_chart_frame(symbol: str, period: str = "2y"):
+    """Download longer OHLCV history for frontend chart range switching."""
+    proxy = get_proxy_for_agent("market")
+    candidates = [symbol]
+    if symbol.endswith(".HK"):
+        core = symbol.split(".")[0].lstrip("0") or "0"
+        stripped = f"{core}.HK"
+        if stripped != symbol:
+            candidates.append(stripped)
+
+    periods = [period]
+    if period != "max":
+        periods.append("max")
+
+    for sym in candidates:
+        for p in periods:
+            try:
+                kwargs = {"period": p, "progress": False, "timeout": 45}
+                if proxy:
+                    kwargs["proxy"] = proxy
+                print(f"📥 [chart] Downloading {sym} period={p} (proxy: {'启用' if proxy else '直连'})...")
+                df = _safe_yf_download(sym, **kwargs)
+                if df is not None and not df.empty and len(df) >= 30:
+                    print(f"✅ [chart] 下载成功！共 {len(df)} 条记录")
+                    return df, ""
+            except YFRateLimitError:
+                print(f"⚠️ [chart] Rate Limit for {sym}, skipping")
+                return None, "rate_limited"
+            except Exception as exc:
+                print(f"❌ [chart] {sym} period={p} 错误: {exc}")
+    return None, "empty"
+
+
 import warnings
 
 def fetch_market_data(symbol: str) -> str:

@@ -808,10 +808,17 @@ def fetch_price_history(symbol: str):
     return _fetch(symbol)
 
 
+def fetch_chart_history(symbol: str):
+    """Download longer OHLCV history for frontend chart range switching."""
+    from tools.price_history import fetch_chart_history as _fetch
+    return _fetch(symbol)
+
+
 __all__ = [
     "collect_market_facts",
     "collect_fundamental_facts",
     "collect_news_facts",
     "collect_all",
     "fetch_price_history",
+    "fetch_chart_history",
 ]
