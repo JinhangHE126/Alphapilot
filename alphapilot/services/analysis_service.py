@@ -5,6 +5,25 @@ from typing import Any, Generator
 from graph.workflow import app as langgraph_app
 from graph.user_profile import load_user_profile
 
+# Agents that output meaningful analysis (exclude infra / orchestrator nodes)
+_CORE_CONCLUSION_AGENTS = {
+    "market_data_expert",
+    "fundamental_expert",
+    "news_sentiment_expert",
+    "strategy_expert",
+    "risk_expert",
+    "guard_agent",
+    "recommendation_agent",
+    "portfolio_agent",
+    "backtesting_agent",
+    "debate_stage",
+    "bull_researcher",
+    "bear_researcher",
+}
+
+# Sentiment label → English key for LLM extraction prompt
+_SENTIMENT_OPTIONS = ["positive", "negative", "neutral"]
+
 
 AGENT_LABELS: dict[str, dict[str, str]] = {
     "evidence_packet_builder": {"label": "Evidence Builder", "icon": "\U0001f4e6"},
@@ -292,6 +311,260 @@ def _coerce_valuation_scenario(raw: dict | None) -> dict | None:
     }
 
 
+# ── Core Conclusion Extractor ──────────────────────────────────────────────
+# 每个分析类智能体完成输出后，用轻量 LLM 提炼 1-2 句核心结论 + 情绪标签。
+# 通过 agent_core_conclusion SSE 事件推送到前端。
+# ────────────────────────────────────────────────────────────────────────────
+
+_CORE_CONCLUSION_PROMPT = (
+    "You are a financial analysis summarizer. "
+    "Given an agent's analysis output, extract a 1-2 sentence core conclusion "
+    "and classify the overall sentiment.\n\n"
+    "Agent output:\n{content}\n\n"
+    "Return ONLY a JSON object (no markdown, no commentary):\n"
+    '{{"core_conclusion": "1-2 sentence summary in the SAME LANGUAGE as the input", '
+    '"conclusion_sentiment": "positive"|"negative"|"neutral", '
+    '"confidence_score": 0-100}}\n\n'
+    "Rules:\n"
+    "- core_conclusion: 1-2 sentences capturing the key judgment. "
+    "Keep the same language as the input text.\n"
+    "- conclusion_sentiment: positive (bullish/favorable/good), "
+    "negative (bearish/unfavorable/risky), or neutral (balanced/uncertain).\n"
+    "- confidence_score: how confident the agent seems in its conclusion (0-100)."
+)
+
+
+def _md_table_value(md: str, key: str) -> str | None:
+    """从 Markdown 表格中提取 | **key** | value |."""
+    m = re.search(rf"\|\s*\*\*{re.escape(key)}\*\*\s*\|\s*(.+?)\s*\|", md)
+    if not m:
+        return None
+    # 去掉内嵌 ** 和 emoji
+    return re.sub(r"\*\*|\u2600-\u27BF|\U0001F300-\U0001FAFF", "", m.group(1)).strip()
+
+
+def _md_section_body(md: str, heading: str) -> str | None:
+    """从中文 Markdown 标题后提取段落内容."""
+    m = re.search(rf"###\s+{re.escape(heading)}\s*\n+([\s\S]*?)(?=\n###\s|\n---|$)", md)
+    return m.group(1).strip() if m else None
+
+
+def _cc_from_strategy_md(content: str) -> dict | None:
+    """从策略 Markdown 表格提取核心结论."""
+    rec_label = _md_table_value(content, "最终建议")
+    score_raw = _md_table_value(content, "置信度评分")
+    reasoning = _md_section_body(content, "决策推理") or ""
+
+    if not rec_label:
+        return None
+
+    sentiment_map = {"买入": "positive", "卖出": "negative", "持有": "neutral", "暂无法评估": "neutral"}
+    sentiment = sentiment_map.get(rec_label.strip(), "neutral")
+
+    conf = 0
+    if score_raw:
+        conf_match = re.search(r"(\d+)", score_raw)
+        if conf_match:
+            conf = int(conf_match.group(1))
+
+    # 用推理文本的前 80 字作为核心结论，或直接用建议 + 置信度
+    if reasoning and len(reasoning) > 20:
+        conclusion = reasoning[:90].rsplit("。", 1)[0] + "。"
+    else:
+        conclusion = f"策略建议：{rec_label}，置信度 {conf}/100"
+
+    return {
+        "core_conclusion": conclusion,
+        "conclusion_sentiment": sentiment,
+        "confidence_score": conf,
+    }
+
+
+def _cc_from_risk_md(content: str) -> dict | None:
+    """从风险 Markdown 表格提取核心结论."""
+    risk_label = _md_table_value(content, "综合风险评分")
+    reasoning = _md_section_body(content, "风险分析") or ""
+
+    if not risk_label:
+        return None
+
+    conf_match = re.search(r"(\d+)", risk_label)
+    conf = int(conf_match.group(1)) if conf_match else 0
+
+    if conf >= 80:
+        sentiment = "negative"
+    elif conf >= 50:
+        sentiment = "neutral"
+    else:
+        sentiment = "positive"
+
+    if reasoning and len(reasoning) > 20:
+        conclusion = reasoning[:90].rsplit("。", 1)[0] + "。"
+    else:
+        conclusion = f"综合风险评分 {conf}/100，风险等级较高"
+
+    return {
+        "core_conclusion": conclusion,
+        "conclusion_sentiment": sentiment,
+        "confidence_score": conf,
+    }
+
+
+def _cc_from_debate_json(content: str) -> dict | None:
+    """从辩论 JSON 提取核心结论."""
+    try:
+        obj = json.loads(content)
+    except (json.JSONDecodeError, ValueError):
+        # 尝试从文本中提取 JSON
+        m = re.search(r"\{[\s\S]*\}", content)
+        if not m:
+            return None
+        try:
+            obj = json.loads(m.group(0))
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+    stance = obj.get("stance_strength", 0)
+    summary = obj.get("summary", "")
+
+    if not summary:
+        return None
+
+    # 从 Markdown summary 中取第一个非标题段落作为结论
+    # 跳过 ## 和 ### 标题行
+    lines = [l.strip() for l in summary.split("\n") if l.strip() and not l.strip().startswith("#")]
+    conclusion = ""
+    for line in lines:
+        if len(line) > 20 and not line.startswith("*") and not line.startswith("-"):
+            conclusion = line[:90]
+            if "。" in conclusion:
+                conclusion = conclusion.rsplit("。", 1)[0] + "。"
+            break
+
+    if not conclusion:
+        # 取全部 summary 的前 90 字符
+        clean = re.sub(r"#+\s*", "", summary).strip()
+        conclusion = clean[:90].rsplit("。", 1)[0] + "。" if "。" in clean[:90] else clean[:90]
+
+    sentiment = "positive" if stance >= 65 else "negative" if stance <= 35 else "neutral"
+
+    return {
+        "core_conclusion": conclusion,
+        "conclusion_sentiment": sentiment,
+        "confidence_score": int(stance),
+    }
+
+
+def _cc_from_guard_text(content: str) -> dict | None:
+    """从 Guard 验证文本提取核心结论."""
+    valid = "true" in content.lower() or "通过" in content or "valid" in content.lower()
+
+    # 提取置信度
+    conf_match = re.search(r"Confidence Score.*?(\d+)", content)
+    if not conf_match:
+        conf_match = re.search(r"置信度.*?(\d+)", content)
+    conf = int(conf_match.group(1)) if conf_match else 0
+
+    issues_match = re.search(r"Issues.*?:(.+?)(?:\n|$)", content)
+    issues_text = issues_match.group(1).strip() if issues_match else ""
+
+    if valid and ("none" in issues_text.lower() or "无" in issues_text or not issues_text.strip()):
+        sentiment = "positive"
+        conclusion = "所有校验项通过，数据来源覆盖度较高，结论可信度良好。"
+    elif valid:
+        sentiment = "neutral"
+        conclusion = f"校验通过但存在 {issues_text.strip()[:60]}，结论可信度受部分影响。"
+    else:
+        sentiment = "negative"
+        conclusion = f"Guard 校验未通过：{issues_text.strip()[:80]}"
+
+    return {
+        "core_conclusion": conclusion,
+        "conclusion_sentiment": sentiment,
+        "confidence_score": conf,
+    }
+
+
+def _extract_core_conclusion(
+    content: str,
+    agent_name: str,
+    language: str = "",
+) -> dict | None:
+    """Extract core conclusion + sentiment tag from agent output.
+    Strategy/risk agents are parsed from their Markdown table;
+    debate agents are parsed from JSON; others use LLM extraction."""
+    if not content or len(content.strip()) < 60:
+        return None
+    if agent_name not in _CORE_CONCLUSION_AGENTS:
+        return None
+
+    # ── 策略智能体：从 Markdown 表格提取 ──
+    if agent_name == "strategy_expert":
+        return _cc_from_strategy_md(content)
+
+    # ── 风险智能体：从 Markdown 表格提取 ──
+    if agent_name == "risk_expert":
+        return _cc_from_risk_md(content)
+
+    # ── 辩论智能体：从 JSON 提取 summary ──
+    if agent_name in ("bull_researcher", "bear_researcher", "debate_stage"):
+        return _cc_from_debate_json(content)
+
+    # ── Guard 智能体：从文本提取 ──
+    if agent_name == "guard_agent":
+        return _cc_from_guard_text(content)
+
+    from config.llm import get_llm as _get_llm
+    try:
+        llm = _get_llm("recommendation")  # 复用 recommendation 的 fast 配置
+    except Exception:
+        return None
+
+    # 截断超长内容以控制 token
+    truncated = content[:2500]
+
+    lang_hint = ""
+    if language == "zh":
+        lang_hint = "\nThe core_conclusion MUST be in Simplified Chinese (简体中文)."
+    elif language == "yue":
+        lang_hint = "\nThe core_conclusion MUST be in Cantonese (粤语)."
+
+    prompt = _CORE_CONCLUSION_PROMPT.format(content=truncated) + lang_hint
+
+    try:
+        response = llm.invoke(prompt)
+        text = response.content if hasattr(response, "content") else str(response)
+    except Exception:
+        return None
+
+    # 提取 JSON
+    json_match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+    if not json_match:
+        return None
+
+    try:
+        obj = json.loads(json_match.group(0))
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    conclusion = str(obj.get("core_conclusion", "")).strip()
+    sentiment = str(obj.get("conclusion_sentiment", "")).strip().lower()
+    confidence = obj.get("confidence_score")
+
+    if not conclusion:
+        return None
+    if sentiment not in _SENTIMENT_OPTIONS:
+        sentiment = "neutral"
+
+    result = {
+        "core_conclusion": conclusion,
+        "conclusion_sentiment": sentiment,
+    }
+    if isinstance(confidence, (int, float)):
+        result["confidence_score"] = int(confidence)
+    return result
+
+
 def _extract_text(update: dict, agent_name: str = "") -> str:
     if update.get("final_report"):
         return str(update["final_report"])
@@ -322,30 +595,104 @@ def _extract_text(update: dict, agent_name: str = "") -> str:
     return ""
 
 
+def _format_debate_markdown(raw_json: str) -> str:
+    """Convert debate JSON (bull/bear) into a clean Markdown report."""
+    import json as _json
+    try:
+        obj = _json.loads(raw_json)
+    except (_json.JSONDecodeError, ValueError):
+        return raw_json
+
+    stance = obj.get("stance_strength", 0)
+    summary = obj.get("summary", "")
+    claims = obj.get("claims", [])
+
+    stance_color = "#22c55e" if stance >= 65 else "#ef4444" if stance <= 35 else "#f59e0b"
+    stance_label = "强看多" if stance >= 65 else "强看空" if stance <= 35 else "中性偏空"
+
+    lines = [
+        "---",
+        f"## 论点强度：{stance_label} ({stance}/100)",
+        "",
+    ]
+
+    if summary:
+        lines.append(summary.strip())
+        lines.append("")
+
+    if claims:
+        lines.append("### 核心论据")
+        lines.append("")
+        for i, c in enumerate(claims, 1):
+            text = c.get("text", "") if isinstance(c, dict) else str(c)
+            conf = c.get("confidence", 0) if isinstance(c, dict) else 0
+            srcs = c.get("sources", []) if isinstance(c, dict) else []
+            src_str = ", ".join(srcs) if srcs else ""
+            lines.append(f"**论据 {i}** (置信度 {conf}%)")
+            lines.append(f"{text}")
+            if src_str:
+                lines.append(f"*数据来源: {src_str}*")
+            lines.append("")
+
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def _strip_claims_section(text: str) -> str:
+    """移除 debate 文本末尾的 Claims: {...} 原始 JSON/Python dict 块。"""
+    # 匹配 "Claims:" 后面跟 JSON 或 Python dict 格式内容
+    cleaned = re.sub(
+        r"\n*\s*Claims?\s*:\s*\{[\s\S]*",
+        "",
+        text,
+    )
+    # 也处理多行 Claims 格式（Claims 单独一行，下面跟 JSON）
+    cleaned = re.sub(
+        r"\n*\s*Claims?\s*\n+\{[\s\S]*",
+        "",
+        cleaned,
+    )
+    return cleaned.strip()
+
+
 def _serialize_debate_side(update: dict, side: str) -> str:
-    """Build SSE payload for bull/bear from debate subgraph state."""
+    """Build SSE payload for bull/bear. Returns JSON + formatted Markdown."""
     data_key = f"{side}_debate_data"
     arg_key = f"{side}_argument"
+
+    raw_json = ""
 
     debate_data = update.get(data_key)
     if isinstance(debate_data, dict):
         claims = debate_data.get("claims")
         if isinstance(claims, list) and claims:
-            return json.dumps(debate_data, ensure_ascii=False)
+            raw_json = json.dumps(debate_data, ensure_ascii=False)
         summary = debate_data.get("summary")
         if isinstance(summary, str) and summary.strip():
-            return json.dumps(debate_data, ensure_ascii=False)
+            raw_json = raw_json or json.dumps(debate_data, ensure_ascii=False)
 
-    argument = update.get(arg_key)
-    if isinstance(argument, str) and argument.strip():
-        return argument.strip()
+    if not raw_json:
+        # 结构化数据不可用时，从 argument 或 message 文本中清理显示
+        text = ""
+        argument = update.get(arg_key)
+        if isinstance(argument, str) and argument.strip():
+            text = argument.strip()
+        else:
+            messages = update.get("messages")
+            if messages and isinstance(messages, list):
+                raw = _safe_text(messages[-1]).strip()
+                if raw:
+                    text = raw
+        if not text:
+            return ""
 
-    messages = update.get("messages")
-    if messages and isinstance(messages, list):
-        raw = _safe_text(messages[-1]).strip()
-        if raw:
-            return raw
-    return ""
+        # 去掉末尾的 "Claims:" 原始 JSON/Python dict 块
+        text = _strip_claims_section(text)
+        return text
+
+    # JSON 放在前面供 DebatePanel 解析，Markdown 放在分隔线后供详情面板展示
+    md = _format_debate_markdown(raw_json)
+    return raw_json + "\n\n---\n" + md
 
 
 def _format_strategy_markdown(raw_json: str) -> str:
@@ -662,6 +1009,15 @@ def stream_analysis_events(
                             "content": sub_content,
                         })
                         debate_sides_emitted.add(sub_agent)
+
+                        # ── 辩论智能体核心结论提取 ──
+                        cc = _extract_core_conclusion(sub_content, sub_agent)
+                        if cc:
+                            yield _sse("agent_core_conclusion", {
+                                "agent": sub_agent,
+                                **cc,
+                            })
+
                         yield _sse("agent_done", {
                             "agent": sub_agent,
                             "duration_ms": round(
@@ -689,6 +1045,24 @@ def stream_analysis_events(
                     if node_name in ("bull_researcher", "bear_researcher"):
                         debate_sides_emitted.add(node_name)
 
+                    # ── 提炼核心结论（LLM 轻量提取）──
+                    lang = initial_state.get("language", "")
+                    cc = _extract_core_conclusion(content, node_name, lang)
+                    if cc:
+                        yield _sse("agent_core_conclusion", {
+                            "agent": node_name,
+                            **cc,
+                        })
+
+                # ── debate_stage 子代理拆包后，补一个汇聚核心结论 ──
+                if node_name == "debate_stage" and debate_subagents_emitted:
+                    yield _sse("agent_core_conclusion", {
+                        "agent": "debate_stage",
+                        "core_conclusion": "多空双方已就估值、盈利能力、技术面等核心议题展开对抗性分析，详见多空博弈面板。",
+                        "conclusion_sentiment": "neutral",
+                        "confidence_score": 70,
+                    })
+
                 if update.get("final_report"):
                     final_report = str(update["final_report"])
                 if node_name == "risk_expert":
@@ -710,6 +1084,14 @@ def stream_analysis_events(
                         "agent": node_name,
                         "content": guard_text,
                     })
+
+                    # ── Guard 核心结论提取 ──
+                    cc = _extract_core_conclusion(guard_text, node_name)
+                    if cc:
+                        yield _sse("agent_core_conclusion", {
+                            "agent": node_name,
+                            **cc,
+                        })
 
                 yield _sse("agent_done", {
                     "agent": node_name,

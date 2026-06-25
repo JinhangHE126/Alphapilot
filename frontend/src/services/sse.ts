@@ -160,6 +160,7 @@ export type StreamEvent =
   | { event: "evidence_packet"; data: EvidencePacketData }
   | { event: "agent_start"; data: { agent: string; label: string; icon: string } }
   | { event: "agent_output"; data: { agent: string; content: string } }
+  | { event: "agent_core_conclusion"; data: { agent: string; core_conclusion: string; conclusion_sentiment: "positive" | "negative" | "neutral"; confidence_score?: number } }
   | { event: "agent_done"; data: { agent: string; duration_ms: number } }
   | { event: "agent_error"; data: { agent: string; label: string; icon: string; message: string; duration_ms: number } }
   | { event: "agent_skipped"; data: { agent: string; label: string; icon: string } }

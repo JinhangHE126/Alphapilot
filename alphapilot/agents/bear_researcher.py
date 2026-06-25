@@ -107,7 +107,71 @@ def _extract_json_text(text: str) -> dict | None:
             return json.loads(text[start:end + 1])
         except json.JSONDecodeError:
             pass
-    return None
+    return _parse_debate_text_to_json(text)
+
+
+def _parse_debate_text_to_json(text: str) -> dict | None:
+    """将 deepseek 输出的非 JSON 结构化文本转为 dict。"""
+    stance_match = re.search(r"Stance\s*Strength\s*:\s*(\d+)", text, re.IGNORECASE)
+    if not stance_match:
+        return None
+    stance = max(0, min(100, int(stance_match.group(1))))
+    summary = ""
+    summary_match = re.search(r"Summary\s*:\s*(.+?)(?=\n+\s*Claims?\s*:)", text, re.IGNORECASE | re.DOTALL)
+    if summary_match:
+        summary = summary_match.group(1).strip()
+    claims_raw = ""
+    claims_match = re.search(r"Claims?\s*:\s*(.+)$", text, re.IGNORECASE)
+    if claims_match:
+        claims_raw = claims_match.group(1).strip()
+    claims: list[dict] = []
+    if claims_raw:
+        depth = 0
+        buf = ""
+        for ch in claims_raw:
+            buf += ch
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and buf.strip():
+                    claims.append(buf.strip())
+                    buf = ""
+        if not claims:
+            try:
+                claims_list = json.loads(claims_raw.replace("'", '"'))
+                if isinstance(claims_list, list):
+                    claims = claims_list
+            except (json.JSONDecodeError, ValueError):
+                pass
+    safe_claims: list[dict] = []
+    for raw_claim in claims:
+        try:
+            claim_json = raw_claim.replace("'", '"')
+            c = json.loads(claim_json)
+            if isinstance(c, dict) and c.get("text"):
+                conf = c.get("confidence", 50)
+                if not isinstance(conf, (int, float)):
+                    conf = 50
+                srcs = c.get("sources", [])
+                if isinstance(srcs, str):
+                    srcs = [srcs]
+                fields = c.get("supporting_fields", [])
+                if isinstance(fields, str):
+                    fields = [fields]
+                safe_claims.append({
+                    "text": str(c["text"]),
+                    "confidence": int(conf),
+                    "sources": [str(s) for s in srcs if s] if isinstance(srcs, list) else [],
+                    "supporting_fields": [str(f) for f in fields if f] if isinstance(fields, list) else [],
+                })
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return {
+        "stance_strength": stance,
+        "summary": summary,
+        "claims": safe_claims,
+    }
 
 
 _bear_agent = create_react_agent(

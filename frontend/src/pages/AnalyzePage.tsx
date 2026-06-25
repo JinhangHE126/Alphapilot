@@ -40,6 +40,12 @@ type AgentStatus = {
   content: string;
   startedAt?: number;
   finishedAt?: number;
+  /** 核心结论（由后端 LLM 提炼，agent_core_conclusion SSE 事件推送） */
+  coreConclusion?: string;
+  /** 结论情绪标签：positive / negative / neutral */
+  conclusionSentiment?: "positive" | "negative" | "neutral";
+  /** 结论置信度 0-100 */
+  conclusionConfidence?: number;
 };
 
 type NodeDef = {
@@ -152,6 +158,24 @@ function AgentCard({
 
   const LucideIcon = def.lucide;
 
+  const coreConclusion = live?.coreConclusion;
+  const conclusionSentiment = live?.conclusionSentiment;
+  const conclusionConf = live?.conclusionConfidence;
+
+  const sentimentColor =
+    conclusionSentiment === "positive"
+      ? "#22c55e"
+      : conclusionSentiment === "negative"
+        ? "#ef4444"
+        : "#f59e0b";
+
+  const sentimentLabel =
+    conclusionSentiment === "positive"
+      ? "正面"
+      : conclusionSentiment === "negative"
+        ? "负面"
+        : "中性";
+
   return (
     <button
       type="button"
@@ -171,6 +195,27 @@ function AgentCard({
       </div>
       <div className="agc-name">{def.label}</div>
       <div className="agc-role">{def.role}</div>
+      {coreConclusion && (
+        <div
+          className="agc-conclusion"
+          style={{
+            background: `${sentimentColor}10`,
+            borderLeft: `3px solid ${sentimentColor}`,
+          }}
+        >
+          <span
+            className="agc-conclusion-tag"
+            style={{
+              background: `${sentimentColor}22`,
+              color: sentimentColor,
+            }}
+          >
+            {sentimentLabel}
+            {conclusionConf !== undefined && ` ${conclusionConf}%`}
+          </span>
+          <span className="agc-conclusion-text">{coreConclusion}</span>
+        </div>
+      )}
       <div className={`agc-desc ${hasContent ? "has-content" : ""}`}>
         {status === "error" && live?.content ? (
           <span className="agc-error-text">{live.content}</span>
@@ -311,6 +356,15 @@ export default function AnalyzePage() {
               const parsed = parseRiskLevelFromContent(evt.data.content);
               if (parsed) setRiskLevel(parsed);
             }
+          }
+          if (evt.event === "agent_core_conclusion") {
+            setAgents((prev) =>
+              upsertAgent(prev, evt.data.agent, {
+                coreConclusion: evt.data.core_conclusion,
+                conclusionSentiment: evt.data.conclusion_sentiment,
+                conclusionConfidence: evt.data.confidence_score,
+              }),
+            );
           }
           if (evt.event === "agent_done") {
             setAgents((prev) =>

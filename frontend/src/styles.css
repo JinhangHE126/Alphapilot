@@ -1343,6 +1343,32 @@ select option {
   margin-top: -2px;
 }
 
+/* ── 核心结论高亮区 ── */
+.agc-conclusion {
+  margin: 8px 0 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.agc-conclusion-tag {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.agc-conclusion-text {
+  color: rgba(255, 255, 255, 0.78);
+  word-break: break-word;
+}
+
 .agc-desc {
   font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.24);
