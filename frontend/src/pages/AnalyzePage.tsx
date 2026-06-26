@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, Check, ChevronRight, Download, FileDown, FileText, X, Zap } from "lucide-react";
+import { Activity, ArrowRight, Check, ChevronRight, Download, FileDown, FileText, Upload, X, Zap } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AGENT_VISUAL,
@@ -20,6 +20,7 @@ import { generateMarkdownReport, downloadMarkdownReport, downloadPDFReport } fro
 import DebatePanel from "../components/DebatePanel";
 import { useTranslation } from "../i18n";
 import { createSession } from "../services/api";
+import { uploadDocument } from "../services/api";
 import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, TargetPriceData, RiskLevelData, parseRiskLevelFromContent } from "../services/sse";
 
 function detectLanguage(text: string): string {
@@ -246,6 +247,11 @@ export default function AnalyzePage() {
   const [guardCheck, setGuardCheck] = useState<GuardCheck | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  // ── 文档上传状态 ──
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDocType, setUploadDocType] = useState("annual_report");
+  const [uploadFeedback, setUploadFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [evidencePacket, setEvidencePacket] = useState<EvidencePacketData | null>(null);
   const [targetPrice, setTargetPrice] = useState<TargetPriceData | null>(null);
@@ -298,6 +304,24 @@ export default function AnalyzePage() {
     const sessionId = created.id;
     setCurrentSessionId(sessionId);
     return sessionId;
+  }
+
+  async function handleUpload() {
+    if (!uploadFile || !stockSymbol.trim()) return;
+    setUploadFeedback(null);
+    try {
+      const result = await uploadDocument(
+        uploadFile,
+        stockSymbol.trim().toUpperCase(),
+        uploadDocType,
+      );
+      setUploadFeedback({ ok: true, msg: `${result.message}` });
+      setUploadFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "上传失败";
+      setUploadFeedback({ ok: false, msg: errMsg });
+    }
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -493,6 +517,60 @@ export default function AnalyzePage() {
 
       <div className="analyze-layout">
         <div className="analyze-side">
+          {/* ── 文档上传区 ── */}
+          <section className="card upload-card">
+            <h2 className="card-title">
+              上传研究文档 <span className="upload-badge">Phase 1</span>
+            </h2>
+            <div className="upload-row">
+              <label className="upload-btn">
+                <Upload size={16} /> 选择 PDF
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.doc,.html,.htm,.txt"
+                  hidden
+                  disabled={running}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setUploadFile(f);
+                    setUploadFeedback(null);
+                  }}
+                />
+              </label>
+              {uploadFile && (
+                <span className="upload-file-name" title={uploadFile.name}>
+                  {uploadFile.name.length > 30 ? uploadFile.name.slice(0, 27) + "..." : uploadFile.name}
+                </span>
+              )}
+              <select
+                className="upload-type-select"
+                value={uploadDocType}
+                onChange={(e) => setUploadDocType(e.target.value)}
+                disabled={running}
+              >
+                <option value="annual_report">年报</option>
+                <option value="earnings_call">电话会议</option>
+                <option value="research_report">券商研报</option>
+                <option value="news">新闻/公告</option>
+              </select>
+              <button
+                type="button"
+                className="btn btn-primary btn-inline"
+                disabled={!uploadFile || !stockSymbol.trim() || running}
+                onClick={handleUpload}
+              >
+                上传入库
+              </button>
+              {uploadFeedback && (
+                <span className={`upload-feedback ${uploadFeedback.ok ? "upload-ok" : "upload-err"}`}>
+                  {uploadFeedback.ok ? <Check size={14} /> : <X size={14} />}
+                  {uploadFeedback.msg}
+                </span>
+              )}
+            </div>
+          </section>
+
           <section className="card">
             <h2 className="card-title">{t("analyze.researchInput")}</h2>
             <form onSubmit={handleSubmit} className="analyze-form">

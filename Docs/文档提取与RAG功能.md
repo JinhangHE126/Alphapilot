@@ -199,3 +199,198 @@ document_evidence:  list[DocumentChunk]
 2. 在保持现有强防幻觉体系的前提下，扩展证据来源
 3. 为后续多 Agent 深度协作和更复杂的投资研究场景打下基础
 4. 符合 fintech 岗位对生产级 RAG + 合规意识的要求
+
+## 9. 详细实现计划
+
+### Phase 1 — MVP：单文档上传 + 基础分块 + 写入向量库 + 检索
+
+#### 9.1 新增 DocumentChunk Schema
+
+**文件**：`alphapilot/schemas/evidence_packet.py`
+
+在 `Fact` 同级新增：
+
+```python
+class DocumentChunk(BaseModel):
+    chunk_id: str          # "0700.HK_annual_2024_RiskFactors_p45"
+    content: str           # chunk 文本
+    source: str            # "HKEX" / "user_uploaded"
+    doc_id: str            # 所属文档唯一 ID
+    doc_type: str          # "annual_report" / "earnings_call" / "research_report" / "news"
+    section: str = ""
+    page: str = ""
+    publish_date: str = "" # "2025-03-20"
+    report_period: str = ""# "2024-12-31"
+    symbol: str = ""
+    contains_table: bool = False
+    language: str = ""
+```
+
+在 `EvidencePacket` 新增：
+
+```python
+document_evidence: list[DocumentChunk] = []
+```
+
+在 `Coverage` 新增：
+
+```python
+document_evidence: str = "missing"
+```
+
+#### 9.2 新增 DocumentChunker 模块
+
+**文件**：`alphapilot/knowledge/document_chunker.py`（新建）
+
+| 函数 | 说明 |
+|------|------|
+| `chunk_by_headings(text)` | 按 `#` / `##` 标题层级切分章节，返回 `[{section, content}]` |
+| `chunk_semantic(text, chunk_size=800, overlap=150)` | 基于段落 + token 计数合并，返回 `list[str]` |
+| `chunk_with_metadata(doc_type, text, metadata)` | 根据 doc_type 选择分块策略，附加元数据 |
+
+#### 9.3 新增 PDFParser 模块
+
+**文件**：`alphapilot/knowledge/pdf_parser.py`（新建）
+
+| 函数 | 说明 |
+|------|------|
+| `parse_pdf(file_path)` | 调用 `markitdown` 或 `pymupdf`(fitz) 提取文本 |
+| `extract_tables(file_path)` | `camelot-py` 提取表格，每表转 Markdown |
+| `parse_and_chunk(file_path, metadata)` | 解析 + 分块一站式，返回 `list[dict]` |
+
+依赖：
+
+```
+markitdown>=0.0.1a3
+pymupdf>=1.24.0
+camelot-py>=0.11.0  # 可选
+```
+
+#### 9.4 扩展 VectorStore 支持 DocumentChunk
+
+**文件**：`alphapilot/rag/retriever.py`
+
+| 方法 | 说明 |
+|------|------|
+| `add_chunks(chunks)` | 批量写入 chunk（含全量元数据），返回成功计数 |
+| `retrieve_doc_chunks(query, symbol, k=10)` | 先按 `symbol` 元数据过滤，再 FAISS 语义检索，返回 `list[dict]` |
+
+#### 9.5 集成到 EvidencePacket Builder
+
+**文件**：`alphapilot/graph/workflow.py` → `evidence_packet_builder()`
+
+在现有结构化数据采集后新增：
+1. 调用 `retriever.retrieve_doc_chunks(query, symbol, k=5)`
+2. 将返回的 chunk 转为 `DocumentChunk` 对象
+3. 写入 `packet.document_evidence`
+
+#### 9.6 Agent Prompt 适配
+
+**文件**：各 Agent（`market_agent.py` / `fundamental_agent.py` 等）
+
+在 `render_packet_for_agent` 中追加 `document_evidence` 的 Markdown 渲染：
+
+```markdown
+## 相关文档证据
+[source: 0700.HK_annual_2024, section: Risk Factors, page: 45]
+...chunk content...
+```
+
+### Phase 2 — 双轨 Schema 落地 + Guard 增强
+
+#### 9.7 Guard 文档 Grounding 检查
+
+**文件**：`alphapilot/agents/guard_agent.py`
+
+新增 `_find_ungrounded_doc_claims(final_output_text, ep)`：
+- 检查 Agent 输出中引用的定性结论是否在 `document_evidence` 中有对应 chunk
+- 类似现有 `_find_ungrounded_claims_v2`，但匹配源为 `chunk_id` 而非 `Fact.field`
+- 非 FULL_ANALYSIS 时将 ungrounded doc claims 加入阻断列表
+
+#### 9.8 输出等级联动
+
+**文件**：`alphapilot/schemas/evidence_packet.py` → `determine_output_level()`
+
+`coverage.document_evidence` 联动评分：
+- `"available"` → evidence_score +5
+- `"missing"` → 不扣分（保持原有行为不变）
+
+### Phase 3 — 自动化文档摄取
+
+#### 9.9 数据源适配器
+
+**文件夹**：`alphapilot/knowledge/fetchers/`（新建）
+
+| 文件 | 功能 |
+|------|------|
+| `hkex_fetcher.py` | 调用 `aiohttp` 抓取 HKEX 披露易年报名单，批量下载 PDF |
+| `sec_fetcher.py` | 扩展现有 SEC API，增加定时调度 |
+| `news_fetcher.py` | 扩展 `tools/news_tools.py` 中 `_fetch_news_list`，标题 + 正文全量入库 |
+
+#### 9.10 定时调度
+
+**文件**：`alphapilot/knowledge/scheduler.py`（新建）
+
+- 使用 `apscheduler` 或 `asyncio.create_task` 定时拉取
+- 每 symbol 最多保留 20 份文档（按 `publish_date` 淘汰旧文档）
+
+#### 9.11 时效性加权
+
+**文件**：`alphapilot/rag/retriever.py` → `retrieve_doc_chunks()`
+
+```python
+days = (today - publish_date).days
+weight = 1.0 if days <= 90 else 0.7 if days <= 365 else 0.3
+score = similarity * weight
+```
+
+#### 9.12 RRF 混合检索
+
+**文件**：`alphapilot/rag/retriever.py` → `hybrid_retrieve()`
+
+- 向量检索 Top-20 + `sqlite3` FTS5 全文检索 Top-20
+- Reciprocal Rank Fusion (k=60) 合并 → 取 Top-10
+
+### Phase 4 — 用户上传 + 私有空间
+
+#### 9.13 上传 API
+
+**文件**：`alphapilot/api/upload.py`（新建）
+
+- `POST /api/upload/document`：接收 PDF/Word/HTML，存入临时目录
+- 调用 `pdf_parser.parse_and_chunk()` 分块
+- 写入 `vectorstore` 带 `source: user_uploaded` + `user_session_id`
+- 标记 `confidence_tier: user_submitted`
+
+#### 9.14 Session 隔离
+
+**文件**：`alphapilot/rag/retriever.py` → `retrieve_doc_chunks()`
+
+- 检索时增加可选 `user_session_id` 过滤参数
+- 公开知识库 chunk + 用户私有 chunk 混合返回
+
+#### 9.15 敏感信息扫描
+
+**文件**：`alphapilot/knowledge/sensitive_scanner.py`（新建）
+
+- `scan(text)` → 正则匹配身份证号 / 银行卡号 / 电话 / 邮箱
+- 命中后打码替换为 `[REDACTED]` 再写入向量库
+
+### 涉及文件总览
+
+| 文件 | Phase | 操作 |
+|------|-------|------|
+| `schemas/evidence_packet.py` | 1 | 新增 `DocumentChunk`、扩展 `EvidencePacket` / `Coverage` |
+| `knowledge/document_chunker.py` | 1 | **新建** |
+| `knowledge/pdf_parser.py` | 1 | **新建** |
+| `knowledge/ingest_service.py` | 1 | 新增 `upsert_document()` |
+| `rag/retriever.py` | 1 | 新增 `retrieve_doc_chunks()`、`add_chunks()` |
+| `graph/workflow.py` | 1 | `evidence_packet_builder` 接入文档 RAG |
+| `agents/*.py` | 1 | Agent prompt 追加 `document_evidence` 渲染 |
+| `agents/guard_agent.py` | 2 | 新增 `_find_ungrounded_doc_claims()` |
+| `schemas/evidence_packet.py` | 2 | `determine_output_level` 联动 |
+| `knowledge/fetchers/hkex_fetcher.py` | 3 | **新建** |
+| `knowledge/scheduler.py` | 3 | **新建** |
+| `rag/retriever.py` | 3 | 时效性加权 + RRF 混合检索 |
+| `api/upload.py` | 4 | **新建** |
+| `knowledge/sensitive_scanner.py` | 4 | **新建** |

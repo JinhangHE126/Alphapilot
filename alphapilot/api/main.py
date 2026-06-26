@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
 import os
@@ -10,7 +11,7 @@ import logging
 
 import jwt
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -462,6 +463,79 @@ async def optimize_stream(request: OptimizeRequest, current_user: dict[str, Any]
 
     headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+
+
+# ====================== 文档上传 ======================
+
+@api.post("/upload/document")
+async def upload_document(
+    file: UploadFile = File(..., description="PDF / Word / HTML 文档"),
+    symbol: str = Form(..., description="股票代码，如 0700.HK"),
+    doc_type: str = Form(default="annual_report", description="annual_report/earnings_call/research_report/news"),
+    source: str = Form(default="user_uploaded", description="HKEX / SEC / user_uploaded"),
+    publish_date: str = Form(default=""),
+    report_period: str = Form(default=""),
+    language: str = Form(default="zh"),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    import uuid
+    from knowledge.pdf_parser import parse_and_chunk
+    from rag.retriever import retriever
+
+    UPLOAD_DIR = Path("rag_data/uploads")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".html", ".htm", ".txt"}
+
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, detail=f"不支持的文件类型: {ext}")
+
+    file_id = uuid.uuid4().hex[:12]
+    safe_name = f"{symbol}_{file_id}{ext}"
+    save_path = UPLOAD_DIR / safe_name
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(413, detail="文件超过 50 MB 上限")
+    save_path.write_bytes(content)
+
+    now = datetime.utcnow().isoformat()
+    doc_id = f"{symbol}_{doc_type}_{file_id}"
+    metadata = {
+        "doc_id": doc_id,
+        "symbol": symbol.upper(),
+        "source": source,
+        "doc_type": doc_type,
+        "publish_date": publish_date or now,
+        "report_period": report_period or "",
+        "language": language,
+        "page": "",
+        "user_session_id": str(current_user.get("id", "")),
+    }
+
+    try:
+        chunks = parse_and_chunk(str(save_path), metadata, doc_type=doc_type)
+    except Exception as exc:
+        save_path.unlink(missing_ok=True)
+        raise HTTPException(422, detail=f"文档解析失败: {exc}") from exc
+
+    if not chunks:
+        save_path.unlink(missing_ok=True)
+        raise HTTPException(422, detail="未能从文档中提取文本内容")
+
+    written = retriever.add_document_chunks(chunks)
+    save_path.unlink(missing_ok=True)
+
+    return {
+        "data": {
+            "doc_id": doc_id,
+            "chunks": written,
+            "symbol": symbol.upper(),
+            "doc_type": doc_type,
+            "message": f"成功导入 {written} 个文档块 ({safe_name})",
+        },
+        "status": "ok",
+    }
+
 
 @api.get("/history")
 async def get_history(

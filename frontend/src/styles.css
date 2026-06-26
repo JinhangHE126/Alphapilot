@@ -958,6 +958,86 @@ select option {
   gap: 16px;
 }
 
+/* ── 文档上传卡片 ── */
+.upload-card {
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+.upload-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.upload-badge {
+  font-size: 0.65rem;
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 6px;
+  color: #a5b4fc;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.upload-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+.upload-file-name {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-type-select {
+  background: #1c1c2a;
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+.btn-inline {
+  padding: 7px 16px;
+  font-size: 0.82rem;
+  height: auto;
+}
+.upload-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+.upload-ok {
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+}
+.upload-err {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+}
+
 .analyze-input-group {
   display: grid;
   gap: 6px;

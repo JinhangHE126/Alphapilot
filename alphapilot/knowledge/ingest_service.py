@@ -1,10 +1,34 @@
 from __future__ import annotations
 
 import uuid
+from typing import List, Dict, Any
 
 from knowledge.ingestion import should_ingest, extract_records, IngestionRecord
 from schemas.evidence_packet import EvidencePacket, ConfidenceTier
 from rag.retriever import retriever as vectorstore
+
+
+def upsert_document(doc_type: str, metadata: Dict[str, Any], text: str) -> dict:
+    """
+    将单个长文档分块后写入向量库。
+    参数:
+      doc_type: annual_report / earnings_call / research_report / news
+      metadata: {symbol, source, publish_date, report_period, language, ...}
+      text: 文档原始 Markdown/纯文本
+    返回: {chunks, symbol, doc_id}
+    """
+    from knowledge.document_chunker import chunk_document
+
+    chunks = chunk_document(doc_type, text, metadata)
+    if not chunks:
+        return {"chunks": 0, "symbol": metadata.get("symbol", ""), "doc_id": metadata.get("doc_id", ""), "reason": "no content"}
+
+    written = vectorstore.add_document_chunks(chunks)
+    return {
+        "chunks": written,
+        "symbol": metadata.get("symbol", ""),
+        "doc_id": metadata.get("doc_id", ""),
+    }
 
 
 def upsert_packet(packet: EvidencePacket) -> dict:

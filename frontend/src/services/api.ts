@@ -83,6 +83,42 @@ export async function getDashboardStats() {
   }>("/dashboard/stats");
 }
 
+/** 上传文档 PDF → 向量库 */
+export async function uploadDocument(
+  file: File,
+  symbol: string,
+  docType: string = "annual_report",
+  source: string = "user_uploaded",
+  publishDate?: string,
+  reportPeriod?: string,
+  language?: string,
+) {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("symbol", symbol);
+  formData.append("doc_type", docType);
+  formData.append("source", source);
+  if (publishDate) formData.append("publish_date", publishDate);
+  if (reportPeriod) formData.append("report_period", reportPeriod);
+  if (language) formData.append("language", language);
+
+  const response = await fetch(`${API_BASE}/upload/document`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  const payload = (await response.json()) as ApiResponse<{ doc_id: string; chunks: number; symbol: string; doc_type: string; message: string }> & { detail?: string };
+  if (!response.ok) {
+    const detail = typeof payload.detail === "string" ? payload.detail : payload.message || "Upload failed";
+    throw new Error(detail);
+  }
+  return payload.data;
+}
+
 export async function getHistory(page = 1, pageSize = 20, stockSymbol?: string) {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   if (stockSymbol) params.set("stock_symbol", stockSymbol);

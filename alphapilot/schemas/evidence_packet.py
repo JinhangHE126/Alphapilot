@@ -81,6 +81,37 @@ class Conflict(BaseModel):
     resolution: str = "unresolved"
 
 
+class DocumentChunk(BaseModel):
+    """
+    文档证据块模型。
+    与 Fact（结构化字段级事实）并行，承载非结构化长文档内容。
+    1. chunk_id：唯一标识，如 "0700.HK_annual_2024_RiskFactors_p45"
+    2. content：chunk 文本
+    3. source：来源，如 "HKEX"、"user_uploaded"
+    4. doc_id：所属文档唯一 ID
+    5. doc_type：文档类型（annual_report / earnings_call / research_report / news）
+    6. section：章节路径，如 "Risk Factors > Regulatory Risk"
+    7. page：页码范围，如 "45-47"
+    8. publish_date：发布日期
+    9. report_period：报告期
+    10. symbol：股票代码
+    11. contains_table：是否包含表格
+    12. language：语言
+    """
+    chunk_id: str = Field(description="唯一标识")
+    content: str = Field(description="chunk 文本")
+    source: str = Field(description="HKEX / user_uploaded 等")
+    doc_id: str = Field(description="所属文档唯一 ID")
+    doc_type: str = Field(description="annual_report / earnings_call / research_report / news")
+    section: str = Field(default="", description="章节路径")
+    page: str = Field(default="", description="页码范围")
+    publish_date: str = Field(default="", description="发布日期")
+    report_period: str = Field(default="", description="报告期")
+    symbol: str = Field(default="", description="股票代码")
+    contains_table: bool = Field(default=False, description="是否包含表格")
+    language: str = Field(default="", description="语言")
+
+
 class Coverage(BaseModel):
     """
     数据覆盖模型。
@@ -89,12 +120,14 @@ class Coverage(BaseModel):
     3. fundamental_data：基本面数据，如 "EPS"、"ROE"
     4. news_data：新闻数据，如 "新闻标题"、"新闻内容"
     5. filings：文件数据，如 "公司报告"、"公司公告"
+    6. document_evidence：文档证据覆盖，如 "available"、"missing"
     """
     rag_context: str = "missing"
     market_data: str = "missing"
     fundamental_data: str = "missing"
     news_data: str = "missing"
     filings: str = "missing"
+    document_evidence: str = "missing"
 
 
 class EvidencePacket(BaseModel):
@@ -121,6 +154,7 @@ class EvidencePacket(BaseModel):
     facts: list[Fact] = Field(default_factory=list)
     missing_fields: list[MissingField] = Field(default_factory=list)
     conflicts: list[Conflict] = Field(default_factory=list)
+    document_evidence: list[DocumentChunk] = Field(default_factory=list)
     evidence_score: int = Field(default=0, ge=0, le=100)
     evidence_score_breakdown: dict = Field(default_factory=dict)
     allowed_output_level: OutputLevel = OutputLevel.INSUFFICIENT_EVIDENCE
@@ -508,6 +542,27 @@ def render_packet_for_agent(packet: EvidencePacket, language: str = "") -> str:
         for c in packet.conflicts:
             lines.append(f"- {c.field}: {c.resolution} (sources: {c.sources})")
 
+    if packet.document_evidence:
+        lines.append("")
+        lines.append("### Document Evidence (non-structured, from reports & filings)")
+        lines.append("- These are excerpts from annual reports, earnings calls, research reports, etc.")
+        lines.append("- Use them for qualitative context (risk, strategy, management outlook).")
+        lines.append("- Cross-reference with structured facts above; structured facts take precedence for numeric claims.")
+        lines.append("")
+        for dc in packet.document_evidence:
+            header = (
+                f"[source: {dc.doc_id}, section: {dc.section}"
+                + (f", page: {dc.page}" if dc.page else "")
+                + f", date: {dc.publish_date}]"
+            )
+            if dc.contains_table:
+                header += " (contains table)"
+            lines.append(f"#### {header}")
+            # limit individual chunk display to avoid blowing up context
+            content = dc.content[:1800] + "..." if len(dc.content) > 1800 else dc.content
+            lines.append(content)
+            lines.append("")
+
     lines.append("")
     lines.append("### Strict Rules")
     lines.append("- Base ALL claims on the facts above. Do not introduce facts not listed.")
@@ -531,6 +586,7 @@ __all__ = [
     "Fact",
     "MissingField",
     "Conflict",
+    "DocumentChunk",
     "Coverage",
     "ConfidenceTier",
     "OutputLevel",

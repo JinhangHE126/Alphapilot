@@ -87,6 +87,49 @@ def _render_fact_summary(ep: dict) -> str:
     return "\n".join(lines)
 
 
+def _render_document_evidence(ep: dict) -> str:
+    """渲染 Document Evidence 为非结构化文本块，供推荐 Agent 使用。"""
+    doc_evidence = ep.get("document_evidence", []) if isinstance(ep, dict) else []
+    if not doc_evidence:
+        return ""
+
+    lines = ["### Document Evidence (non-structured, from reports & filings)"]
+    for i, dc in enumerate(doc_evidence):
+        if not isinstance(dc, dict):
+            continue
+        content = str(dc.get("content", ""))
+        if not content.strip():
+            continue
+        source = dc.get("source", "unknown")
+        doc_type = dc.get("doc_type", "")
+        section = dc.get("section", "")
+        publish_date = dc.get("publish_date", "")
+        page = dc.get("page", "")
+        report_period = dc.get("report_period", "")
+
+        header_parts = [f"[source: {source}"]
+        if doc_type:
+            header_parts.append(f"type: {doc_type}")
+        if section:
+            header_parts.append(f"section: {section}")
+        if page:
+            header_parts.append(f"page: {page}")
+        if publish_date:
+            header_parts.append(f"date: {publish_date}")
+        if report_period:
+            header_parts.append(f"period: {report_period}")
+        header_parts.append("]")
+
+        lines.append(f"#### Chunk {i + 1} {' '.join(header_parts)}")
+        # 截断过长内容
+        if len(content) > 2000:
+            content = content[:2000] + "...[truncated]"
+        lines.append(content)
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _collect_agent_summaries(messages) -> str:
     latest: dict[str, str] = {}
     for message in messages or []:
@@ -141,7 +184,7 @@ def _invoke_recommendation_model(system_prompt: str, compact_context: str) -> st
 
 def recommendation_agent(state):
     """
-    Recommendation Agent - v4 证据感知版
+    Recommendation Agent - v4 证据感知版（已加强 Document Evidence 使用）
     """
     user_profile = state.get("user_profile", {})
     risk_preference = user_profile.get("risk_preference", "medium")
@@ -168,6 +211,7 @@ def recommendation_agent(state):
             "```"
         )
         return {"messages": [AIMessage(content=content, name="recommendation_agent")]}
+
     elif ep_score < 70:
         fallback_json = _fallback_json(f"Evidence score {ep_score}/100 too low for reliable recommendation.")
         content = (
@@ -179,6 +223,7 @@ def recommendation_agent(state):
             "```"
         )
         return {"messages": [AIMessage(content=content, name="recommendation_agent")]}
+
     else:
         system_prompt = f"""
 You are Recommendation Agent - AlphaPilot personalized investment recommendation expert.
@@ -187,8 +232,19 @@ User Profile:
 - Risk Preference: {risk_preference} (low / medium / high)
 - Investment Horizon: {horizon} (short / medium / long)
 
+### Document Evidence Usage Guideline
+You have access to the "### Document Evidence" section in the Evidence Packet Summary.
+Use it to provide **qualitative depth** that structured facts cannot cover, especially:
+- Management outlook, strategic direction, and forward guidance
+- Risk factors, uncertainties, and potential red flags from annual reports or filings
+- Competitive positioning and business initiatives
+
+When referencing content from Document Evidence, you **must clearly indicate the source** (e.g., "根据2024年年报..." or "Management stated in the Q4 earnings call...").
+Prioritize official company documents (annual reports, earnings call transcripts) over third-party research reports.
+
 Your core responsibilities:
 - Synthesize analysis results from agents that have ACTUALLY produced output in the conversation
+- Actively review and incorporate relevant qualitative insights from Document Evidence to enrich the analysis (especially in Fundamental, Risk, Strategy, and Debate sections)
 - Strictly follow user profile to provide highly personalized, actionable investment recommendations
 
 STRICT PROHIBITIONS:
@@ -206,11 +262,11 @@ Required structured output — generate a detailed, professional report with the
 ## 一、多维度综合分析（逐智能体详细拆解）
 For EACH agent that produced output in the Prior Agent Outputs context, create a dedicated sub-section that:
 - 市场技术面 (market_data_expert): 详述当前价格、涨跌幅、RSI、MACD（含DIFF/DEA/柱状线数值）、布林带上下轨、波动率、成交量等所有提供的指标，并解读其含义
-- 基本面分析 (fundamental_expert): 详述营收、EPS、净利润、营收增速、EPS增速、毛利率、净利率、ROE、自由现金流、资产负债等所有财务指标的具体数值和分析
+- 基本面分析 (fundamental_expert): 详述营收、EPS、净利润、营收增速、EPS增速、毛利率、净利率、ROE、自由现金流、资产负债等所有财务指标的具体数值和分析。**如有相关内容，请主动结合 Document Evidence 中的管理层展望、战略方向等定性信息进行补充，并标注来源。**
 - 新闻情绪 (news_sentiment_expert): 详述近期关键新闻标题、情绪倾向、市场关注焦点
-- 多空辩论 (bull_researcher / bear_researcher): 详述多头核心论点、空头核心论点、关键分歧点、辩论结论
+- 多空辩论 (bull_researcher / bear_researcher): 详述多头核心论点、空头核心论点、关键分歧点、辩论结论。**如有相关内容，请结合 Document Evidence 中的风险披露或积极信号进行分析，并标注来源。**
 - 策略评估 (strategy_expert): 详述策略建议（买入/持有/卖出）、信心评分、权重分配、推理链
-- 风险评估 (risk_expert): 详述波动率风险、宏观风险、止损建议、仓位上限、综合风险评分、关键风险点列表
+- 风险评估 (risk_expert): 详述波动率风险、宏观风险、止损建议、仓位上限、综合风险评分、关键风险点列表。**如有相关内容，请结合 Document Evidence 中的风险因素披露进行补充，并标注来源。**
 - 仓位管理 (portfolio_agent): 详述仓位建议、建仓策略、止损/止盈位
 - 回测验证 (backtesting_agent): 详述回测结果（如可用），含Sharpe、最大回撤等
 
@@ -219,19 +275,21 @@ For EACH agent that produced output in the Prior Agent Outputs context, create a
 - 识别并分析观点矛盾之处，给出倾向性判断及理由
 
 ## 三、整体评估
-- 一句话总结 + 详细综合分析（估值、趋势、质量三个维度的交叉评估）
+- 一句话总结 + 详细综合分析（估值、趋势、质量三个维度的交叉评估）。**在形成整体判断时，请考虑 Document Evidence 是否支持或质疑定量结论。**
 
 ## 四、个性化投资建议
 - Suggested position size (as % of total assets)
-- Personalized reasoning (explicitly reference user risk preference and investment horizon)
+- Personalized reasoning (explicitly reference user risk preference and investment horizon)。**请说明 Document Evidence 中的定性信息（如管理层展望或风险披露）如何影响了你的推荐。**
 
 ## 五、风险警告
-- 至少列出3-5条具体风险，每条需关联到对应智能体的分析依据
+- 至少列出3-5条具体风险，每条需关联到对应智能体的分析依据。
+- **如 Document Evidence 中存在相关风险披露（如年报 Risk Factors 部分），建议在此处引用并标注来源。**
 
 ## 六、行动计划
 - Short-term (1-4 weeks) / Medium-term (1-3 months) / Long-term (6+ months) — 每阶段包含具体触发条件、操作步骤和预期目标
 
 After your plain-text response, append ONE machine-readable JSON block (inside ```json ... ```) containing a valuation scenario. This JSON block is UI metadata only and is not part of the report text:
+
 ```json
 {{
   "valuation_low": <number or null>,
@@ -241,22 +299,22 @@ After your plain-text response, append ONE machine-readable JSON block (inside `
   "downside_pct": <number or null>,
   "consensus_summary": "<one-sentence multi-agent synthesis>"
 }}
-```
-- valuation_low/mid/high: scenario valuation range, based only on verified current_price and compact agent summaries. Set all three to null if evidence is insufficient.
-- upside_pct: (valuation_mid - current_price) / current_price * 100. Set to null if valuation_mid is null.
-- downside_pct: (current_price - valuation_low) / current_price * 100. Set to null if valuation_low is null.
-- consensus_summary: 一句话总结 Market/Fundamental/News/Bull/Bear 各 agent 的核心共识。
+valuation_low/mid/high: scenario valuation range, based only on verified current_price and compact agent summaries. Set all three to null if evidence is insufficient.
+upside_pct: (valuation_mid - current_price) / current_price * 100. Set to null if valuation_mid is null.
+downside_pct: (current_price - valuation_low) / current_price * 100. Set to null if valuation_low is null.
+consensus_summary: 一句话总结 Market/Fundamental/News/Bull/Bear 各 agent 的核心共识。
 
 You have NO tools. Do NOT attempt to call any tool. Respond with plain text first, then the JSON block.
 Style: Professional, cautious, data-driven, like a senior financial advisor.
 """
 
-    compact_context = (
-        "Use only this compact context. Do not infer from omitted text.\n\n"
-        "## Evidence Packet Summary\n"
-        f"{_render_fact_summary(ep if isinstance(ep, dict) else {})}\n\n"
-        "## Prior Agent Outputs\n"
-        f"{_collect_agent_summaries(state.get('messages', []))}"
-    )
-    content = _invoke_recommendation_model(system_prompt, compact_context)
-    return {"messages": [AIMessage(content=content, name="recommendation_agent")]}
+        compact_context = (
+            "Use only this compact context. Do not infer from omitted text.\n\n"
+            "## Evidence Packet Summary\n"
+            f"{_render_fact_summary(ep if isinstance(ep, dict) else {})}\n\n"
+            f"{_render_document_evidence(ep if isinstance(ep, dict) else {})}\n\n"
+            "## Prior Agent Outputs\n"
+            f"{_collect_agent_summaries(state.get('messages', []))}"
+        )
+        content = _invoke_recommendation_model(system_prompt, compact_context)
+        return {"messages": [AIMessage(content=content, name="recommendation_agent")]}

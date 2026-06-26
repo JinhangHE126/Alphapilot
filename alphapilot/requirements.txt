@@ -14,6 +14,7 @@ chromadb
 python-dotenv
 streamlit
 pymupdf
+markitdown>=0.0.1a3
 gradio
 
 fastapi>=0.115.0

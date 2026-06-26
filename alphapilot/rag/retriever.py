@@ -32,6 +32,10 @@ EMBEDDING_MODEL_NAME = os.getenv(
 RAG_INDEX_PATH = Path("rag_data/faiss_index")
 RAG_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+# ── 文档向量库（独立于事实向量库） ──
+DOC_INDEX_PATH = Path("rag_data/doc_faiss_index")
+DOC_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 def _resolve_model_name() -> str:
     """Support short model name and full HF repo name."""
     if "/" in EMBEDDING_MODEL_NAME:
@@ -248,6 +252,110 @@ class RagRetriever:
         """返回纯文本列表（兼容原有 tools/rag_tools.py）"""
         docs = self.retrieve(query_text, k=n_results)
         return [doc.page_content for doc in docs]
+
+    # ── 文档级 RAG 方法 ──
+
+    def add_document_chunks(self, chunks: List[Dict[str, Any]]) -> int:
+        """
+        批量写入文档 chunk 到向量库。
+        chunk dict 需包含: chunk_id, content, symbol, source, doc_type, section, page,
+        publish_date, report_period, contains_table, language 等元数据。
+        返回成功写入数。
+        """
+        if not self.vectorstore:
+            print("⚠️ RAG 未初始化，跳过 add_document_chunks")
+            return 0
+
+        docs = []
+        for c in chunks:
+            chunk_id = c.get("chunk_id", "")
+            if chunk_id in self._known_doc_ids:
+                print(f"⏭️ Doc chunk already exists, skipped: {chunk_id}")
+                continue
+
+            doc = Document(
+                page_content=c.get("content", ""),
+                metadata={
+                    "chunk_id": chunk_id,
+                    "doc_id": c.get("doc_id", ""),
+                    "symbol": c.get("symbol", ""),
+                    "source": c.get("source", "unknown"),
+                    "doc_type": c.get("doc_type", ""),
+                    "section": c.get("section", ""),
+                    "page": c.get("page", ""),
+                    "publish_date": c.get("publish_date", ""),
+                    "report_period": c.get("report_period", ""),
+                    "contains_table": c.get("contains_table", False),
+                    "language": c.get("language", ""),
+                    "_type": "document_chunk",
+                },
+            )
+            docs.append(doc)
+            self._known_doc_ids.add(chunk_id)
+
+        if docs:
+            self.vectorstore.add_documents(docs)
+            self.vectorstore.save_local(str(RAG_INDEX_PATH))
+            print(f"✅ Added {len(docs)} document chunks")
+        return len(docs)
+
+    def retrieve_doc_chunks(
+        self, query: str, symbol: str = "", k: int = 10, user_session_id: str = ""
+    ) -> List[Dict[str, Any]]:
+        """
+        文档感知 RAG 检索。
+        1. 按 symbol + _type=document_chunk 元数据预过滤
+        2. 语义检索 Top-K
+        3. 返回 [{"chunk_id", "content", "doc_type", "section", "page", ...}]
+        """
+        if not self.vectorstore:
+            return []
+
+        fetch_k = max(k * 5, 30)
+        # 构建元数据过滤条件
+        filter_dict: Dict[str, Any] = {"_type": "document_chunk"}
+        if symbol:
+            filter_dict["symbol"] = symbol.upper()
+
+        try:
+            docs = self.vectorstore.similarity_search(
+                query, k=fetch_k, filter=filter_dict
+            )
+        except Exception:
+            # 降级：不设 filter 做全量检索
+            docs = self.vectorstore.similarity_search(query, k=fetch_k)
+
+        results: List[Dict[str, Any]] = []
+        for doc in docs:
+            meta = doc.metadata
+            # 如果指定了 symbol，只保留匹配的
+            if symbol and meta.get("symbol", "").upper() != symbol.upper():
+                continue
+            # 如果指定了 session，混合返回公开 + 用户私有
+            if user_session_id:
+                sid = meta.get("user_session_id", "")
+                if sid and sid != user_session_id:
+                    continue
+
+            results.append({
+                "chunk_id": meta.get("chunk_id", ""),
+                "content": doc.page_content,
+                "doc_id": meta.get("doc_id", ""),
+                "doc_type": meta.get("doc_type", ""),
+                "section": meta.get("section", ""),
+                "page": meta.get("page", ""),
+                "publish_date": meta.get("publish_date", ""),
+                "report_period": meta.get("report_period", ""),
+                "source": meta.get("source", ""),
+                "symbol": meta.get("symbol", ""),
+                "contains_table": meta.get("contains_table", False),
+                "language": meta.get("language", ""),
+            })
+
+            if len(results) >= k:
+                break
+
+        return results
 
 
 # ====================== 全局实例 ======================

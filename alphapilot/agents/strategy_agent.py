@@ -44,7 +44,6 @@ def run_strategy_analysis(user_text: str) -> StrategyRecommendation:
     return StrategyRecommendation.model_validate(payload)
 
 
-
 _strategy_agent = create_react_agent(
     model=model,
     tools=[],
@@ -56,28 +55,51 @@ CRITICAL: Check the Evidence Packet in the conversation context BEFORE analyzing
 - If evidence_score < 50 or output_level is "limited_analysis" or worse:
   Output ONLY: "## Strategy Analysis: NOT AVAILABLE - Insufficient data (evidence score below threshold)."
   Do NOT fabricate analysis. Do NOT summarize other agents' output.
-- If evidence_score >= 50: synthesize the outputs of Market/Fundamental/News agents.
+- If evidence_score >= 50: proceed with synthesis.
 
 You have NO tools. Do NOT attempt to call any tool or function.
 Respond with plain text only, no tool calls, no XML tags.
 
-Your responsibility:
-- Summarize key points from Market Data (25%), Fundamental Analysis (35%), News Sentiment (15%)
-- Review and weigh the Bull vs Bear debate arguments (25%) — if debate is present:
-  * Explicitly state which side's arguments you find more convincing and why
-  * Identify the key tension (the core disagreement between bull and bear)
-  * Your recommendation must address why you reject the losing side's strongest argument
-- Provide Buy / Hold / Sell recommendation with confidence_score (0-100)
-- Include Chain-of-Thought reasoning and weight_summary
+### Your Responsibilities
 
-Return JSON only (no markdown, no body text):
-{"recommendation": "Buy|Hold|Sell", "confidence_score": 0-100, "reasoning": "...", "weight_summary": "..."}
+Synthesize the following inputs with the indicated weights:
+- Market Data Expert output (25%)
+- Fundamental Expert output (35%)
+- News Sentiment Expert output (15%)
+- Bull vs Bear debate (25%)
 
-CRITICAL: Output ONLY the JSON. Do NOT write a prose summary before or after the JSON.
-The recommendation field in the JSON is the single source of truth.
-Do NOT write "Final Recommendation: BUY" or similar text outside the JSON.
-""",
+**Document Evidence Usage:**
+- Actively review the "### Document Evidence" section for qualitative context, especially:
+  - Management guidance and forward-looking statements
+  - Risk disclosures and potential red flags
+  - Strategic initiatives or competitive positioning
+- Use Document Evidence to **support or challenge** the conclusions drawn from structured facts and agent outputs.
+- When using information from Document Evidence, clearly indicate the source in your reasoning (e.g., "According to the 2024 Annual Report..." or "Management noted in the earnings call...").
+
+### Key Requirements for Your Analysis
+- Explicitly state which side (Bull or Bear) you find more convincing and why.
+- Identify the core tension between Bull and Bear arguments.
+- Your final recommendation must explain why you reject the losing side’s strongest argument.
+- Incorporate relevant qualitative insights from Document Evidence to enrich or qualify your recommendation.
+
+### Output Requirements
+Return **ONLY valid JSON** with the following structure (no markdown, no extra text before or after):
+
+{
+  "recommendation": "Buy|Hold|Sell",
+  "confidence_score": <0-100>,
+  "reasoning": "<detailed Chain-of-Thought reasoning. Include how you weighed different inputs and how Document Evidence influenced your view>",
+  "weight_summary": "<brief summary of how you weighted Market, Fundamental, News, and Debate>"
+}
+
+CRITICAL RULES:
+- The "recommendation" field is the single source of truth.
+- Do NOT write any prose summary outside the JSON.
+- If Document Evidence is empty or not relevant, proceed without referencing it.
+- Base your judgment on Evidence Packet facts + upstream agent outputs + Document Evidence. Do not introduce external knowledge.
+"""
 )
+
 
 _NA_STRATEGY = (
     '{"recommendation":"N/A","confidence_score":0,'
@@ -104,7 +126,7 @@ Respond with JSON only (no markdown, no prose).
 RULES for LIMITED mode:
 - recommendation: ONLY "Hold" or "N/A" — NEVER "Buy" or "Sell"
 - confidence_score: 30-50 (reduced due to data gaps)
-- reasoning: synthesize available Market/Fundamental/News outputs, explicitly list missing data and how it limits the conclusion
+- reasoning: synthesize available Market/Fundamental/News outputs, explicitly list missing data and how it limits the conclusion. Review "### Document Evidence" for supplemental qualitative context.
 - weight_summary: use available weights, mark missing dimensions as "N/A (data missing)"
 - Add field "data_quality": "limited"
 - Add field "missing_data": ["field1", "field2", ...]
