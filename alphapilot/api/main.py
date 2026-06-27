@@ -89,6 +89,11 @@ async def request_context_middleware(request: Request, call_next):
 @api.on_event("startup")
 def startup_event() -> None:
     init_db()
+    try:
+        from knowledge.pdf_env import log_pdf_capabilities
+        log_pdf_capabilities()
+    except Exception as exc:
+        print(f"⚠️ PDF capability check skipped: {exc}")
 
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict[str, Any]:

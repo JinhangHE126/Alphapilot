@@ -261,10 +261,17 @@ document_evidence: str = "missing"
 依赖：
 
 ```
+# requirements.txt（必需 — PDF 文本提取）
 markitdown>=0.0.1a3
 pymupdf>=1.24.0
-camelot-py>=0.11.0  # 可选
+
+# requirements-optional.txt（可选 — 表格提取）
+camelot-py[cv]>=0.11.0   # 需 Java + Ghostscript
+pdfplumber>=0.11.0       # 轻量回退，camelot 不可用时自动使用
 ```
+
+环境检查：`knowledge/pdf_env.py` → `check_pdf_parse_dependencies()` / `require_text_extraction()`。  
+API 启动时打印能力摘要；`POST /api/upload/document` 上传 PDF 前校验文本提取后端。
 
 #### 9.4 扩展 VectorStore 支持 DocumentChunk
 
@@ -272,29 +279,32 @@ camelot-py>=0.11.0  # 可选
 
 | 方法 | 说明 |
 |------|------|
-| `add_chunks(chunks)` | 批量写入 chunk（含全量元数据），返回成功计数 |
-| `retrieve_doc_chunks(query, symbol, k=10)` | 先按 `symbol` 元数据过滤，再 FAISS 语义检索，返回 `list[dict]` |
+| `add_document_chunks(chunks)` | 批量写入 chunk（含全量元数据 `_type=document_chunk`），返回成功计数 |
+| `retrieve_doc_chunks(query, symbol, k=10)` | over-fetch 语义检索 + Python 后过滤 symbol/session，返回 `list[dict]` |
 
 #### 9.5 集成到 EvidencePacket Builder
 
-**文件**：`alphapilot/graph/workflow.py` → `evidence_packet_builder()`
+**文件**：`alphapilot/graph/workflow.py` → `evidence_packet_builder()`  
+**辅助模块**：`alphapilot/graph/document_evidence.py` → `attach_document_evidence()`
 
 在现有结构化数据采集后新增：
-1. 调用 `retriever.retrieve_doc_chunks(query, symbol, k=5)`
-2. 将返回的 chunk 转为 `DocumentChunk` 对象
-3. 写入 `packet.document_evidence`
+1. 调用 `attach_document_evidence(packet, symbol, query, k=5)`（内部 `retrieve_doc_chunks`）
+2. 将返回的 chunk 转为 `DocumentChunk` 对象并写入 `packet.document_evidence`
+3. 有结果时设置 `coverage.document_evidence = "available"`
 
 #### 9.6 Agent Prompt 适配
 
-**文件**：各 Agent（`market_agent.py` / `fundamental_agent.py` 等）
+**文件**：各 Agent（`fundamental_agent.py` / `news_agent.py` 等）；`market_agent.py` **明确忽略** Document Evidence（仅用 Verified Facts 做技术面分析）
 
-在 `render_packet_for_agent` 中追加 `document_evidence` 的 Markdown 渲染：
+在 `render_packet_for_agent` 中追加 `document_evidence` 的 Markdown 渲染，并为每条 chunk 分配 **`[doc:N]`** 序号（N 为 `document_evidence` 列表下标，从 1 起）：
 
 ```markdown
-## 相关文档证据
-[source: 0700.HK_annual_2024, section: Risk Factors, page: 45]
+### Document Evidence
+[doc:1] [source: 0700.HK_annual_2024, section: Risk Factors, page: 45]
 ...chunk content...
 ```
+
+Agent 引用文档结论时应标注 `[doc:N]`；存储层 `chunk_id`（如 `0700.HK_annual_2024_RiskFactors_p45`）用于入库与 audit，Guard Level 1 校验的是 **`[doc:N]` ↔ 列表下标**，而非在输出中手写 `chunk_id` 字符串。
 
 ### Phase 2 — 双轨 Schema 落地 + Guard 增强
 
@@ -302,10 +312,19 @@ camelot-py>=0.11.0  # 可选
 
 **文件**：`alphapilot/agents/guard_agent.py`
 
-新增 `_find_ungrounded_doc_claims(final_output_text, ep)`：
-- 检查 Agent 输出中引用的定性结论是否在 `document_evidence` 中有对应 chunk
-- 类似现有 `_find_ungrounded_claims_v2`，但匹配源为 `chunk_id` 而非 `Fact.field`
-- 非 FULL_ANALYSIS 时将 ungrounded doc claims 加入阻断列表
+`_find_ungrounded_doc_claims(final_output_text, ep)` 返回 `(issues, warnings)`：
+
+| 层级 | 机制 | 严重度 |
+|------|------|--------|
+| **Level 1** | 输出中 `[doc:N]` 必须在 `document_evidence[N-1]` 范围内 | `issues`（阻断） |
+| **Level 2** | 疑似文档引用段落与 chunk 内容 embedding 相似度 ≥ 0.45；段落内已有合法 `[doc:N]` 则跳过 | `issues`（阻断） |
+| **Level 3** | 中英文文档引用句式模式粗检 | `warnings`；`document_evidence` 为空时升为 `issues` |
+
+**输出等级联动**：
+- `FULL_ANALYSIS`：Level 1/2 的 `doc_grounding_issues` **降级为** `grounding_warnings`（前缀 `[FULL_ANALYSIS-downgraded]`），不阻断
+- 其他等级：ungrounded doc claims 进入阻断列表
+
+`chunk_id` 仍作为向量库主键与 audit trail；Guard 不要求 Agent 在正文中粘贴 `chunk_id`，而通过 **`[doc:N]` + 语义匹配** 建立可追溯性。
 
 #### 9.8 输出等级联动
 

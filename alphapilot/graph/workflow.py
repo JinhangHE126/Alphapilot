@@ -16,7 +16,6 @@ from schemas.evidence_packet import (
     Fact,
     MissingField,
     Coverage,
-    DocumentChunk,
     compute_evidence_score,
     determine_output_level,
     detect_conflicts,
@@ -390,33 +389,16 @@ def evidence_packet_builder(state: GraphState) -> dict:
     )
 
     # ── 文档感知 RAG：检索相关非结构化文档 chunk ──
+    from graph.document_evidence import attach_document_evidence
     try:
-        doc_results = retriever.retrieve_doc_chunks(
-            query=f"{symbol} {user_instruction[:200]}",
+        attach_document_evidence(
+            packet,
             symbol=symbol,
+            query=f"{symbol} {user_instruction[:200]}",
             k=5,
         )
-        if doc_results:
-            doc_chunks = [
-                DocumentChunk(
-                    chunk_id=dc.get("chunk_id", ""),
-                    content=dc.get("content", ""),
-                    source=dc.get("source", "unknown"),
-                    doc_id=dc.get("doc_id", ""),
-                    doc_type=dc.get("doc_type", ""),
-                    section=dc.get("section", ""),
-                    page=dc.get("page", ""),
-                    publish_date=dc.get("publish_date", ""),
-                    report_period=dc.get("report_period", ""),
-                    symbol=dc.get("symbol", ""),
-                    contains_table=bool(dc.get("contains_table", False)),
-                    language=dc.get("language", ""),
-                )
-                for dc in doc_results
-            ]
-            packet.document_evidence = doc_chunks
-            packet.coverage.document_evidence = "available"
-            print(f"📄 Document RAG: {len(doc_chunks)} chunks loaded")
+        if packet.document_evidence:
+            print(f"📄 Document RAG: {len(packet.document_evidence)} chunks loaded")
     except Exception as exc:
         print(f"⚠️ Document RAG failed (non-critical): {exc}")
         packet.document_evidence = []

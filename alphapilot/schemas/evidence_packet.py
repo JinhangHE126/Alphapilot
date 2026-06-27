@@ -288,6 +288,12 @@ def compute_evidence_score(packet: EvidencePacket) -> EvidencePacket:
         + field_confidence_avg * 0.20
     )
 
+    # 9.8 输出等级联动：文档证据覆盖给予加分
+    doc_bonus = 0
+    if packet.coverage.document_evidence == "available":
+        doc_bonus = 5
+        evidence_score = min(100, evidence_score + doc_bonus)
+
     packet.evidence_score = evidence_score
     packet.evidence_score_breakdown = {
         "source_diversity": source_diversity,
@@ -295,6 +301,8 @@ def compute_evidence_score(packet: EvidencePacket) -> EvidencePacket:
         "completeness": completeness,
         "field_confidence_avg": field_confidence_avg,
     }
+    if doc_bonus:
+        packet.evidence_score_breakdown["document_evidence_bonus"] = doc_bonus
     return packet
 
 
@@ -548,10 +556,11 @@ def render_packet_for_agent(packet: EvidencePacket, language: str = "") -> str:
         lines.append("- These are excerpts from annual reports, earnings calls, research reports, etc.")
         lines.append("- Use them for qualitative context (risk, strategy, management outlook).")
         lines.append("- Cross-reference with structured facts above; structured facts take precedence for numeric claims.")
+        lines.append("- When referencing a specific chunk, cite it with its [doc:N] marker for traceability.")
         lines.append("")
-        for dc in packet.document_evidence:
+        for i, dc in enumerate(packet.document_evidence, start=1):
             header = (
-                f"[source: {dc.doc_id}, section: {dc.section}"
+                f"[doc:{i}] source: {dc.doc_id}, section: {dc.section}"
                 + (f", page: {dc.page}" if dc.page else "")
                 + f", date: {dc.publish_date}]"
             )

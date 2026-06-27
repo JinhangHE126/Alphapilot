@@ -299,61 +299,99 @@ class RagRetriever:
             print(f"✅ Added {len(docs)} document chunks")
         return len(docs)
 
+    def _matches_doc_chunk_filters(
+        self,
+        meta: Dict[str, Any],
+        symbol: str = "",
+        user_session_id: str = "",
+    ) -> bool:
+        if meta.get("_type") != "document_chunk":
+            return False
+        if symbol and meta.get("symbol", "").upper() != symbol.upper():
+            return False
+        if user_session_id:
+            sid = meta.get("user_session_id", "")
+            if sid and sid != user_session_id:
+                return False
+        return True
+
+    def _doc_chunk_from_document(self, doc: Document) -> Dict[str, Any]:
+        meta = doc.metadata or {}
+        return {
+            "chunk_id": meta.get("chunk_id", ""),
+            "content": doc.page_content,
+            "doc_id": meta.get("doc_id", ""),
+            "doc_type": meta.get("doc_type", ""),
+            "section": meta.get("section", ""),
+            "page": meta.get("page", ""),
+            "publish_date": meta.get("publish_date", ""),
+            "report_period": meta.get("report_period", ""),
+            "source": meta.get("source", ""),
+            "symbol": meta.get("symbol", ""),
+            "contains_table": meta.get("contains_table", False),
+            "language": meta.get("language", ""),
+        }
+
+    def _filter_doc_chunks_from_search(
+        self,
+        docs: List[Document],
+        symbol: str,
+        user_session_id: str,
+        k: int,
+    ) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        for doc in docs:
+            if not self._matches_doc_chunk_filters(doc.metadata or {}, symbol, user_session_id):
+                continue
+            results.append(self._doc_chunk_from_document(doc))
+            if len(results) >= k:
+                break
+        return results
+
     def retrieve_doc_chunks(
         self, query: str, symbol: str = "", k: int = 10, user_session_id: str = ""
     ) -> List[Dict[str, Any]]:
         """
         文档感知 RAG 检索。
-        1. 按 symbol + _type=document_chunk 元数据预过滤
-        2. 语义检索 Top-K
-        3. 返回 [{"chunk_id", "content", "doc_type", "section", "page", ...}]
+        FAISS 无法按 metadata 预过滤，因此 over-fetch 后做 Python 后过滤。
+        若首轮候选不足，降级为全库扫描再过滤（避免 facts 挤占 Top-K）。
         """
         if not self.vectorstore:
             return []
 
-        fetch_k = max(k * 5, 30)
-        # 构建元数据过滤条件
-        filter_dict: Dict[str, Any] = {"_type": "document_chunk"}
-        if symbol:
-            filter_dict["symbol"] = symbol.upper()
+        store_size = len(self.vectorstore.docstore._dict)
+        fetch_k = min(store_size, max(k * 20, 200))
 
         try:
-            docs = self.vectorstore.similarity_search(
-                query, k=fetch_k, filter=filter_dict
-            )
-        except Exception:
-            # 降级：不设 filter 做全量检索
             docs = self.vectorstore.similarity_search(query, k=fetch_k)
+        except Exception:
+            docs = []
 
-        results: List[Dict[str, Any]] = []
-        for doc in docs:
-            meta = doc.metadata
-            # 如果指定了 symbol，只保留匹配的
-            if symbol and meta.get("symbol", "").upper() != symbol.upper():
-                continue
-            # 如果指定了 session，混合返回公开 + 用户私有
-            if user_session_id:
-                sid = meta.get("user_session_id", "")
-                if sid and sid != user_session_id:
-                    continue
+        doc_chunk_count = sum(
+            1 for d in docs if (d.metadata or {}).get("_type") == "document_chunk"
+        )
+        print(
+            f"📊 retrieve_doc_chunks: fetch_k={fetch_k}, total={len(docs)}, "
+            f"doc_chunks_in_total={doc_chunk_count}, symbol={symbol or 'ANY'}"
+        )
 
-            results.append({
-                "chunk_id": meta.get("chunk_id", ""),
-                "content": doc.page_content,
-                "doc_id": meta.get("doc_id", ""),
-                "doc_type": meta.get("doc_type", ""),
-                "section": meta.get("section", ""),
-                "page": meta.get("page", ""),
-                "publish_date": meta.get("publish_date", ""),
-                "report_period": meta.get("report_period", ""),
-                "source": meta.get("source", ""),
-                "symbol": meta.get("symbol", ""),
-                "contains_table": meta.get("contains_table", False),
-                "language": meta.get("language", ""),
-            })
+        results = self._filter_doc_chunks_from_search(docs, symbol, user_session_id, k)
 
-            if len(results) >= k:
-                break
+        # 首轮不足 k 条时也全库扫描（facts 挤占 Top-200 时常见只命中 1 条）
+        if len(results) < k and store_size > fetch_k:
+            try:
+                docs = self.vectorstore.similarity_search(query, k=store_size)
+            except Exception:
+                docs = []
+            wide_results = self._filter_doc_chunks_from_search(
+                docs, symbol, user_session_id, k
+            )
+            if len(wide_results) > len(results):
+                print(
+                    f"📄 Document RAG fallback: widened search to {store_size} "
+                    f"→ {len(wide_results)} chunk(s) (was {len(results)})"
+                )
+                results = wide_results
 
         return results
 

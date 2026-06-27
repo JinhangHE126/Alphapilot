@@ -14,6 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from knowledge.pdf_env import require_text_extraction
 from knowledge.pdf_parser import parse_and_chunk
 from rag.retriever import retriever
 
@@ -53,6 +54,12 @@ async def upload_document(
             status_code=400,
             detail=f"不支持的文件类型: {ext}。支持: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
         )
+
+    if ext == ".pdf":
+        try:
+            require_text_extraction()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     # ── 保存到临时文件 ──
     file_id = uuid.uuid4().hex[:12]

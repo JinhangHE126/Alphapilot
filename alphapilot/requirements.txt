@@ -22,3 +22,9 @@ uvicorn[standard]>=0.30.0
 pydantic>=2.0
 python-multipart>=0.0.9
 PyJWT>=2.8.0
+
+# PDF upload (Phase 1): core text extraction — required for /api/upload/document
+#   markitdown + pymupdf (above)
+# Optional table extraction (annual reports with tables):
+#   pip install -r requirements-optional.txt
+#   (camelot-py needs Java; pdfplumber is the lightweight fallback)

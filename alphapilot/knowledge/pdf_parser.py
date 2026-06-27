@@ -9,6 +9,7 @@ import tempfile
 from typing import List, Dict, Any, Optional
 
 from knowledge.document_chunker import chunk_document
+from knowledge.pdf_env import check_pdf_parse_dependencies
 
 
 def parse_pdf(file_path: str) -> Optional[str]:
@@ -51,6 +52,12 @@ def parse_pdf(file_path: str) -> Optional[str]:
     except Exception as e:
         print(f"⚠️ pymupdf failed: {e}")
 
+    caps = check_pdf_parse_dependencies()
+    if not caps["text_extraction_ready"]:
+        print(
+            "❌ PDF text extraction unavailable. "
+            "Install: pip install markitdown pymupdf"
+        )
     return None
 
 

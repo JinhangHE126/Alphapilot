@@ -5,6 +5,7 @@ from schemas.evidence_packet import (
     EvidencePacket,
     determine_output_level,
     OutputLevel,
+    DocumentChunk,
 )
 import re
 
@@ -78,6 +79,184 @@ def _number_variants(value) -> set[str]:
     if abs(num) <= 1000:
         variants.add(f"{num:,.2f}".replace(",", ""))
     return {v.rstrip("0").rstrip(".") if "." in v else v for v in variants}
+
+
+# ── 文档 Grounding 辅助 ──
+
+# Level 3 模式粗检用（检测 "是否有文档引用句式"）
+_DOC_CITATION_PATTERNS_CN = [
+    r"(?:根据|来自|参照|参考|引用|援引|依据).{0,10}(?:年报|年度报告|财报|电话会议|会议记录|研报|研究报告|季报|半年报)",
+    r"(?:年报|年度报告|财报|电话会议|会议记录|研报|研究报告|季报|半年报).{0,10}(?:指出|显示|表明|披露|提到|提及|揭示|透露|说明)",
+    r"(?:Document Evidence|文档证据|文档来源|文件证据).{0,15}(?:显示|指出|表明|披露|提到|揭示)",
+]
+
+_DOC_CITATION_PATTERNS_EN = [
+    r"(?:according to|based on|per|as stated in|as disclosed in|as noted in).{0,20}(?:annual report|earnings call|10-K|10-Q|filing|research report|transcript)",
+    r"(?:annual report|earnings call|10-K|10-Q|filing|research report|transcript).{0,20}(?:states?|discloses?|notes?|reveals?|indicates?|shows?)",
+    r"(?:Document Evidence|document source).{0,20}(?:states?|shows?|indicates?|reveals?)",
+    r"(?:management|CEO|CFO).{0,15}(?:stated|noted|mentioned|commented|said).{0,30}(?:earnings call|transcript|annual report|filing)",
+]
+
+_DOC_GROUNDING_MODEL = None
+
+
+def _get_doc_grounding_model():
+    """懒加载 embedding 模型，避免 Guard 每次检查都重新实例化。"""
+    global _DOC_GROUNDING_MODEL
+    if _DOC_GROUNDING_MODEL is None:
+        from sentence_transformers import SentenceTransformer
+        _DOC_GROUNDING_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+    return _DOC_GROUNDING_MODEL
+
+
+def _span_has_valid_doc_marker(snippet: str, valid_indices: set[int]) -> bool:
+    """段落内含有合法 [doc:N] 标记时，视为 Level 1 已 grounding，跳过 L2 改写惩罚。"""
+    if not valid_indices:
+        return False
+    cited = {int(n) for n in re.findall(r"\[doc:(\d+)\]", snippet)}
+    return bool(cited) and cited <= valid_indices
+
+
+def _extract_doc_citation_spans(output_text: str) -> list[tuple[str, str, int, int]]:
+    """
+    从 Agent 输出中提取所有文档引用段落。
+    返回 [(matched_text, doc_type_hint, start_pos, end_pos), ...]
+    """
+    spans: list[tuple[str, str, int, int]] = []
+    patterns: list[tuple[str, str]] = [
+        # 中文 — 年报/报告
+        (r"(?:根据|来自|参照|参考|引用|援引|依据).{0,30}?(?:\d{4}\s*年\s*(?:年|财年|年度)?\s*(?:报|报告)|年报|年度报告|年報)", "annual_report"),
+        (r"(?:\d{4}\s*年\s*(?:年|财年|年度)?\s*(?:报|报告)|年报|年度报告|年報).{0,50}?(?:指出|显示|表明|披露|提到|提及|揭示|透露|说明|显示)", "annual_report"),
+        # 中文 — 电话会议
+        (r"(?:Q[1-4]\s*(?:季度|财报|业绩)?\s*(?:电话会议|业绩会)|财报电话会|业绩说明会).{0,50}?(?:指出|显示|表明|披露|提到|透露|表示|称)", "earnings_call"),
+        # 中文 — 研报
+        (r"(?:券商研报|研究报告|券商报告|投行报告)", "research_report"),
+        # 中文 — Document Evidence 通用
+        (r"(?:Document Evidence|文档证据|文档来源|文件证据|RAG文档).{0,50}?(?:显示|指出|表明|披露|提到|揭示)", "document"),
+        # 英文 — 年报/文件
+        (r"(?:according to|based on|per|as stated in|as disclosed in|as noted in|pursuant to).{0,40}?(?:annual report|10-K|10-Q|filing|annual filing)", "annual_report"),
+        (r"(?:annual report|10-K|10-Q|filing).{0,40}?(?:states?|discloses?|notes?|reveals?|indicates?|shows?|highlights?)", "annual_report"),
+        # 英文 — 电话会议
+        (r"(?:according to|during|in|per).{0,30}?(?:Q[1-4]\s*(?:20\d{2})?\s*(?:earnings call|transcript|call))", "earnings_call"),
+        (r"(?:earnings call|transcript).{0,40}?(?:states?|discloses?|notes?|reveals?|indicates?|shows?|highlighted)", "earnings_call"),
+        # 英文 — 管理层引用
+        (r"(?:management|CEO|CFO|executive).{0,30}?(?:stated|noted|mentioned|commented|said|indicated|highlighted).{0,40}?(?:earnings call|transcript|annual report|filing|call)", "earnings_call"),
+        # 英文 — Document Evidence 通用
+        (r"(?:Document Evidence|document source).{0,40}?(?:states?|shows?|indicates?|reveals?|notes?)", "document"),
+        # 英文 — 研报
+        (r"(?:research report|analyst report|broker report|equity research)", "research_report"),
+    ]
+    for pat, doc_type in patterns:
+        for m in re.finditer(pat, output_text, re.IGNORECASE):
+            start = max(0, m.start())
+            end = min(len(output_text), m.end() + 120)
+            snippet = output_text[start:end]
+            spans.append((snippet, doc_type, start, end))
+    return spans
+
+
+def _find_ungrounded_doc_claims(
+    output_text: str,
+    ep: EvidencePacket,
+) -> tuple[list[str], list[str]]:
+    """
+    文档 Grounding 检查 (v2)。返回 (issues, warnings)。
+
+    Level 1 — chunk_id 精确匹配（issues，阻断）:
+    - 检查 [doc:N] 引用标记是否在 document_evidence 中存在
+
+    Level 2 — 内容级语义匹配（issues，阻断）:
+    - 提取 Agent 输出中疑似文档引用的段落
+    - 与 document_evidence 各 chunk 做 embedding 相似度匹配
+    - 所有 chunk 相似度均低于阈值 → ungrounded
+
+    Level 3 — 模式粗检（warnings，不阻断）:
+    - 检测输出中是否有文档引用句式
+    - document_evidence 为空时降级为 issues（因完全无法追溯）
+    """
+    if not output_text:
+        return [], []
+
+    doc_evidence = list(ep.document_evidence) if ep.document_evidence else []
+    issues: list[str] = []
+    warnings: list[str] = []
+
+    # ═══ Level 1: [doc:N] citation marker exact matching ═══
+    citation_matches = re.findall(r"\[doc:(\d+)\]", output_text)
+    valid_indices = set(range(1, len(doc_evidence) + 1))
+    if citation_matches:
+        cited_indices = {int(n) for n in citation_matches}
+        invalid = cited_indices - valid_indices
+        if invalid:
+            issues.append(
+                f"Ungrounded doc citation: reference markers {sorted(invalid)} "
+                f"are out of range (document_evidence has {len(doc_evidence)} chunks)"
+            )
+
+    # ═══ Level 2: content-level semantic matching ═══
+    citation_spans = _extract_doc_citation_spans(output_text)
+    if citation_spans and doc_evidence:
+        chunk_contents = [dc.content for dc in doc_evidence if dc.content]
+        if chunk_contents:
+            try:
+                model = _get_doc_grounding_model()
+                chunk_embeddings = model.encode(chunk_contents, convert_to_numpy=True)
+                span_texts = [s[0] for s in citation_spans]
+                span_embeddings = model.encode(span_texts, convert_to_numpy=True)
+                from numpy import dot
+                from numpy.linalg import norm as np_norm
+                SIMILARITY_THRESHOLD = 0.45
+                for i, (snippet, doc_type_hint, _, _) in enumerate(citation_spans):
+                    # 已标注合法 [doc:N] 的段落允许 paraphrase，不重复做语义拦截
+                    if _span_has_valid_doc_marker(snippet, valid_indices):
+                        continue
+                    scores = [
+                        float(dot(span_embeddings[i], ce) / (np_norm(span_embeddings[i]) * np_norm(ce) + 1e-10))
+                        for ce in chunk_embeddings
+                    ]
+                    max_score = max(scores) if scores else 0.0
+                    best_idx = int(scores.index(max_score)) + 1 if scores else 0
+                    if max_score < SIMILARITY_THRESHOLD:
+                        issues.append(
+                            f"Ungrounded doc claim: agent references '{doc_type_hint}' type content "
+                            f"(similarity={max_score:.2f}, best chunk={best_idx}, "
+                            f"threshold={SIMILARITY_THRESHOLD}). "
+                            f"Snippet: \"{snippet[:80]}...\""
+                        )
+            except ImportError:
+                # 降级：semantic matching 不可用，跳过 Level 2
+                pass
+
+    # ═══ Level 3: pattern-based coarse check (warnings) ═══
+    has_doc_pattern = False
+    for pat in _DOC_CITATION_PATTERNS_CN + _DOC_CITATION_PATTERNS_EN:
+        if re.search(pat, output_text, re.IGNORECASE):
+            has_doc_pattern = True
+            break
+
+    if has_doc_pattern:
+        if not doc_evidence:
+            # 升级为 issue：有引用模式但完全无可追溯的 chunk
+            issues.append(
+                "Ungrounded doc claim: agent output references document evidence "
+                "(e.g. annual report, earnings call, filing) but Evidence Packet "
+                "contains no document_evidence chunks"
+            )
+        else:
+            # warnings 级别：有引用模式且有 chunk，但没有被 Level 1/2 捕获时做兜底
+            matched_types = set()
+            for dc in doc_evidence:
+                dt = (dc.doc_type or "") if hasattr(dc, 'doc_type') else ""
+                if dt:
+                    matched_types.add(dt)
+            if not issues:  # Level 1/2 都没触发 issue
+                warnings.append(
+                    f"Doc grounding (coarse): output contains document citation patterns; "
+                    f"available doc types: {sorted(matched_types)}. "
+                    f"No issues detected at Level 1/2."
+                )
+
+    return issues, warnings
 
 
 def _find_ungrounded_claims_v2(ep: EvidencePacket, output_text: str) -> tuple[list[str], list[str]]:
@@ -253,8 +432,25 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
     # - value-level warnings (字段存在但数值没被逐字引用) → 不影响 is_valid，仅作提示
     grounding_issues, grounding_warnings = _find_ungrounded_claims_v2(ep, final_output_text)
 
+    # 文档 grounding 检查（非结构化 RAG）— 返回 (issues, warnings)
+    doc_grounding_issues, doc_grounding_warnings = _find_ungrounded_doc_claims(
+        final_output_text, ep
+    )
+
     if guard_result.allowed_output_level != OutputLevel.FULL_ANALYSIS:
         issues.extend(grounding_issues)
+        issues.extend(doc_grounding_issues)
+    else:
+        # FULL_ANALYSIS 下文档 grounding 不阻断，但 L1/L2 issues 降级并入 warnings
+        # 以保留审计链（否则 FULL 模式下 doc grounding 问题会被静默丢弃）
+        if doc_grounding_issues:
+            grounding_warnings = list(grounding_warnings) + [
+                f"[FULL_ANALYSIS-downgraded] {issue}" for issue in doc_grounding_issues
+            ]
+
+    # FULL_ANALYSIS 或非 FULL 下 L3 warnings 始终记录
+    if doc_grounding_warnings:
+        grounding_warnings = list(grounding_warnings) + doc_grounding_warnings
 
     is_valid = len(issues) == 0
 
@@ -313,6 +509,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
         "output_level": level,
         "checks": checks,
         "risk_warnings": risk_warnings,
+        "grounding_warnings": grounding_warnings,
     }
 
 

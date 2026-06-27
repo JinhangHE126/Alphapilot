@@ -98,3 +98,59 @@ def test_guard_rejects_ungrounded_keyword_claim():
     result = _hard_rule_guard(packet, "The P/B is 8.0 and valuation is expensive.", symbol="TSLA")
     assert result["is_valid"] is False
     assert any("Ungrounded claim" in issue for issue in result["issues"])
+
+
+def test_doc_grounding_skips_l2_for_valid_doc_marker_paraphrase(monkeypatch):
+    """Paraphrase with [doc:1] should not trigger Level 2 even when similarity is low."""
+    import numpy as np
+    from agents import guard_agent
+    from agents.guard_agent import _find_ungrounded_doc_claims
+    from schemas.evidence_packet import Coverage, DocumentChunk, EvidencePacket
+
+    class _FakeEmbedModel:
+        def encode(self, texts, convert_to_numpy=True):
+            # Orthogonal vectors → similarity 0; without L2 skip this would fail.
+            basis = np.eye(len(texts), dtype=float)
+            return basis
+
+    monkeypatch.setattr(guard_agent, "_get_doc_grounding_model", lambda: _FakeEmbedModel())
+
+    chunk_text = (
+        "Revenue from the energy storage segment grew 67% year-over-year, "
+        "becoming a significant growth driver."
+    )
+    ep = EvidencePacket(
+        symbol="TSLA",
+        request_type="comprehensive_analysis",
+        is_cold_start=False,
+        coverage=Coverage(
+            rag_context="available",
+            market_data="available",
+            fundamental_data="available",
+            news_data="available",
+            filings="missing",
+            document_evidence="available",
+        ),
+        facts=[],
+        document_evidence=[
+            DocumentChunk(
+                chunk_id="tsla_energy_c0",
+                content=chunk_text,
+                source="annual_report",
+                doc_id="tsla_2024_annual",
+                doc_type="annual_report",
+                section="MD&A",
+                page="24",
+                publish_date="2025-02-01",
+                report_period="FY2024",
+                symbol="TSLA",
+            )
+        ],
+    )
+    output = (
+        "According to the annual report [doc:1], energy storage revenue surged sharply "
+        "and is now a major growth engine for the company."
+    )
+    issues, _warnings = _find_ungrounded_doc_claims(output, ep)
+    l2_issues = [i for i in issues if "similarity=" in i]
+    assert not l2_issues, f"Expected L2 skip with [doc:1], got: {issues}"
