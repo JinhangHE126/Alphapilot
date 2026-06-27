@@ -41,12 +41,23 @@ export type ChartPoint = {
   v?: number;
 };
 
+export type DocumentEvidenceItem = {
+  source: string;
+  doc_id: string;
+  doc_type: string;
+  section: string;
+  publish_date: string;
+  report_period: string;
+  page: string;
+};
+
 export type EvidencePacketData = {
   symbol: string;
   facts: EvidenceFact[];
   evidence_score: number;
   allowed_output_level: string;
   chart_data: ChartPoint[];
+  document_evidence: DocumentEvidenceItem[];
 };
 
 export type TargetPriceData = {

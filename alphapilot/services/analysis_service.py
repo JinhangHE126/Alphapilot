@@ -1038,12 +1038,14 @@ def stream_analysis_events(
                 if node_name == "evidence_packet_builder" and "evidence_packet" in update:
                     ep = update["evidence_packet"]
                     chart = update.get("chart_data", [])
+                    doc_evidence = _serialize_document_evidence(ep.get("document_evidence", []))
                     yield _sse("evidence_packet", {
                         "symbol": ep.get("symbol", ""),
                         "facts": ep.get("facts", []),
                         "evidence_score": ep.get("evidence_score", 0),
                         "allowed_output_level": ep.get("allowed_output_level", ""),
                         "chart_data": chart,
+                        "document_evidence": doc_evidence,
                     })
 
                 # 当 orchestrator 决定好下一批要运行的 agent 时，立即发出 agent_start，
@@ -1239,6 +1241,32 @@ def stream_analysis_events(
 
     yield _sse("analysis_complete", done_payload)
     return done_payload
+
+
+def _serialize_document_evidence(doc_evidence: list[dict]) -> list[dict]:
+    """将 DocumentChunk 列表序列化为前端可消费的轻量格式。"""
+    seen = set()
+    result = []
+    for dc in doc_evidence:
+        if not isinstance(dc, dict):
+            continue
+        source = dc.get("source", "")
+        doc_id = dc.get("doc_id", "")
+        # 去重：同一 source+doc_id 只保留第一条
+        key = f"{source}|{doc_id}"
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append({
+            "source": source,
+            "doc_id": doc_id,
+            "doc_type": dc.get("doc_type", ""),
+            "section": dc.get("section", ""),
+            "publish_date": dc.get("publish_date", ""),
+            "report_period": dc.get("report_period", ""),
+            "page": dc.get("page", ""),
+        })
+    return result
 
 
 def _sse(event_name: str, data: dict[str, Any]) -> str:

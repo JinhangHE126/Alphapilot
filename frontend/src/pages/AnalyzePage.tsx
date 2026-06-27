@@ -21,7 +21,7 @@ import DebatePanel from "../components/DebatePanel";
 import { useTranslation } from "../i18n";
 import { createSession } from "../services/api";
 import { uploadDocument } from "../services/api";
-import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, TargetPriceData, RiskLevelData, parseRiskLevelFromContent } from "../services/sse";
+import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, DocumentEvidenceItem, TargetPriceData, RiskLevelData, parseRiskLevelFromContent } from "../services/sse";
 
 function detectLanguage(text: string): string {
   const stripped = text.replace(/\s/g, "");
@@ -706,6 +706,10 @@ export default function AnalyzePage() {
                     agentId={selectedAgentId}
                     facts={evidencePacket?.facts ?? []}
                   />
+                  {/* 文档来源（非结构化 RAG） */}
+                  <DocumentSources
+                    items={evidencePacket?.document_evidence ?? []}
+                  />
                 </div>
               </div>
             )}
@@ -962,6 +966,51 @@ function AgentSources({ agentId, facts }: AgentSourcesProps) {
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   Agent 详情 — 文档来源列表（非结构化 RAG 文档）
+   ══════════════════════════════════════════════════════════════════════ */
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  annual_report: "年报",
+  earnings_call: "电话会议",
+  research_report: "研报",
+  news: "新闻",
+};
+
+type DocumentSourcesProps = {
+  items: DocumentEvidenceItem[];
+};
+
+function DocumentSources({ items }: DocumentSourcesProps) {
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div className="agent-sources">
+      <div className="agent-sources-label">文档来源</div>
+      <div className="agent-sources-list">
+        {items.map((item) => {
+          const typeLabel = DOC_TYPE_LABELS[item.doc_type] || item.doc_type;
+          const meta = [
+            typeLabel,
+            item.section,
+            item.report_period ? `(${item.report_period})` : "",
+            item.page ? `p.${item.page}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <div key={`${item.source}|${item.doc_id}`} className="agent-source-group">
+              <span className="agent-source-name">{item.source}</span>
+              <span className="agent-source-fields">{meta}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
