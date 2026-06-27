@@ -9,6 +9,7 @@ from typing import Any
 
 from knowledge.document_chunker import chunk_document
 from knowledge.pdf_parser import parse_and_chunk
+from knowledge.sensitive_scanner import scan
 from rag.doc_registry import register_document, prune_symbol_documents
 from rag.retriever import retriever
 
@@ -52,21 +53,36 @@ def ingest_chunks(
     *,
     max_docs_per_symbol: int | None = 20,
     user_session_id: str = "",
+    is_user_upload: bool = False,
 ) -> int:
     if not chunks:
         return 0
-    if user_session_id:
-        for c in chunks:
+
+    redacted_count = 0
+    for c in chunks:
+        content = c.get("content", "")
+        if content:
+            scan_result = scan(content)
+            if scan_result.redacted:
+                redacted_count += 1
+            c["content"] = scan_result.text
+        if user_session_id:
             c["user_session_id"] = user_session_id
+        if is_user_upload or user_session_id:
+            c["source"] = c.get("source") or "user_uploaded"
+            c["confidence_tier"] = "user_submitted"
+
     written = retriever.add_document_chunks(chunks)
     symbol = (chunks[0].get("symbol") or "").upper()
     doc_id = chunks[0].get("doc_id", "")
     publish_date = chunks[0].get("publish_date", "")
     chunk_ids = [c.get("chunk_id", "") for c in chunks if c.get("chunk_id")]
-    if doc_id and symbol and written:
+    if doc_id and symbol and written and not user_session_id:
         register_document(symbol, doc_id, publish_date, chunk_ids)
-    if max_docs_per_symbol and symbol:
+    if max_docs_per_symbol and symbol and not user_session_id:
         prune_symbol_documents(symbol, max_docs=max_docs_per_symbol)
+    if redacted_count:
+        print(f"🔒 Sensitive scan: redacted content in {redacted_count} chunk(s)")
     return written
 
 
@@ -78,11 +94,18 @@ def ingest_file(
     max_docs_per_symbol: int | None = 20,
     user_session_id: str = "",
 ) -> int:
+    is_user_upload = bool(user_session_id)
+    if is_user_upload:
+        metadata = {
+            **metadata,
+            "source": "user_uploaded",
+        }
     chunks = parse_file_to_chunks(file_path, metadata, doc_type=doc_type)
     return ingest_chunks(
         chunks,
         max_docs_per_symbol=max_docs_per_symbol,
         user_session_id=user_session_id,
+        is_user_upload=is_user_upload,
     )
 
 

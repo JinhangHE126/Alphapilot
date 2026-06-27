@@ -10,6 +10,7 @@ def attach_document_evidence(
     symbol: str,
     query: str,
     k: int = 5,
+    user_session_id: str = "",
 ) -> EvidencePacket:
     """
     检索 document_chunk 并写入 packet.document_evidence。
@@ -20,6 +21,7 @@ def attach_document_evidence(
             query=query,
             symbol=symbol,
             k=k,
+            user_session_id=user_session_id,
         )
         print(f"📊 attach_document_evidence: symbol={symbol}, results={len(doc_results)}")
         if doc_results:
@@ -37,6 +39,7 @@ def attach_document_evidence(
                     symbol=dc.get("symbol", ""),
                     contains_table=bool(dc.get("contains_table", False)),
                     language=dc.get("language", ""),
+                    confidence_tier=dc.get("confidence_tier", ""),
                 )
                 for dc in doc_results
             ]

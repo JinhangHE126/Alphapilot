@@ -396,6 +396,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
             symbol=symbol,
             query=f"{symbol} {user_instruction[:200]}",
             k=5,
+            user_session_id=str(state.get("user_session_id", "") or ""),
         )
         if packet.document_evidence:
             print(f"📄 Document RAG: {len(packet.document_evidence)} chunks loaded")

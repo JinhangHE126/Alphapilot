@@ -43,6 +43,8 @@ from db.repository import (
 from graph.state import GraphState
 from graph.user_profile import load_user_profile, save_user_profile
 from services.auth_service import create_access_token, decode_access_token
+from api.upload import router as upload_router
+from api.upload import router as upload_router
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change_this_in_prod")
 auth_scheme = HTTPBearer()
@@ -68,6 +70,8 @@ api.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+api.include_router(upload_router)
 
 @api.middleware("http")
 async def request_context_middleware(request: Request, call_next):
@@ -497,9 +501,8 @@ async def upload_document(
     language: str = Form(default="zh"),
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
-    import uuid
-    from knowledge.pdf_parser import parse_and_chunk
-    from rag.retriever import retriever
+    from knowledge.document_ingest import ingest_file
+    from knowledge.pdf_env import require_text_extraction
 
     UPLOAD_DIR = Path("rag_data/uploads")
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -508,6 +511,12 @@ async def upload_document(
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, detail=f"不支持的文件类型: {ext}")
+
+    if ext == ".pdf":
+        try:
+            require_text_extraction()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     file_id = uuid.uuid4().hex[:12]
     safe_name = f"{symbol}_{file_id}{ext}"
@@ -519,29 +528,33 @@ async def upload_document(
 
     now = datetime.utcnow().isoformat()
     doc_id = f"{symbol}_{doc_type}_{file_id}"
+    user_session_id = str(current_user.get("id", ""))
     metadata = {
         "doc_id": doc_id,
         "symbol": symbol.upper(),
-        "source": source,
+        "source": "user_uploaded",
         "doc_type": doc_type,
         "publish_date": publish_date or now,
         "report_period": report_period or "",
         "language": language,
         "page": "",
-        "user_session_id": str(current_user.get("id", "")),
     }
 
     try:
-        chunks = parse_and_chunk(str(save_path), metadata, doc_type=doc_type)
+        written = ingest_file(
+            str(save_path),
+            metadata,
+            doc_type=doc_type,
+            user_session_id=user_session_id,
+        )
     except Exception as exc:
         save_path.unlink(missing_ok=True)
         raise HTTPException(422, detail=f"文档解析失败: {exc}") from exc
 
-    if not chunks:
+    if not written:
         save_path.unlink(missing_ok=True)
         raise HTTPException(422, detail="未能从文档中提取文本内容")
 
-    written = retriever.add_document_chunks(chunks)
     save_path.unlink(missing_ok=True)
 
     return {

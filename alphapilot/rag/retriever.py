@@ -345,6 +345,7 @@ class RagRetriever:
                     "contains_table": c.get("contains_table", False),
                     "language": c.get("language", ""),
                     "user_session_id": c.get("user_session_id", ""),
+                    "confidence_tier": c.get("confidence_tier", ""),
                     "_type": "document_chunk",
                 },
             )
@@ -372,6 +373,18 @@ class RagRetriever:
             print(f"✅ Added {len(docs)} document chunks")
         return len(docs)
 
+    def _lookup_doc_chunk_meta(self, chunk_id: str) -> Dict[str, Any]:
+        if not self.vectorstore or not chunk_id:
+            return {}
+        try:
+            for _doc_id, doc in self.vectorstore.docstore._dict.items():
+                meta = doc.metadata or {}
+                if meta.get("chunk_id") == chunk_id:
+                    return meta
+        except Exception:
+            pass
+        return {}
+
     def _matches_doc_chunk_filters(
         self,
         meta: Dict[str, Any],
@@ -384,11 +397,18 @@ class RagRetriever:
             return False
         if symbol and meta.get("symbol", "").upper() != symbol.upper():
             return False
+        sid = str(meta.get("user_session_id", "") or "")
         if user_session_id:
-            sid = meta.get("user_session_id", "")
+            # 公开 chunk（无 session）+ 当前用户私有 chunk
             if sid and sid != user_session_id:
                 return False
+        elif sid:
+            # 未登录/无 session：不返回任何用户私有 chunk
+            return False
         return True
+
+    def _is_private_doc_chunk(self, meta: Dict[str, Any]) -> bool:
+        return bool(str(meta.get("user_session_id", "") or ""))
 
     def _doc_chunk_from_document(self, doc: Document) -> Dict[str, Any]:
         meta = doc.metadata or {}
@@ -405,6 +425,8 @@ class RagRetriever:
             "symbol": meta.get("symbol", ""),
             "contains_table": meta.get("contains_table", False),
             "language": meta.get("language", ""),
+            "user_session_id": meta.get("user_session_id", ""),
+            "confidence_tier": meta.get("confidence_tier", ""),
         }
 
     def _vector_doc_chunk_candidates(
@@ -471,6 +493,49 @@ class RagRetriever:
 
         return [chunk for chunk, _score in candidates[:k]]
 
+    def _merge_public_private_hits(
+        self,
+        query: str,
+        symbol: str,
+        user_session_id: str,
+        k: int,
+    ) -> List[Dict[str, Any]]:
+        """登录用户：公开 + 私有各取候选，再按分数合并。"""
+        if not user_session_id:
+            return self.retrieve_doc_chunks(query, symbol=symbol, k=k, user_session_id="")
+
+        half = max(k // 2, 1)
+        public_pool: List[tuple[Dict[str, Any], float]] = []
+        private_pool: List[tuple[Dict[str, Any], float]] = []
+        store_size = len(self.vectorstore.docstore._dict) if self.vectorstore else 0
+        fetch_k = min(store_size, max(k * 20, 200))
+        for chunk, score in self._vector_doc_chunk_candidates(
+            query, symbol, user_session_id, fetch_k
+        ):
+            sid = str(chunk.get("user_session_id", "") or "")
+            if sid == user_session_id:
+                private_pool.append((chunk, score))
+            elif not sid:
+                public_pool.append((chunk, score))
+
+        merged: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for pool in (public_pool[:half], private_pool[:half]):
+            for chunk, _ in pool:
+                cid = chunk.get("chunk_id", "")
+                if cid and cid not in seen:
+                    merged.append(chunk)
+                    seen.add(cid)
+        if len(merged) < k:
+            for chunk, _ in public_pool[half:] + private_pool[half:]:
+                cid = chunk.get("chunk_id", "")
+                if cid and cid not in seen:
+                    merged.append(chunk)
+                    seen.add(cid)
+                if len(merged) >= k:
+                    break
+        return merged[:k]
+
     def hybrid_retrieve(
         self,
         query: str,
@@ -506,6 +571,9 @@ class RagRetriever:
                 cid = row.get("chunk_id", "")
                 if not cid:
                     continue
+                meta = self._lookup_doc_chunk_meta(cid)
+                if meta and not self._matches_doc_chunk_filters(meta, symbol, user_session_id):
+                    continue
                 fts_ranked.append(cid)
                 fts_rows[cid] = {
                     "chunk_id": cid,
@@ -513,19 +581,26 @@ class RagRetriever:
                     "doc_id": row.get("doc_id", ""),
                     "symbol": row.get("symbol", symbol),
                     "publish_date": row.get("publish_date", ""),
-                    "source": "fts",
-                    "doc_type": "",
-                    "section": "",
-                    "page": "",
-                    "report_period": "",
-                    "contains_table": False,
-                    "language": "",
+                    "source": meta.get("source", "fts") if meta else "fts",
+                    "doc_type": meta.get("doc_type", "") if meta else "",
+                    "section": meta.get("section", "") if meta else "",
+                    "page": meta.get("page", "") if meta else "",
+                    "report_period": meta.get("report_period", "") if meta else "",
+                    "contains_table": bool(meta.get("contains_table", False)) if meta else False,
+                    "language": meta.get("language", "") if meta else "",
+                    "user_session_id": meta.get("user_session_id", "") if meta else "",
+                    "confidence_tier": meta.get("confidence_tier", "") if meta else "",
                 }
         except Exception as exc:
             print(f"⚠️ FTS search skipped: {exc}")
 
         if not vector_ranked and not fts_ranked:
             return []
+
+        if user_session_id:
+            mixed = self._merge_public_private_hits(query, symbol, user_session_id, k)
+            if mixed:
+                return mixed
 
         fused = rrf_fusion(
             {"vector": vector_ranked, "fts": fts_ranked},
@@ -542,6 +617,9 @@ class RagRetriever:
         for chunk_id, rrf_score in fused:
             chunk = chunk_by_id.get(chunk_id)
             if not chunk:
+                continue
+            meta = self._lookup_doc_chunk_meta(chunk_id)
+            if meta and not self._matches_doc_chunk_filters(meta, symbol, user_session_id):
                 continue
             if symbol and chunk.get("symbol", "").upper() != symbol.upper():
                 continue

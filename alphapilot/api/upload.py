@@ -77,12 +77,12 @@ async def upload_document(
     metadata = {
         "doc_id": doc_id,
         "symbol": symbol.upper(),
-        "source": source,
+        "source": "user_uploaded" if user_session_id else source,
         "doc_type": doc_type,
         "publish_date": publish_date or now,
         "report_period": report_period or "",
         "language": language,
-        "page": "",  # 解析后由 chunker 填充
+        "page": "",
     }
 
     # ── 解析 + 分块 + 入库 ──

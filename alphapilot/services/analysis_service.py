@@ -906,6 +906,7 @@ def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, threa
         "executed_agents": [],
         "guard_retry_count": 0,
         "evidence_packet": None,
+        "user_session_id": user_id,
     }
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -994,6 +995,7 @@ def stream_analysis_events(
         "executed_agents": [],
         "guard_retry_count": 0,
         "evidence_packet": None,
+        "user_session_id": user_id,
     }
     config = {"configurable": {"thread_id": thread_id}}
 

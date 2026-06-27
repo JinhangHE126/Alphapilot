@@ -65,3 +65,6 @@ class GraphState(TypedDict, total=False):
     final_score: float
     current_portfolio: dict
     errors: list[str]
+
+    # Phase 4 — 用户上传私有空间（与登录 user_id 一致）
+    user_session_id: str

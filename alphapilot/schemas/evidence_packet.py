@@ -13,10 +13,12 @@ class ConfidenceTier(str, Enum):
     1. MACHINE：机器级置信度
     2. LLM_EXTRACTED：LLM 提取的置信度
     3. LLM_INFERRED：LLM 推理的置信度
+    4. USER_SUBMITTED：用户上传文档
     """
     MACHINE = "machine"
     LLM_EXTRACTED = "llm_extracted"
     LLM_INFERRED = "llm_inferred"
+    USER_SUBMITTED = "user_submitted"
 
 
 class OutputLevel(str, Enum):
@@ -110,6 +112,7 @@ class DocumentChunk(BaseModel):
     symbol: str = Field(default="", description="股票代码")
     contains_table: bool = Field(default=False, description="是否包含表格")
     language: str = Field(default="", description="语言")
+    confidence_tier: str = Field(default="", description="user_submitted / machine 等")
 
 
 class Coverage(BaseModel):
@@ -433,6 +436,7 @@ TIER_MARKS: dict[ConfidenceTier, str] = {
     ConfidenceTier.MACHINE: "[✓]",
     ConfidenceTier.LLM_EXTRACTED: "[~]",
     ConfidenceTier.LLM_INFERRED: "[?]",
+    ConfidenceTier.USER_SUBMITTED: "[U]",
 }
 
 _CONFLICT_THRESHOLDS: dict[str, float] = {
@@ -559,8 +563,13 @@ def render_packet_for_agent(packet: EvidencePacket, language: str = "") -> str:
         lines.append("- When referencing a specific chunk, cite it with its [doc:N] marker for traceability.")
         lines.append("")
         for i, dc in enumerate(packet.document_evidence, start=1):
+            tier_mark = ""
+            if dc.confidence_tier == "user_submitted":
+                tier_mark = TIER_MARKS.get(ConfidenceTier.USER_SUBMITTED, "[U]")
+            elif dc.confidence_tier in {t.value for t in ConfidenceTier}:
+                tier_mark = TIER_MARKS.get(ConfidenceTier(dc.confidence_tier), "")
             header = (
-                f"[doc:{i}] source: {dc.doc_id}, section: {dc.section}"
+                f"[doc:{i}]{tier_mark} source: {dc.doc_id}, section: {dc.section}"
                 + (f", page: {dc.page}" if dc.page else "")
                 + f", date: {dc.publish_date}]"
             )
