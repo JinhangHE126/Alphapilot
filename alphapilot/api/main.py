@@ -21,6 +21,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from dotenv import load_dotenv
+
+load_dotenv(PROJECT_ROOT / ".env")
+
 from api.response import error, success
 from db.models import init_db
 from db.repository import (
@@ -44,12 +48,11 @@ from graph.state import GraphState
 from graph.user_profile import load_user_profile, save_user_profile
 from services.auth_service import create_access_token, decode_access_token
 from api.upload import router as upload_router
-from api.upload import router as upload_router
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change_this_in_prod")
 auth_scheme = HTTPBearer()
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format='{"ts":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}',
 )
 logger = logging.getLogger("alphapilot.api")
