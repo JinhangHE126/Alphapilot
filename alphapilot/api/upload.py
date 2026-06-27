@@ -14,9 +14,8 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from knowledge.document_ingest import ingest_file
 from knowledge.pdf_env import require_text_extraction
-from knowledge.pdf_parser import parse_and_chunk
-from rag.retriever import retriever
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
@@ -86,29 +85,18 @@ async def upload_document(
         "page": "",  # 解析后由 chunker 填充
     }
 
-    # ── 解析 + 分块 ──
+    # ── 解析 + 分块 + 入库 ──
     try:
-        chunks = parse_and_chunk(str(save_path), metadata, doc_type=doc_type)
+        written = ingest_file(
+            str(save_path), metadata, doc_type=doc_type, user_session_id=user_session_id
+        )
     except Exception as exc:
-        # 清理临时文件
         save_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail=f"文档解析失败: {exc}") from exc
 
-    if not chunks:
+    if not written:
         save_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail="未能从文档中提取文本内容")
-
-    # ── 写入向量库 ──
-    # 用户私有空间标记
-    if user_session_id:
-        for c in chunks:
-            c["user_session_id"] = user_session_id
-
-    try:
-        written = retriever.add_document_chunks(chunks)
-    except Exception as exc:
-        save_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail=f"写入向量库失败: {exc}") from exc
 
     # ── 清理临时文件（成功入库后） ──
     save_path.unlink(missing_ok=True)

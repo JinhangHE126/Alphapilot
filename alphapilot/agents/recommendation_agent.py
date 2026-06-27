@@ -94,6 +94,7 @@ def _render_document_evidence(ep: dict) -> str:
         return ""
 
     lines = ["### Document Evidence (non-structured, from reports & filings)"]
+    lines.append("- Cite chunks as [doc:N] (N = chunk number below). Do NOT invent content not shown here.")
     for i, dc in enumerate(doc_evidence):
         if not isinstance(dc, dict):
             continue
@@ -120,7 +121,7 @@ def _render_document_evidence(ep: dict) -> str:
             header_parts.append(f"period: {report_period}")
         header_parts.append("]")
 
-        lines.append(f"#### Chunk {i + 1} {' '.join(header_parts)}")
+        lines.append(f"#### [doc:{i + 1}] {' '.join(header_parts)}")
         # 截断过长内容
         if len(content) > 2000:
             content = content[:2000] + "...[truncated]"
@@ -225,6 +226,15 @@ def recommendation_agent(state):
         return {"messages": [AIMessage(content=content, name="recommendation_agent")]}
 
     else:
+        partial_constraints = ""
+        if output_level == "limited_analysis_partial":
+            partial_constraints = """
+LIMITED_ANALYSIS_PARTIAL constraints:
+- Do NOT use strong actionable phrases: 建议买入, 建议卖出, 强烈推荐, 目标价, strong buy, strong sell, price target.
+- Use cautious wording: 可考虑观望, 谨慎持有, 风险较高需控制仓位, etc.
+- Document Evidence claims must include [doc:N] and match chunk content; omit doc section if chunks are insufficient.
+"""
+
         system_prompt = f"""
 You are Recommendation Agent - AlphaPilot personalized investment recommendation expert.
 
@@ -239,7 +249,9 @@ Use it to provide **qualitative depth** that structured facts cannot cover, espe
 - Risk factors, uncertainties, and potential red flags from annual reports or filings
 - Competitive positioning and business initiatives
 
-When referencing content from Document Evidence, you **must clearly indicate the source** (e.g., "根据2024年年报..." or "Management stated in the Q4 earnings call...").
+When referencing content from Document Evidence, cite with **[doc:N]** (matching the chunk markers below).
+Only paraphrase facts explicitly present in the Document Evidence text — do NOT invent filings, restatements, or metrics.
+Do NOT use speculative templates (e.g. "年报中通常...") as if they came from the document.
 Prioritize official company documents (annual reports, earnings call transcripts) over third-party research reports.
 
 Your core responsibilities:
@@ -255,6 +267,7 @@ STRICT PROHIBITIONS:
 - Do NOT put target prices, price targets, 目标价, or expected-return percentages in the human-readable text.
 - DO NOT use vague approximators: 约, 左右, 大概, approximately, roughly, about.
 - Every numeric claim MUST copy the exact value from the Evidence Packet facts (with decimal).
+{partial_constraints}
 - {_lang_instruction(language)}
 
 Required structured output — generate a detailed, professional report with the following sections:

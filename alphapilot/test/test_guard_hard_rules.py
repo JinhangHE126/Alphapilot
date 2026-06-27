@@ -154,3 +154,99 @@ def test_doc_grounding_skips_l2_for_valid_doc_marker_paraphrase(monkeypatch):
     issues, _warnings = _find_ungrounded_doc_claims(output, ep)
     l2_issues = [i for i in issues if "similarity=" in i]
     assert not l2_issues, f"Expected L2 skip with [doc:1], got: {issues}"
+
+
+def test_doc_grounding_accepts_uppercase_doc_marker(monkeypatch):
+    import numpy as np
+    from agents import guard_agent
+    from agents.guard_agent import _find_ungrounded_doc_claims
+    from schemas.evidence_packet import Coverage, DocumentChunk, EvidencePacket
+
+    class _FakeEmbedModel:
+        def encode(self, texts, convert_to_numpy=True):
+            import numpy as np
+            return np.eye(len(texts), dtype=float)
+
+    monkeypatch.setattr(guard_agent, "_get_doc_grounding_model", lambda: _FakeEmbedModel())
+
+    ep = EvidencePacket(
+        symbol="TSLA",
+        request_type="comprehensive_analysis",
+        is_cold_start=False,
+        coverage=Coverage(
+            rag_context="available",
+            market_data="available",
+            fundamental_data="available",
+            news_data="available",
+            filings="missing",
+            document_evidence="available",
+        ),
+        facts=[],
+        document_evidence=[
+            DocumentChunk(
+                chunk_id="c0",
+                content="FY2024 revenue restatement and EBITDA presentation changes were disclosed.",
+                source="annual_report",
+                doc_id="tsla_annual",
+                doc_type="annual_report",
+                section="Notes",
+                page="1",
+                publish_date="2025-01-01",
+                report_period="FY2024",
+                symbol="TSLA",
+            )
+        ],
+    )
+    output = (
+        "文档证据（[DOC:1]）显示2024年财务数据重述，EBITDA列报方式调整。\n"
+    )
+    issues, _ = _find_ungrounded_doc_claims(output, ep)
+    l2_issues = [i for i in issues if "similarity=" in i]
+    assert not l2_issues
+
+
+def test_doc_grounding_skips_heuristic_annual_report_phrase(monkeypatch):
+    import numpy as np
+    from agents import guard_agent
+    from agents.guard_agent import _find_ungrounded_doc_claims
+    from schemas.evidence_packet import Coverage, DocumentChunk, EvidencePacket
+
+    class _FakeEmbedModel:
+        def encode(self, texts, convert_to_numpy=True):
+            import numpy as np
+            return np.eye(len(texts), dtype=float)
+
+    monkeypatch.setattr(guard_agent, "_get_doc_grounding_model", lambda: _FakeEmbedModel())
+
+    ep = EvidencePacket(
+        symbol="TSLA",
+        request_type="comprehensive_analysis",
+        is_cold_start=False,
+        coverage=Coverage(
+            rag_context="available",
+            market_data="available",
+            fundamental_data="available",
+            news_data="available",
+            filings="missing",
+            document_evidence="available",
+        ),
+        facts=[],
+        document_evidence=[
+            DocumentChunk(
+                chunk_id="c0",
+                content="Risk factors include supply chain concentration.",
+                source="annual_report",
+                doc_id="tsla_annual",
+                doc_type="annual_report",
+                section="Risk",
+                page="1",
+                publish_date="2025-01-01",
+                report_period="FY2024",
+                symbol="TSLA",
+            )
+        ],
+    )
+    output = "文档证据虽未直接提及，但年报中通常会在 Risk Factors 部分披露关键人物依赖风险。"
+    issues, _ = _find_ungrounded_doc_claims(output, ep)
+    l2_issues = [i for i in issues if "similarity=" in i]
+    assert not l2_issues

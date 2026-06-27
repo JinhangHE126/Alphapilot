@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from typing import List, Dict, Any, Set
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
@@ -35,6 +35,44 @@ RAG_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
 # ── 文档向量库（独立于事实向量库） ──
 DOC_INDEX_PATH = Path("rag_data/doc_faiss_index")
 DOC_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+RRF_K = 60
+HYBRID_VECTOR_K = 20
+HYBRID_FTS_K = 20
+HYBRID_DEFAULT_K = 10
+
+
+def recency_weight(publish_date: str | None) -> float:
+    """Phase 3.11 — down-weight stale document chunks."""
+    if not publish_date:
+        return 0.7
+    try:
+        text = str(publish_date).strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        if "T" in text:
+            pub = datetime.fromisoformat(text).date()
+        else:
+            pub = date.fromisoformat(text[:10])
+        days = (date.today() - pub).days
+    except (ValueError, TypeError):
+        return 0.7
+    if days <= 90:
+        return 1.0
+    if days <= 365:
+        return 0.7
+    return 0.3
+
+
+def rrf_fusion(rank_lists: Dict[str, List[str]], k: int = RRF_K) -> List[tuple[str, float]]:
+    """Reciprocal Rank Fusion across ranked chunk_id lists."""
+    scores: Dict[str, float] = {}
+    for ids in rank_lists.values():
+        for rank, chunk_id in enumerate(ids, start=1):
+            if not chunk_id:
+                continue
+            scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (k + rank)
+    return sorted(scores.items(), key=lambda item: -item[1])
 
 def _resolve_model_name() -> str:
     """Support short model name and full HF repo name."""
@@ -76,6 +114,7 @@ class RagRetriever:
         self.vectorstore = None
         self.embedding_model = None
         self._known_doc_ids: Set[str] = set()
+        self._evicted_doc_ids: Set[str] = set()
         try:
             self.embedding_model = _build_embedding_model()
             self.load_or_create_index()
@@ -107,18 +146,36 @@ class RagRetriever:
             self._known_doc_ids = set()
 
     def _scan_existing_doc_ids(self):
-        """扫描向量库中已有的 doc_id，用于去重。"""
+        """扫描向量库中已有的 doc_id / chunk_id，用于去重。"""
         try:
             docstore = self.vectorstore.docstore
             for doc_id in docstore._dict:
                 doc = docstore._dict.get(doc_id)
                 if doc and hasattr(doc, "metadata"):
-                    existing = doc.metadata.get("doc_id")
+                    meta = doc.metadata or {}
+                    existing = meta.get("chunk_id") or meta.get("doc_id")
                     if existing:
                         self._known_doc_ids.add(existing)
-            print(f"📚 已加载 {len(self._known_doc_ids)} 个已知 doc_id 用于去重")
+                    if meta.get("_evicted") and meta.get("doc_id"):
+                        self._evicted_doc_ids.add(meta["doc_id"])
+            print(f"📚 已加载 {len(self._known_doc_ids)} 个已知 doc/chunk id 用于去重")
         except Exception:
             self._known_doc_ids = set()
+
+    def mark_doc_evicted(self, doc_ids: List[str]) -> None:
+        """Soft-evict documents (filtered at retrieval; FAISS rebuild optional)."""
+        for doc_id in doc_ids:
+            self._evicted_doc_ids.add(doc_id)
+        if not self.vectorstore:
+            return
+        try:
+            for _faiss_id, doc in self.vectorstore.docstore._dict.items():
+                meta = doc.metadata or {}
+                if meta.get("doc_id") in doc_ids:
+                    meta["_evicted"] = True
+                    doc.metadata = meta
+        except Exception:
+            pass
 
     def add_document(self, text: str, metadata: Dict[str, Any], doc_id: str) -> bool:
         """添加单篇文档（推荐使用），相同 doc_id 自动跳过。返回 True 表示新增成功。"""
@@ -287,6 +344,7 @@ class RagRetriever:
                     "report_period": c.get("report_period", ""),
                     "contains_table": c.get("contains_table", False),
                     "language": c.get("language", ""),
+                    "user_session_id": c.get("user_session_id", ""),
                     "_type": "document_chunk",
                 },
             )
@@ -296,6 +354,21 @@ class RagRetriever:
         if docs:
             self.vectorstore.add_documents(docs)
             self.vectorstore.save_local(str(RAG_INDEX_PATH))
+            try:
+                from rag.chunk_fts import get_chunk_fts
+
+                fts = get_chunk_fts()
+                for c in chunks:
+                    if c.get("chunk_id") in {d.metadata.get("chunk_id") for d in docs}:
+                        fts.index_chunk(
+                            chunk_id=c.get("chunk_id", ""),
+                            doc_id=c.get("doc_id", ""),
+                            symbol=c.get("symbol", ""),
+                            content=c.get("content", ""),
+                            publish_date=c.get("publish_date", ""),
+                        )
+            except Exception as exc:
+                print(f"⚠️ FTS index update skipped: {exc}")
             print(f"✅ Added {len(docs)} document chunks")
         return len(docs)
 
@@ -306,6 +379,8 @@ class RagRetriever:
         user_session_id: str = "",
     ) -> bool:
         if meta.get("_type") != "document_chunk":
+            return False
+        if meta.get("_evicted") or meta.get("doc_id") in self._evicted_doc_ids:
             return False
         if symbol and meta.get("symbol", "").upper() != symbol.upper():
             return False
@@ -332,29 +407,42 @@ class RagRetriever:
             "language": meta.get("language", ""),
         }
 
-    def _filter_doc_chunks_from_search(
+    def _vector_doc_chunk_candidates(
         self,
-        docs: List[Document],
+        query: str,
         symbol: str,
         user_session_id: str,
-        k: int,
-    ) -> List[Dict[str, Any]]:
-        results: List[Dict[str, Any]] = []
-        for doc in docs:
-            if not self._matches_doc_chunk_filters(doc.metadata or {}, symbol, user_session_id):
+        fetch_k: int,
+    ) -> List[tuple[Dict[str, Any], float]]:
+        if not self.vectorstore:
+            return []
+        try:
+            scored = self.vectorstore.similarity_search_with_score(query, k=fetch_k)
+        except Exception:
+            return []
+
+        results: List[tuple[Dict[str, Any], float]] = []
+        for doc, distance in scored:
+            meta = doc.metadata or {}
+            if not self._matches_doc_chunk_filters(meta, symbol, user_session_id):
                 continue
-            results.append(self._doc_chunk_from_document(doc))
-            if len(results) >= k:
-                break
+            similarity = self._distance_to_similarity(float(distance))
+            weight = recency_weight(meta.get("publish_date", ""))
+            weighted = round(similarity * weight, 6)
+            chunk = self._doc_chunk_from_document(doc)
+            chunk["similarity"] = similarity
+            chunk["recency_weight"] = weight
+            chunk["weighted_score"] = weighted
+            results.append((chunk, weighted))
+        results.sort(key=lambda item: -item[1])
         return results
 
     def retrieve_doc_chunks(
         self, query: str, symbol: str = "", k: int = 10, user_session_id: str = ""
     ) -> List[Dict[str, Any]]:
         """
-        文档感知 RAG 检索。
+        文档感知 RAG 检索（向量 + 时效加权）。
         FAISS 无法按 metadata 预过滤，因此 over-fetch 后做 Python 后过滤。
-        若首轮候选不足，降级为全库扫描再过滤（避免 facts 挤占 Top-K）。
         """
         if not self.vectorstore:
             return []
@@ -362,38 +450,131 @@ class RagRetriever:
         store_size = len(self.vectorstore.docstore._dict)
         fetch_k = min(store_size, max(k * 20, 200))
 
-        try:
-            docs = self.vectorstore.similarity_search(query, k=fetch_k)
-        except Exception:
-            docs = []
-
-        doc_chunk_count = sum(
-            1 for d in docs if (d.metadata or {}).get("_type") == "document_chunk"
+        candidates = self._vector_doc_chunk_candidates(
+            query, symbol, user_session_id, fetch_k
         )
         print(
-            f"📊 retrieve_doc_chunks: fetch_k={fetch_k}, total={len(docs)}, "
-            f"doc_chunks_in_total={doc_chunk_count}, symbol={symbol or 'ANY'}"
+            f"📊 retrieve_doc_chunks: fetch_k={fetch_k}, vector_hits={len(candidates)}, "
+            f"symbol={symbol or 'ANY'}"
         )
 
-        results = self._filter_doc_chunks_from_search(docs, symbol, user_session_id, k)
-
-        # 首轮不足 k 条时也全库扫描（facts 挤占 Top-200 时常见只命中 1 条）
-        if len(results) < k and store_size > fetch_k:
-            try:
-                docs = self.vectorstore.similarity_search(query, k=store_size)
-            except Exception:
-                docs = []
-            wide_results = self._filter_doc_chunks_from_search(
-                docs, symbol, user_session_id, k
+        if len(candidates) < k and store_size > fetch_k:
+            wide = self._vector_doc_chunk_candidates(
+                query, symbol, user_session_id, store_size
             )
-            if len(wide_results) > len(results):
+            if len(wide) > len(candidates):
                 print(
                     f"📄 Document RAG fallback: widened search to {store_size} "
-                    f"→ {len(wide_results)} chunk(s) (was {len(results)})"
+                    f"→ {len(wide)} chunk(s) (was {len(candidates)})"
                 )
-                results = wide_results
+                candidates = wide
 
-        return results
+        return [chunk for chunk, _score in candidates[:k]]
+
+    def hybrid_retrieve(
+        self,
+        query: str,
+        symbol: str = "",
+        k: int = HYBRID_DEFAULT_K,
+        user_session_id: str = "",
+    ) -> List[Dict[str, Any]]:
+        """
+        Phase 3.12 — 向量 Top-20 + FTS5 Top-20 → RRF(k=60) → Top-k，并应用时效加权。
+        """
+        if not self.vectorstore:
+            return []
+
+        store_size = len(self.vectorstore.docstore._dict)
+        fetch_k = min(store_size, max(HYBRID_VECTOR_K * 10, 200))
+        vector_candidates = self._vector_doc_chunk_candidates(
+            query, symbol, user_session_id, fetch_k
+        )
+        if len(vector_candidates) < HYBRID_VECTOR_K and store_size > fetch_k:
+            wide = self._vector_doc_chunk_candidates(
+                query, symbol, user_session_id, store_size
+            )
+            if len(wide) > len(vector_candidates):
+                vector_candidates = wide
+        vector_ranked = [c["chunk_id"] for c, _ in vector_candidates[:HYBRID_VECTOR_K]]
+
+        fts_ranked: List[str] = []
+        fts_rows: Dict[str, Dict[str, Any]] = {}
+        try:
+            from rag.chunk_fts import get_chunk_fts
+
+            for row in get_chunk_fts().search(query, symbol=symbol, k=HYBRID_FTS_K):
+                cid = row.get("chunk_id", "")
+                if not cid:
+                    continue
+                fts_ranked.append(cid)
+                fts_rows[cid] = {
+                    "chunk_id": cid,
+                    "content": row.get("content", ""),
+                    "doc_id": row.get("doc_id", ""),
+                    "symbol": row.get("symbol", symbol),
+                    "publish_date": row.get("publish_date", ""),
+                    "source": "fts",
+                    "doc_type": "",
+                    "section": "",
+                    "page": "",
+                    "report_period": "",
+                    "contains_table": False,
+                    "language": "",
+                }
+        except Exception as exc:
+            print(f"⚠️ FTS search skipped: {exc}")
+
+        if not vector_ranked and not fts_ranked:
+            return []
+
+        fused = rrf_fusion(
+            {"vector": vector_ranked, "fts": fts_ranked},
+            k=RRF_K,
+        )
+
+        chunk_by_id: Dict[str, Dict[str, Any]] = {
+            c["chunk_id"]: c for c, _ in vector_candidates
+        }
+        for cid, row in fts_rows.items():
+            chunk_by_id.setdefault(cid, row)
+
+        final: List[tuple[Dict[str, Any], float]] = []
+        for chunk_id, rrf_score in fused:
+            chunk = chunk_by_id.get(chunk_id)
+            if not chunk:
+                continue
+            if symbol and chunk.get("symbol", "").upper() != symbol.upper():
+                continue
+            if chunk.get("doc_id") in self._evicted_doc_ids:
+                continue
+            weight = recency_weight(chunk.get("publish_date", ""))
+            score = rrf_score * weight
+            chunk = dict(chunk)
+            chunk["rrf_score"] = round(rrf_score, 6)
+            chunk["recency_weight"] = weight
+            chunk["hybrid_score"] = round(score, 6)
+            final.append((chunk, score))
+
+        final.sort(key=lambda item: -item[1])
+        results = [chunk for chunk, _ in final[:k]]
+
+        if len(results) < k:
+            fallback = self.retrieve_doc_chunks(
+                query, symbol=symbol, k=k, user_session_id=user_session_id
+            )
+            seen = {r.get("chunk_id") for r in results}
+            for chunk in fallback:
+                cid = chunk.get("chunk_id")
+                if cid and cid not in seen:
+                    results.append(chunk)
+                    seen.add(cid)
+                if len(results) >= k:
+                    break
+            if len(results) > len(final):
+                print(
+                    f"📄 hybrid_retrieve fallback: supplemented to {len(results)} chunk(s)"
+                )
+        return results[:k]
 
 
 # ====================== 全局实例 ======================

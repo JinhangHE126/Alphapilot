@@ -94,6 +94,20 @@ def startup_event() -> None:
         log_pdf_capabilities()
     except Exception as exc:
         print(f"⚠️ PDF capability check skipped: {exc}")
+    try:
+        from knowledge.scheduler import start_document_scheduler
+        start_document_scheduler()
+    except Exception as exc:
+        print(f"⚠️ Document scheduler skipped: {exc}")
+
+
+@api.on_event("shutdown")
+def shutdown_event() -> None:
+    try:
+        from knowledge.scheduler import stop_document_scheduler
+        stop_document_scheduler()
+    except Exception:
+        pass
 
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict[str, Any]:

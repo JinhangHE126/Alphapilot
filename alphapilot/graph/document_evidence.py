@@ -16,11 +16,12 @@ def attach_document_evidence(
     失败时保持 document_evidence 为空，不抛异常。
     """
     try:
-        doc_results = retriever.retrieve_doc_chunks(
+        doc_results = retriever.hybrid_retrieve(
             query=query,
             symbol=symbol,
             k=k,
         )
+        print(f"📊 attach_document_evidence: symbol={symbol}, results={len(doc_results)}")
         if doc_results:
             packet.document_evidence = [
                 DocumentChunk(

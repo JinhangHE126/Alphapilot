@@ -109,12 +109,42 @@ def _get_doc_grounding_model():
     return _DOC_GROUNDING_MODEL
 
 
-def _span_has_valid_doc_marker(snippet: str, valid_indices: set[int]) -> bool:
-    """段落内含有合法 [doc:N] 标记时，视为 Level 1 已 grounding，跳过 L2 改写惩罚。"""
+_DOC_CITE_RE = re.compile(r"\[doc:(\d+)\]", re.IGNORECASE)
+
+# 泛化/推测性表述 — 不算对具体 chunk 的引用，跳过 L2 语义拦截
+_HEURISTIC_DOC_PHRASES = (
+    "通常", "一般", "往往", "可能", "虽未直接提及", "虽未明确提及",
+    "并未直接提及", "可能被解读", "可能被市场解读", "通常会在",
+    "typically", "generally", "usually", "may be interpreted",
+    "although not directly mentioned", "not directly mentioned",
+)
+
+
+def _extract_doc_citation_indices(text: str) -> set[int]:
+    return {int(n) for n in _DOC_CITE_RE.findall(text)}
+
+
+def _span_has_valid_doc_marker(
+    snippet: str,
+    valid_indices: set[int],
+    output_text: str = "",
+    span_start: int = 0,
+    span_end: int = 0,
+) -> bool:
+    """段落内（含前后扩展窗口）含有合法 [doc:N] 时，跳过 L2 改写惩罚。"""
     if not valid_indices:
         return False
-    cited = {int(n) for n in re.findall(r"\[doc:(\d+)\]", snippet)}
+    window_start = max(0, span_start - 200)
+    window_end = min(len(output_text), span_end + 80) if output_text else len(snippet)
+    search_text = output_text[window_start:window_end] if output_text else snippet
+    cited = _extract_doc_citation_indices(search_text)
     return bool(cited) and cited <= valid_indices
+
+
+def _is_heuristic_doc_reference(snippet: str) -> bool:
+    """推测性/模板化表述，非对具体文档内容的断言。"""
+    lower = snippet.lower()
+    return any(p in snippet or p in lower for p in _HEURISTIC_DOC_PHRASES)
 
 
 def _extract_doc_citation_spans(output_text: str) -> list[tuple[str, str, int, int]]:
@@ -182,7 +212,7 @@ def _find_ungrounded_doc_claims(
     warnings: list[str] = []
 
     # ═══ Level 1: [doc:N] citation marker exact matching ═══
-    citation_matches = re.findall(r"\[doc:(\d+)\]", output_text)
+    citation_matches = _DOC_CITE_RE.findall(output_text)
     valid_indices = set(range(1, len(doc_evidence) + 1))
     if citation_matches:
         cited_indices = {int(n) for n in citation_matches}
@@ -206,9 +236,12 @@ def _find_ungrounded_doc_claims(
                 from numpy import dot
                 from numpy.linalg import norm as np_norm
                 SIMILARITY_THRESHOLD = 0.45
-                for i, (snippet, doc_type_hint, _, _) in enumerate(citation_spans):
-                    # 已标注合法 [doc:N] 的段落允许 paraphrase，不重复做语义拦截
-                    if _span_has_valid_doc_marker(snippet, valid_indices):
+                for i, (snippet, doc_type_hint, span_start, span_end) in enumerate(citation_spans):
+                    if _is_heuristic_doc_reference(snippet):
+                        continue
+                    if _span_has_valid_doc_marker(
+                        snippet, valid_indices, output_text, span_start, span_end
+                    ):
                         continue
                     scores = [
                         float(dot(span_embeddings[i], ce) / (np_norm(span_embeddings[i]) * np_norm(ce) + 1e-10))
