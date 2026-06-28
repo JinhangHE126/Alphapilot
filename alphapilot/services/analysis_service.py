@@ -924,6 +924,11 @@ def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, threa
                     evidence_packet = guard_check.get("evidence_packet")
 
     from services.citations import build_citations
+
+    # Fallback: use recommendation text if no agent explicitly set final_report
+    if not final_report and recommendation:
+        final_report = recommendation
+
     citations = build_citations(
         final_report=final_report,
         evidence_packet=evidence_packet if isinstance(evidence_packet, dict) else None,

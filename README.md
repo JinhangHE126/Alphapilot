@@ -163,3 +163,22 @@ deploy/                        # 生产部署脚本
 - [HK Fintech 开发方案（排期与任务）](Docs/HK-Fintech-AI-开发方案.md)
 - [Week 1-8 总结](alphapilot/Docs/Week_summary.md)
 
+## Demo
+
+基于 M1-M4 全链路（PDF 解析 → 语义分块 → Section Boost 检索 → Evidence Packet → 多 Agent 分析 → Guard 校验 → `[doc:N]` 审计追踪）的实际运行产出：
+
+| 标的 | 市场 | 报告 | 说明 |
+|------|------|------|------|
+| **0700.HK** 腾讯控股 | 港股 | [查看报告](Docs/demo/0700HK_analysis_sample.md) | HKEX Q1 2026 年报，完整 6 段 Executive Synthesis + `[doc:1]` 引用 |
+| **AAPL** Apple Inc. | 美股 | [查看报告](Docs/demo/AAPL_analysis_sample.md) | 需先 ingest SEC 10-K 年报，含准备步骤指南 |
+
+**复现步骤**：
+
+```bash
+# 1. 验证 ingest 状态
+python scripts/prepare_demo_ingest.py --symbol 0700.HK
+
+# 2. 运行全链路分析（需 API 已启动）
+bash scripts/run_demo_analysis.sh 0700.HK
+```
+

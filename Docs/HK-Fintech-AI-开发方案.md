@@ -272,7 +272,7 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 |----|------|------|
 | D1–D2 | 3.3 Audit Trail ✅ | M3 |
 | D3 | 3.4 Recommendation prompt | M4 |
-| D4–D5 | 3.5 Demo ingest + 全链路分析 | M5 初版 |
+| D4–D5 | 3.5 Demo ingest + 全链路分析 | M5 完成 ✅ |
 
 ### Week 3（缓冲）
 
@@ -299,11 +299,11 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 
 ## 7. 验收清单（投递前勾选）
 
-- [ ] AAPL 或 0700.HK 年报 ingest 后，Risk Factors / MD&A 相关 chunk 可被 `hybrid_retrieve` 命中
+- [x] AAPL 或 0700.HK 年报 ingest 后，Risk Factors / MD&A 相关 chunk 可被 `hybrid_retrieve` 命中
 - [x] Recommendation 报告含 Executive Synthesis + `[doc:N]` 文档小节
 - [x] `GET /history/{id}` 返回 `citations.chunk_ids`
 - [ ] `scripts/verify_p4.py` 仍通过（回归 P4）
-- [ ] README 含 Demo 链接与 2–3 张截图
+- [x] README 含 Demo 链接与 2–3 张截图
 - [ ] 分析页有免责声明；上传有确认勾选
 
 ---
