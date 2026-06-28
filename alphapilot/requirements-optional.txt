@@ -1,13 +1,12 @@
-# Optional dependencies for AlphaPilot document RAG (not required for core API).
-# Install when you need table extraction from scanned or complex PDFs:
+# Extra optional dependencies for AlphaPilot document RAG.
+# Core PDF table extraction (pdfplumber) is now in requirements.txt.
+# Install these ONLY when you need camelot for complex/scanned tables:
 #
 #   pip install -r requirements-optional.txt
 #
 # Notes:
 # - camelot-py requires a Java runtime and Ghostscript for lattice mode.
-# - pdfplumber is a lighter fallback used automatically when camelot is absent.
-# - Core PDF text extraction uses markitdown + pymupdf from requirements.txt.
+# - pdfplumber (in requirements.txt) is the recommended default — no Java needed.
 
 camelot-py[cv]>=0.11.0
 opencv-python-headless>=4.8.0
-pdfplumber>=0.11.0

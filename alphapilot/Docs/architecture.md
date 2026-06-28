@@ -1,8 +1,8 @@
-# AlphaPilot 系统架构 v4.1
+# AlphaPilot 系统架构 v4.3
 
-> 当前版本以 **Evidence Packet 前置构造 + Bull vs Bear 多空辩论 + Guard 硬规则校验 + 动态 RAG 事实缓存** 为核心。  
-> 旧版"Agent 各自调工具/RAG"的模式已收敛为"Builder 统一采集证据，Agent 只消费证据"。
-> v4.2 新增 Bull vs Bear 辩论子图，Strategy Agent 综合辩论结论输出最终建议。只消费证据”。
+> 当前版本以 **Evidence Packet 前置构造 + 双轨证据（结构化 Fact + Document Evidence）+ Bull vs Bear 多空辩论 + Guard 硬规则校验 + 文档感知 RAG** 为核心。  
+> 旧版「Agent 各自调工具/RAG」的模式已收敛为「Builder 统一采集证据，Agent 只消费证据」。  
+> v4.2 新增 Bull vs Bear 辩论子图；**v4.3 落地文档感知 RAG（Phase 1–4）**：公开文档自动摄取、用户私有上传、混合检索与 Guard 文档 grounding。
 
 ## 1. 系统全景
 
@@ -14,14 +14,15 @@
                            │ HTTP + SSE (JWT Bearer Token)
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                     FastAPI 后端 (Python 3.12)                    │
-│  /auth/* │ /profile │ /sessions │ /analyze │ /history │ /dashboard │
+│  /auth/* │ /profile │ /sessions │ /analyze │ /upload/document │ /history │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────────┐
 │              LangGraph StateGraph 多智能体工作流                    │
 │                                                                  │
 │  Evidence Packet Builder                                         │
-│    → RAG 检索 → 冷启动判断 → 数据采集 → Evidence Packet 评分         │
+│    → 结构化 RAG + Fact Store → 多 Provider 采集 → 评分/门控      │
+│    → 文档 RAG (hybrid_retrieve) → document_evidence             │
 │    → 动态入库 (FAISS facts cache, TTL, doc_id 去重)                │
 │                                                                  │
 │  Orchestrator                                                    │
@@ -29,8 +30,9 @@
 │    → Market/Fundamental/News → Bull vs Bear 辩论 → Strategy/Risk  │
 │    → full_analysis 时才进入 Portfolio/Backtest/Recommendation      │
 │                                                                  │
-│  持久化: SQLite (checkpointer + 业务表)                           │
-│  知识库: FAISS 动态事实缓存 + ChromaDB 辅助模块                    │
+│  持久化: SQLite (checkpointer + 业务表 + Fact Store)              │
+│  知识库: FAISS（事实 + document_chunk）+ FTS5 全文索引              │
+│  文档摄取: scheduler (HKEX/SEC/News) + 用户上传 API               │
 │  用户画像: JSON 文件 (risk_preference, horizon)                   │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -46,11 +48,12 @@
 | 多智能体   | LangGraph (StateGraph)              | Evidence Builder + Orchestrator 编排 14 Agent（含 Bull/Bear 辩论） |
 | LLM 路由 | Gemini / DeepSeek / Grok            | 按 Agent 类型分模型                                               |
 | 数据库    | SQLite (WAL 模式)                     | 业务表 + LangGraph checkpointer                                |
-| 向量检索   | FAISS (all-MiniLM-L6-v2) + ChromaDB | FAISS 为主流程动态事实缓存，Chroma 保留为辅助模块                             |
+| 向量检索   | FAISS (all-MiniLM-L6-v2) + FTS5     | 结构化事实 + `document_chunk` 双轨；RRF 混合检索、时效加权、`user_session_id` 私有隔离 |
+| 文档摄取   | pymupdf / markitdown + APScheduler  | HKEX/SEC/News 定时抓取；用户上传 PDF/Word/HTML/TXT；敏感信息打码 |
 | 防幻觉    | Evidence Packet + Guard hard rules  | 输出等级门控、字段级来源追溯、冷启动拒答/降级                                     |
 | 认证     | JWT (HS256)                         | register / login / refresh / me                             |
 | 实时通信   | SSE (Server-Sent Events)            | agent_start / agent_output / agent_done                     |
-| 数据采集   | yfinance + SEC/HKEX 辅助              | 当前主链路仍以 yfinance 为主，下一阶段接 Polygon/Tiingo/Alpha Vantage      |
+| 数据采集   | 多 Provider + Fact Store            | yfinance / SEC / Finnhub / EastMoney / AKShare 等；字段级 TTL 与优先级去重 |
 | CI/CD  | GitHub Actions + GHCR + Docker      | 前后端独立镜像 + SSH 部署                                            |
 
 
@@ -129,7 +132,8 @@ strategy_expert (消费辩论历史 + 上游输出)
 | ------------------------- | ----------------- | ------------------------------------ |
 | `stock_symbol`            | str               | 当前分析股票代码                             |
 | `messages`                | list[BaseMessage] | LangGraph 消息流 (add_messages reducer) |
-| `evidence_packet`         | dict              | Evidence Builder 生成的字段级证据包           |
+| `evidence_packet`         | dict              | Evidence Builder 生成的双轨证据包（facts + document_evidence） |
+| `user_session_id`         | str               | 登录用户 ID，用于检索用户私有 document chunk              |
 | `cold_start`              | bool              | 是否触发冷启动采集                            |
 | `ingestion_result`        | dict              | Evidence Packet 回写 FAISS 的统计结果       |
 | `market_data`             | str               | Market Agent 输出                      |
@@ -248,7 +252,7 @@ stream_analysis_events()
 | -------------- | ------------------ | --------------------- |
 | `/login`       | LoginPage          | 登录/注册双模式              |
 | `/`            | DashboardPage      | 统计总览 + 最近分析           |
-| `/analyze`     | AnalyzePage        | SSE 实时分析 + Agent 进度卡片 |
+| `/analyze`     | AnalyzePage        | SSE 实时分析 + Agent 进度卡片 + **文档上传** |
 | `/history`     | HistoryPage        | 分页列表 + 股票筛选 + 删除      |
 | `/history/:id` | AnalysisDetailPage | 单次分析事件时间线             |
 | `/settings`    | SettingsPage       | 用户画像配置                |
@@ -286,9 +290,9 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 
 ```
   Layer 0  Evidence Packet Builder
-    ↓      RAG + 数据采集统一归一化为 Fact
+    ↓      结构化采集 + Fact Store + 文档 RAG → Fact + DocumentChunk
   Layer 1  字段级证据 Schema
-    ↓      source / as_of_date / confidence / confidence_tier
+    ↓      Fact (source/confidence_tier) + DocumentChunk ([doc:N] / user_submitted)
   Layer 2  Evidence Score + Output Level
     ↓      full / limited / data_summary / insufficient
   Layer 3  Agent 只消费 Packet
@@ -304,13 +308,15 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 
 **实现**：
 
-- `evidence_packet_builder` 先调用 FAISS RAG 检索，过滤 symbol mismatch。
-- RAG 不足时触发 `collect_all(symbol)` 冷启动采集。
-- `collect_all()` 当前聚合 yfinance 市场/基本面/新闻，辅以 SEC/HKEX collector。
-- 采集结果统一转换为 `Fact`，每个字段保留 `source`、`as_of_date`、`confidence`、`confidence_tier`。
-- 高质量 Evidence Packet 会通过 `upsert_packet()` 回写 FAISS，带 doc_id 去重和 TTL。
+- `evidence_packet_builder` 先查 **Fact Store** 与 FAISS 结构化事实检索，过滤 symbol mismatch。
+- 调用 `attach_document_evidence()` → `hybrid_retrieve()`（向量 Top-20 + FTS5 Top-20 → RRF k=60 → 时效加权），写入 `packet.document_evidence`。
+- 登录用户传入 `user_session_id`：公开 chunk + 当前用户私有上传 chunk 混合返回；无 session 时屏蔽私有 chunk。
+- RAG / Fact Store 不足时触发 `collect_all(symbol)` 冷启动采集。
+- `collect_all()` 聚合多 Provider 市场/基本面/新闻与 SEC/HKEX 披露。
+- 采集结果统一转换为 `Fact`；用户上传经 `sensitive_scanner` 打码后入库，`confidence_tier=user_submitted`。
+- 高质量 Evidence Packet 通过 `upsert_packet()` 回写 FAISS（结构化 facts 去重 + TTL）。
 
-**文件**：`graph/workflow.py`, `tools/data_collector.py`, `schemas/evidence_packet.py`, `knowledge/ingest_service.py`, `rag/retriever.py`
+**文件**：`graph/workflow.py`, `graph/document_evidence.py`, `tools/data_collector.py`, `schemas/evidence_packet.py`, `knowledge/document_ingest.py`, `knowledge/scheduler.py`, `rag/retriever.py`, `rag/chunk_fts.py`, `db/fact_store.py`
 
 ### 9.3 Layer 1：字段级证据 Schema
 
@@ -326,8 +332,19 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 | `source`          | 数据来源，例如 yfinance / SEC_EDGAR / HKEX / RAG    |
 | `as_of_date`      | 数据对应日期                                       |
 | `confidence`      | 字段级置信度                                       |
-| `confidence_tier` | `machine` / `llm_extracted` / `llm_inferred` |
+| `confidence_tier` | `machine` / `llm_extracted` / `llm_inferred` / **`user_submitted`**（用户上传文档） |
 
+**DocumentChunk**（与 `Fact` 并行，见 `schemas/evidence_packet.py`）：
+
+| 字段 | 说明 |
+| ---- | ---- |
+| `chunk_id` / `doc_id` | 向量库主键与 audit |
+| `source` | `HKEX` / `SEC` / `user_uploaded` 等 |
+| `doc_type` | `annual_report` / `earnings_call` / `research_report` / `news` |
+| `confidence_tier` | 用户上传为 `user_submitted`，渲染时带 `[U]` 标记 |
+| `user_session_id` | 私有空间隔离（仅上传者 + 登录分析可见） |
+
+Agent 侧通过 `render_packet_for_agent()` 输出 `### Document Evidence`，每条 chunk 带 **`[doc:N]`** 序号；Guard L1 校验 `[doc:N]` 与列表下标对应关系。
 
 **文件**：`schemas/evidence_packet.py`
 
@@ -346,7 +363,7 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 | `insufficient_evidence` | 直接拒答或请求补充数据              |
 
 
-评分因素包括 source diversity、recency、completeness、field confidence。缺少关键字段或存在冲突时会降级。
+评分因素包括 source diversity、recency、completeness、field confidence；`coverage.document_evidence == "available"` 时 evidence_score **+5**。缺少关键字段或存在冲突时会降级。
 
 ### 9.5 Layer 3：Agent 只消费 Packet
 
@@ -355,7 +372,8 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 当前策略：
 
 - 主要 Agent 均为 `tools=[]`。
-- Agent prompt 要求只使用 Evidence Packet。
+- Agent prompt 要求只使用 Evidence Packet（结构化 facts + document_evidence）。
+- **Market Agent 明确忽略 Document Evidence**，仅用 Verified Facts 做技术面分析。
 - 缺少字段时输出 `NOT AVAILABLE` 或降级说明。
 - `limited_analysis` 链路跳过 Portfolio / Backtest / Recommendation，避免过度建议。
 
@@ -367,6 +385,11 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 2. **输出级约束**：limited 级别禁止目标价、强推荐等
 3. **Keyword grounding**（仅非 full）：输出提到某类指标 → Packet 里必须有对应 field
 4. **数值 grounding**（部分）：提到指标且 Packet 有值 → 报告里的数要对得上
+5. **文档 grounding**（Phase 2）：
+   - **L1**：`[doc:N]` 必须在 `document_evidence[N-1]` 范围内
+   - **L2**：疑似文档引用段落与 chunk embedding 相似度 ≥ 0.45（段内已有合法 `[doc:N]` 则跳过）
+   - **L3**：文档引用句式粗检；`document_evidence` 为空时升为 issues
+   - `FULL_ANALYSIS` 时 L1/L2 可降级为 warnings，不阻断
 
 #### 工作流程
 
@@ -429,7 +452,7 @@ Agent 输出
 | Layer 1 Fact Schema       | 无来源事实、字段不完整               | Pydantic          | 极低  | ✅ 生效 |
 | Layer 2 Output Level      | 证据不足时强结论                  | 纯 Python 规则       | 低   | ✅ 生效 |
 | Layer 3 Agent Packet-only | Agent 私自采集/编造事实           | prompt + tools=[] | 中   | ✅ 生效 |
-| Layer 4 Guard hard rules  | 未追溯事实、目标价、symbol mismatch | 纯 Python 规则为主     | 中   | ✅ 生效 |
+| Layer 4 Guard hard rules  | 未追溯事实、目标价、symbol mismatch、**未 grounding 文档引用** | 纯 Python 规则为主 + embedding | 中   | ✅ 生效 |
 
 
 ---
@@ -452,15 +475,75 @@ Agent 输出
                        │
           ┌────────────┼────────────┬────────────────┐
           ▼            ▼            ▼                ▼
-      Data Providers  FAISS RAG   DeepSeek API    Gemini/Grok API
-      yfinance        facts cache  主分析模型       可选模型路由
-      SEC/HKEX
-      (Polygon/Tiingo/Alpha Vantage 规划中)
+      Data Providers  FAISS RAG        LLM APIs
+      multi-provider  facts + docs    DeepSeek / Gemini / Grok
+      Fact Store      FTS5 index
+      HKEX/SEC/News
+      scheduler
 ```
 
-## 11. 下一阶段目标架构：多数据源 + Fact Store
+---
 
-当前 v4.1 已经完成“证据前置”和“动态 RAG 事实缓存”，但事实来源仍主要依赖 yfinance。下一阶段应把数据层升级为 Provider + Fact Store + Vector Index 三层：
+## 12. 文档感知 RAG（v4.3，Phase 1–4）
+
+详细方案与差距说明见项目根目录 [`Docs/文档提取与RAG功能.md`](../../Docs/文档提取与RAG功能.md)。
+
+### 12.1 双轨证据
+
+```
+EvidencePacket
+├── facts: list[Fact]                    # 结构化字段（价格、PE、增长率…）
+└── document_evidence: list[DocumentChunk]  # 非结构化文档摘录（年报、公告、研报、用户上传）
+```
+
+### 12.2 数据流
+
+```
+公开来源                          用户上传
+HKEX / SEC / News ──scheduler──►  document_ingest ──► FAISS (_type=document_chunk)
+POST /upload/document ──────────►       │                    │
+  (JWT, user_session_id)                ├── sensitive_scanner ([REDACTED])
+                                        └── chunk_fts (FTS5)
+
+分析请求 (user_session_id = user_id)
+    → attach_document_evidence()
+    → hybrid_retrieve(query, symbol, user_session_id)
+    → 公开 chunk + 本人私有 chunk（混合）
+    → render_packet_for_agent() → Agent / Guard
+```
+
+### 12.3 关键模块
+
+| 模块 | 路径 | 职责 |
+| ---- | ---- | ---- |
+| 分块 | `knowledge/document_chunker.py` | 按 doc_type 结构/语义分块 |
+| 解析 | `knowledge/pdf_parser.py` | PDF 文本（pymupdf / markitdown） |
+| 入库 | `knowledge/document_ingest.py` | 统一 ingest；用户上传跳过全局 20 文档 prune |
+| 抓取 | `knowledge/fetchers/*`, `scheduler.py` | 定时摄取；`DOC_FETCH_ENABLED=true` |
+| 检索 | `rag/retriever.py`, `rag/chunk_fts.py` | `hybrid_retrieve`, `retrieve_doc_chunks`, session 过滤 |
+| 保留 | `rag/doc_registry.py` | 每 symbol 最多 20 份公开文档 |
+| 私有 | `knowledge/sensitive_scanner.py` | 身份证/银行卡/电话/邮箱打码 |
+| 接入 | `graph/document_evidence.py` | workflow 与测试共用 |
+| API | `api/main.py` `/upload/document`, `api/upload.py` | 登录上传 |
+| 验收 | `scripts/verify_p4.py` | 上传 + 隔离 + 打码一键测试 |
+
+### 12.4 环境变量（文档抓取）
+
+```bash
+DOC_FETCH_ENABLED=true
+DOC_FETCH_SYMBOLS=TSLA,AAPL,0700.HK
+DOC_FETCH_INTERVAL_HOURS=6
+```
+
+### 12.5 尚未实现（见 RAG 文档 §10）
+
+A/B 测试框架、document 级 `superseded`、BGE-large-zh 向量升级、完整 analysis 审计表、上传合规确认 UI 等。
+
+---
+
+## 13. 数据层演进：Fact Store 与多 Provider（进行中）
+
+当前 v4.3 已具备 **Fact Store（SQLite）+ 多 Provider 适配 + 文档 RAG**。后续重点为冲突检测、评测指标与审计链路，而非从零搭建 Fact Store：
 
 ```
 Polygon / Tiingo / Alpha Vantage / SEC / HKEX / yfinance
@@ -486,7 +569,7 @@ Normalized Fact Store (SQLite / Postgres)
                └── 语义召回、上下文补充，不作为唯一真相源
 ```
 
-### 11.1 Provider 优先级建议
+### 13.1 Provider 优先级（当前）
 
 
 | 数据类型      | 主源                      | 备用源                      | 说明                                              |
@@ -498,13 +581,12 @@ Normalized Fact Store (SQLite / Postgres)
 | 新闻        | Tiingo / Polygon        | yfinance news            | 新闻单源需标记未交叉验证                                    |
 
 
-### 11.2 冷启动判定升级
+### 13.2 冷启动与证据构造（当前）
 
-当前冷启动仍主要由 RAG similarity 和 symbol metadata 判断。目标状态应改为：
-
-1. 先查 Fact Store：目标 symbol 的 required fields 是否未过期。
-2. 再查 RAG：补充上下文、研报摘要、历史分析。
+1. 先查 **Fact Store**：目标 symbol 的 required fields 是否未过期。
+2. 并行 **文档 RAG**：`hybrid_retrieve` 补充定性上下文。
 3. 字段覆盖不足时按 provider priority 补采。
 4. 多源冲突时进入 `packet.conflicts`，不用于强结论。
+5. RAG similarity 低且无 Fact Store 命中时仍可能标记 cold start。
 
-这样可以避免“FAISS top-k 召回其他股票 → 误判冷启动 → 重复下载”的问题。
+这样可以减少重复下载，并在结构化事实与文档证据之间分工明确。

@@ -37,7 +37,7 @@ def format_pdf_capability_message(caps: dict[str, Any] | None = None) -> str:
     lines = [
         "PDF parse capabilities:",
         f"  text (required): markitdown={caps['markitdown']}, pymupdf={caps['pymupdf']}",
-        f"  tables (optional): camelot={caps['camelot']}, pdfplumber={caps['pdfplumber']}",
+        f"  tables (recommended): pdfplumber={caps['pdfplumber']} | camelot={caps['camelot']}",
     ]
     if not caps["text_extraction_ready"]:
         lines.append(
@@ -45,7 +45,11 @@ def format_pdf_capability_message(caps: dict[str, Any] | None = None) -> str:
         )
     if not caps["table_extraction_ready"]:
         lines.append(
-            "  ℹ️ No table backend — optional: pip install -r requirements-optional.txt"
+            "  ℹ️ No table backend — optional: pip install pdfplumber"
+        )
+    elif not caps["pdfplumber"] and caps["camelot"]:
+        lines.append(
+            "  ℹ️ Using camelot (needs Java). For lighter setup: pip install pdfplumber"
         )
     return "\n".join(lines)
 
