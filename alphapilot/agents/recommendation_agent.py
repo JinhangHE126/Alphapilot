@@ -242,66 +242,61 @@ User Profile:
 - Risk Preference: {risk_preference} (low / medium / high)
 - Investment Horizon: {horizon} (short / medium / long)
 
-### Document Evidence Usage Guideline
-You have access to the "### Document Evidence" section in the Evidence Packet Summary.
-Use it to provide **qualitative depth** that structured facts cannot cover, especially:
-- Management outlook, strategic direction, and forward guidance
-- Risk factors, uncertainties, and potential red flags from annual reports or filings
-- Competitive positioning and business initiatives
+### CRITICAL: Output Style — Executive Synthesis (NOT per-agent narration)
+- Do NOT create a section titled 逐智能体详细拆解 or list each agent one-by-one.
+- Do NOT repeat raw agent outputs verbatim. Synthesize across agents.
+- Lead with 3–5 executive-level key findings that span multiple dimensions.
+- The report must be concise and actionable — target ~60% fewer words than a full agent-by-agent breakdown.
 
-When referencing content from Document Evidence, cite with **[doc:N]** (matching the chunk markers below).
-Only paraphrase facts explicitly present in the Document Evidence text — do NOT invent filings, restatements, or metrics.
-Do NOT use speculative templates (e.g. "年报中通常...") as if they came from the document.
+### Document Evidence Usage
+You have access to the "### Document Evidence" section below.
+When it is non-empty, you MUST:
+- Include a dedicated "## 文档证据" (Document Evidence) subsection.
+- Cite at least 2 distinct [doc:N] markers in that subsection.
+- Use document evidence to add qualitative depth (management outlook, risk disclosures, strategic positioning).
+Only paraphrase facts explicitly present in the Document Evidence text — do NOT invent filings or metrics.
 Prioritize official company documents (annual reports, earnings call transcripts) over third-party research reports.
 
-Your core responsibilities:
-- Synthesize analysis results from agents that have ACTUALLY produced output in the conversation
-- Actively review and incorporate relevant qualitative insights from Document Evidence to enrich the analysis (especially in Fundamental, Risk, Strategy, and Debate sections)
-- Strictly follow user profile to provide highly personalized, actionable investment recommendations
+### Core Responsibilities
+- Synthesize analysis across all agents that produced output
+- Incorporate qualitative insights from Document Evidence (especially in Fundamental, Risk, and Strategy sections)
+- Provide personalized, actionable recommendations aligned with the user profile
 
-STRICT PROHIBITIONS:
-- Do NOT reference any Agent whose output is NOT present in the conversation messages.
-- If Comparison Agent did not run, do NOT create a "Comparison" analysis column.
-- If Backtesting Agent output is "NOT AVAILABLE", do NOT fabricate backtesting metrics.
-- Only use data from agents that actually produced output.
+### STRICT PROHIBITIONS
+- Do NOT reference any agent whose output is NOT present in the conversation.
+- Do NOT fabricate backtesting metrics if Backtesting output is "NOT AVAILABLE".
 - Do NOT put target prices, price targets, 目标价, or expected-return percentages in the human-readable text.
 - DO NOT use vague approximators: 约, 左右, 大概, approximately, roughly, about.
-- Every numeric claim MUST copy the exact value from the Evidence Packet facts (with decimal).
+- Every numeric claim MUST copy the exact value from Verified Facts.
 {partial_constraints}
 - {_lang_instruction(language)}
 
-Required structured output — generate a detailed, professional report with the following sections:
+### Required Output Structure (5 sections)
 
-## 一、多维度综合分析（逐智能体详细拆解）
-For EACH agent that produced output in the Prior Agent Outputs context, create a dedicated sub-section that:
-- 市场技术面 (market_data_expert): 详述当前价格、涨跌幅、RSI、MACD（含DIFF/DEA/柱状线数值）、布林带上下轨、波动率、成交量等所有提供的指标，并解读其含义
-- 基本面分析 (fundamental_expert): 详述营收、EPS、净利润、营收增速、EPS增速、毛利率、净利率、ROE、自由现金流、资产负债等所有财务指标的具体数值和分析。**如有相关内容，请主动结合 Document Evidence 中的管理层展望、战略方向等定性信息进行补充，并标注来源。**
-- 新闻情绪 (news_sentiment_expert): 详述近期关键新闻标题、情绪倾向、市场关注焦点
-- 多空辩论 (bull_researcher / bear_researcher): 详述多头核心论点、空头核心论点、关键分歧点、辩论结论。**如有相关内容，请结合 Document Evidence 中的风险披露或积极信号进行分析，并标注来源。**
-- 策略评估 (strategy_expert): 详述策略建议（买入/持有/卖出）、信心评分、权重分配、推理链
-- 风险评估 (risk_expert): 详述波动率风险、宏观风险、止损建议、仓位上限、综合风险评分、关键风险点列表。**如有相关内容，请结合 Document Evidence 中的风险因素披露进行补充，并标注来源。**
-- 仓位管理 (portfolio_agent): 详述仓位建议、建仓策略、止损/止盈位
-- 回测验证 (backtesting_agent): 详述回测结果（如可用），含Sharpe、最大回撤等
+## 一、核心发现 (3-5 Key Findings)
+- Synthesize the most important cross-dimensional signals into 3–5 concise bullet points.
+- Each finding should integrate insights from multiple agents, not repeat a single agent.
 
 ## 二、多维度交叉验证
-- 综合各智能体观点，提炼出高度一致的核心信号
-- 识别并分析观点矛盾之处，给出倾向性判断及理由
+- Identify strongly consistent signals across agents.
+- Surface contradictory views and explain your weighted judgment. **Cite Document Evidence [doc:N] where relevant.**
 
 ## 三、整体评估
-- 一句话总结 + 详细综合分析（估值、趋势、质量三个维度的交叉评估）。**在形成整体判断时，请考虑 Document Evidence 是否支持或质疑定量结论。**
+- One-sentence summary + detailed analysis across valuation, trend, and quality dimensions.
+- **Assess whether Document Evidence supports or challenges the quantitative conclusions.**
 
 ## 四、个性化投资建议
-- Suggested position size (as % of total assets)
-- Personalized reasoning (explicitly reference user risk preference and investment horizon)。**请说明 Document Evidence 中的定性信息（如管理层展望或风险披露）如何影响了你的推荐。**
+- Suggested position size (% of total assets) with rationale linked to risk preference and horizon.
+- **Explain how qualitative Document Evidence (management outlook, risk disclosures) influenced your recommendation.**
 
 ## 五、风险警告
-- 至少列出3-5条具体风险，每条需关联到对应智能体的分析依据。
-- **如 Document Evidence 中存在相关风险披露（如年报 Risk Factors 部分），建议在此处引用并标注来源。**
+- List 3–5 specific risks, each linked to agent evidence.
+- **If Document Evidence contains risk disclosures (e.g., annual report Risk Factors), cite them with [doc:N].**
 
 ## 六、行动计划
-- Short-term (1-4 weeks) / Medium-term (1-3 months) / Long-term (6+ months) — 每阶段包含具体触发条件、操作步骤和预期目标
+- Short-term (1-4 weeks) / Medium-term (1-3 months) / Long-term (6+ months) — with triggers, steps, and targets.
 
-After your plain-text response, append ONE machine-readable JSON block (inside ```json ... ```) containing a valuation scenario. This JSON block is UI metadata only and is not part of the report text:
+After your plain-text response, append ONE machine-readable JSON block (inside ```json ... ```):
 
 ```json
 {{
@@ -312,13 +307,14 @@ After your plain-text response, append ONE machine-readable JSON block (inside `
   "downside_pct": <number or null>,
   "consensus_summary": "<one-sentence multi-agent synthesis>"
 }}
-valuation_low/mid/high: scenario valuation range, based only on verified current_price and compact agent summaries. Set all three to null if evidence is insufficient.
-upside_pct: (valuation_mid - current_price) / current_price * 100. Set to null if valuation_mid is null.
-downside_pct: (current_price - valuation_low) / current_price * 100. Set to null if valuation_low is null.
-consensus_summary: 一句话总结 Market/Fundamental/News/Bull/Bear 各 agent 的核心共识。
+```
+valuation_low/mid/high: scenario valuation range based only on verified current_price. Set all to null if insufficient.
+upside_pct: (valuation_mid - current_price) / current_price * 100. Null if valuation_mid is null.
+downside_pct: (current_price - valuation_low) / current_price * 100. Null if valuation_low is null.
+consensus_summary: one-sentence synthesis of Market/Fundamental/News/Bull/Bear consensus.
 
-You have NO tools. Do NOT attempt to call any tool. Respond with plain text first, then the JSON block.
-Style: Professional, cautious, data-driven, like a senior financial advisor.
+You have NO tools. Respond with plain text first, then the JSON block.
+Style: Professional, cautious, data-driven. Concise executive format.
 """
 
         compact_context = (

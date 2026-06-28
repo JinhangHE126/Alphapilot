@@ -262,6 +262,14 @@ def _find_ungrounded_doc_claims(
 
     # ═══ Level 3: pattern-based coarse check (warnings) ═══
     has_doc_pattern = False
+    # 3.4.2 — document_evidence 非空但输出无 [doc:N] 时生成 warning
+    if doc_evidence and not citation_matches:
+        warnings.append(
+            "Document evidence missing citations: Evidence Packet contains "
+            f"{len(doc_evidence)} document chunk(s) but the final report has no [doc:N] citations. "
+            "Recommendation should reference at least 2 document chunks with [doc:N] markers."
+        )
+
     for pat in _DOC_CITATION_PATTERNS_CN + _DOC_CITATION_PATTERNS_EN:
         if re.search(pat, output_text, re.IGNORECASE):
             has_doc_pattern = True
@@ -543,6 +551,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
         "checks": checks,
         "risk_warnings": risk_warnings,
         "grounding_warnings": grounding_warnings,
+        "evidence_packet": packet,
     }
 
 
@@ -587,4 +596,5 @@ def guard_agent(state):
         "sources": guard_result.get("sources", []),
         "guard_retry_count": next_retry_count,
         "output_level": evidence_packet.get("allowed_output_level", "") if evidence_packet else "",
+        "evidence_packet": evidence_packet,
     }

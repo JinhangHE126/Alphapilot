@@ -47,10 +47,10 @@ Week 1                    Week 2                    Week 3（缓冲）
 
 | 里程碑 | 交付物 | 验收 |
 |--------|--------|------|
-| **M1** 解析增强 ✅ | pdfplumber 默认路径、表格挂 section、SEC/HKEX 章节识别 | `test_pdf_section_chunking.py` 通过；0700.HK 季报 E2E ingest+检索（见 `Docs/M1-M2-验收报告.md`） |
-| **M2** 检索 boost ✅ | `section` / `doc_type` 加权 | `test_retriever_m2.py` 通过；`hybrid_retrieve` section/doc_type boost；workflow 默认仍不过滤 doc_type |
-| **M3** Audit Trail | DB 迁移 + 落库 + API | ✅ 完成 |
-| **M4** Recommendation | 新 prompt 结构 | 人工评审：无大段 Agent 复述；含 `[doc:N]` 节 |
+| **M1** 解析增强 ✅ | pdfplumber 默认路径、表格挂 section、SEC/HKEX 章节识别 | `test_pdf_section_chunking.py` 通过；0700.HK 季报 E2E（见 `Docs/M1-M4-验收报告.md`） |
+| **M2** 检索 boost ✅ | `section` / `doc_type` 加权 | `test_retriever_m2.py` 通过；`hybrid_retrieve` section/doc_type boost |
+| **M3** Audit Trail ✅ | DB 落库 + API | `test_analysis_citations.py`；`GET /history/{id}` 返回 citations |
+| **M4** Recommendation ✅ | 新 prompt 结构 | 0700.HK full_analysis 人工验收；Executive Synthesis + `[doc:N]` |
 | **M5** Demo | AAPL + 0700.HK 各 1 份 full_analysis 报告 | Guard Valid；报告可对外展示 |
 | **M6** 包装 | 免责声明、上传确认、README Demo 区 | 前端可勾选确认；报告页展示免责 |
 
@@ -134,7 +134,7 @@ SECTION_BOOST = {
 | **改动** | `hybrid_retrieve(..., doc_type: str = "")` 可选过滤 `annual_report` 等 |
 | **验收** | 传 `doc_type=annual_report` 时不返回 news chunk |
 
-> **M1+M2 验收报告**：[`Docs/M1-M2-验收报告.md`](M1-M2-验收报告.md)（2026-06-28）
+> **M1–M4 验收报告**：[`Docs/M1-M4-验收报告.md`](M1-M4-验收报告.md)（2026-06-28）
 
 ---
 
@@ -182,6 +182,8 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 ---
 
 ### 3.4 Recommendation Agent（M4）
+
+> 详见验收报告 §五。
 
 #### 3.4.1 Prompt 重构
 
@@ -298,7 +300,7 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 ## 7. 验收清单（投递前勾选）
 
 - [ ] AAPL 或 0700.HK 年报 ingest 后，Risk Factors / MD&A 相关 chunk 可被 `hybrid_retrieve` 命中
-- [ ] Recommendation 报告含 Executive Synthesis + `[doc:N]` 文档小节
+- [x] Recommendation 报告含 Executive Synthesis + `[doc:N]` 文档小节
 - [x] `GET /history/{id}` 返回 `citations.chunk_ids`
 - [ ] `scripts/verify_p4.py` 仍通过（回归 P4）
 - [ ] README 含 Demo 链接与 2–3 张截图
@@ -324,4 +326,4 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 | 日期 | 说明 |
 |------|------|
 | 2026-06-28 | 初版：由竞争力优化方案拆解为工程任务、里程碑与排期 |
-| 2026-06-28 | M1+M2 验收完成：见 `Docs/M1-M2-验收报告.md`；里程碑表标注 M1/M2 ✅ |
+| 2026-06-28 | M1–M4 验收完成：见 `Docs/M1-M4-验收报告.md`；里程碑表 M1–M4 ✅ |

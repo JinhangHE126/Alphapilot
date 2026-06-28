@@ -452,7 +452,7 @@ score = similarity * weight
 | Phase 3 | 9.9–9.12 Fetcher / Scheduler / 时效加权 / RRF+FTS5 | ✅ | `run_fetch_once()`、TSLA/0700.HK 抓取日志 |
 | Phase 4 | 9.13–9.15 上传 / Session 隔离 / 敏感打码 | ✅ | `scripts/verify_p4.py`、`test_session_isolation.py` |
 | HK-Fintech M1 | 结构化 PDF 分块（section / 表格 / 语义 chunk_id） | ✅ | `test_pdf_section_chunking.py`、0700.HK 季报 E2E |
-| HK-Fintech M2 | section / doc_type boost + `hybrid_retrieve(doc_type=)` | ✅ | `test_retriever_m2.py`；详见 `Docs/M1-M2-验收报告.md` |
+| HK-Fintech M2 | section / doc_type boost + `hybrid_retrieve(doc_type=)` | ✅ | `test_retriever_m2.py`；详见 `Docs/M1-M4-验收报告.md` |
 
 ### 10.2 与 Proposal 原文的差距（未做或简化）
 
