@@ -254,20 +254,20 @@ document_evidence: str = "missing"
 
 | 函数 | 说明 |
 |------|------|
-| `parse_pdf(file_path)` | 调用 `markitdown` 或 `pymupdf`(fitz) 提取文本 |
-| `extract_tables(file_path)` | `camelot-py` 提取表格，每表转 Markdown |
-| `parse_and_chunk(file_path, metadata)` | 解析 + 分块一站式，返回 `list[dict]` |
+| `parse_pdf(file_path)` | 调用 `markitdown` 或 `pymupdf`(fitz) 提取文本；pymupdf 输出自动推断章节标题 |
+| `extract_tables(file_path)` | **pdfplumber 优先**（轻量免 Java），camelot 回退；表格按页码归属对应章节 |
+| `parse_and_chunk(file_path, metadata)` | 解析 + 表格注入章节 + 分块一站式，返回 `list[dict]` |
 
 依赖：
 
 ```
-# requirements.txt（必需 — PDF 文本提取）
+# requirements.txt（必需 — PDF 文本提取 + 表格提取）
 markitdown>=0.0.1a3
 pymupdf>=1.24.0
+pdfplumber>=0.11.0       # 默认表格后端（M1 起从 optional 升级）
 
-# requirements-optional.txt（可选 — 表格提取）
-camelot-py[cv]>=0.11.0   # 需 Java + Ghostscript
-pdfplumber>=0.11.0       # 轻量回退，camelot 不可用时自动使用
+# requirements-optional.txt（可选 — 复杂表格/扫描件）
+camelot-py[cv]>=0.11.0   # 需 Java + Ghostscript，pdfplumber 不可用时自动回退
 ```
 
 环境检查：`knowledge/pdf_env.py` → `check_pdf_parse_dependencies()` / `require_text_extraction()`。  
@@ -342,7 +342,7 @@ Agent 引用文档结论时应标注 `[doc:N]`；存储层 `chunk_id`（如 `070
 
 | 文件 | 功能 |
 |------|------|
-| `hkex_fetcher.py` | 调用 `aiohttp` 抓取 HKEX 披露易年报名单，批量下载 PDF |
+| `hkex_fetcher.py` | 解析 `activestock_*.json` 得 `stockId`，从 `titlesearch.xhtml` HTML 提取年报 PDF 并入库 |
 | `sec_fetcher.py` | 扩展现有 SEC API，增加定时调度 |
 | `news_fetcher.py` | 扩展 `tools/news_tools.py` 中 `_fetch_news_list`，标题 + 正文全量入库 |
 
@@ -365,10 +365,27 @@ score = similarity * weight
 
 #### 9.12 RRF 混合检索
 
-**文件**：`alphapilot/rag/retriever.py` → `hybrid_retrieve()`
+**文件**：`alphapilot/rag/retriever.py` → `hybrid_retrieve()`；`alphapilot/rag/chunk_fts.py`（FTS5）
 
 - 向量检索 Top-20 + `sqlite3` FTS5 全文检索 Top-20
-- Reciprocal Rank Fusion (k=60) 合并 → 取 Top-10
+- Reciprocal Rank Fusion (k=60) 合并 → 取 Top-k（默认 10）
+- `graph/document_evidence.py` 在 workflow 中调用 `hybrid_retrieve`
+
+**Phase 3 实现状态**：✅ 9.9–9.12 已落地
+
+| 模块 | 路径 |
+|------|------|
+| HKEX fetcher | `knowledge/fetchers/hkex_fetcher.py` |
+| SEC fetcher | `knowledge/fetchers/sec_fetcher.py` |
+| News fetcher | `knowledge/fetchers/news_fetcher.py` |
+| 调度器 | `knowledge/scheduler.py`（`DOC_FETCH_ENABLED=true` 启用） |
+| 统一入库 | `knowledge/document_ingest.py` |
+| 文档保留 | `rag/doc_registry.py`（每 symbol 最多 20 份） |
+
+环境变量：
+- `DOC_FETCH_ENABLED=true` — 启动定时抓取
+- `DOC_FETCH_SYMBOLS=TSLA,AAPL,0700.HK` — 监控标的
+- `DOC_FETCH_INTERVAL_HOURS=6` — 抓取间隔（小时）
 
 ### Phase 4 — 用户上传 + 私有空间
 
@@ -395,6 +412,14 @@ score = similarity * weight
 - `scan(text)` → 正则匹配身份证号 / 银行卡号 / 电话 / 邮箱
 - 命中后打码替换为 `[REDACTED]` 再写入向量库
 
+**实现状态（已完成）**：
+
+| 条目 | 实现 |
+|------|------|
+| 9.13 | `api/upload.py` + `main.py` `/upload/document`（需登录）→ `document_ingest.ingest_file()`，元数据 `source=user_uploaded`、`confidence_tier=user_submitted`、`user_session_id` |
+| 9.14 | `retrieve_doc_chunks()` / `hybrid_retrieve()` 支持 `user_session_id`；无 session 时屏蔽私有 chunk；有 session 时公开+私有混合（`_merge_public_private_hits`） |
+| 9.15 | `ingest_chunks()` 入库前调用 `sensitive_scanner.scan()`；分析链路经 `user_session_id` 传入 `attach_document_evidence()` |
+
 ### 涉及文件总览
 
 | 文件 | Phase | 操作 |
@@ -413,3 +438,47 @@ score = similarity * weight
 | `rag/retriever.py` | 3 | 时效性加权 + RRF 混合检索 |
 | `api/upload.py` | 4 | **新建** |
 | `knowledge/sensitive_scanner.py` | 4 | **新建** |
+
+---
+
+## 10. 实现状态与差距说明（2026-06）
+
+### 10.1 已交付（§9.1–9.15）
+
+| 阶段 | 条目 | 状态 | 验收方式 |
+|------|------|------|----------|
+| Phase 1 | 9.1–9.6 Schema / 分块 / PDF / 检索 / Workflow / Agent | ✅ | `test_rag_e2e_pipeline.py`、分析日志 `Document RAG: N chunks` |
+| Phase 2 | 9.7–9.8 Guard grounding + 输出等级联动 | ✅ | `test_guard_hard_rules.py`、Guard `Valid: True` |
+| Phase 3 | 9.9–9.12 Fetcher / Scheduler / 时效加权 / RRF+FTS5 | ✅ | `run_fetch_once()`、TSLA/0700.HK 抓取日志 |
+| Phase 4 | 9.13–9.15 上传 / Session 隔离 / 敏感打码 | ✅ | `scripts/verify_p4.py`、`test_session_isolation.py` |
+
+### 10.2 与 Proposal 原文的差距（未做或简化）
+
+| 类别 | 文档描述 | 当前实现 |
+|------|----------|----------|
+| 路线图 §6 Phase 4 | A/B 测试框架 | ❌ 未实现 |
+| 路线图 §6 Phase 4 | 输出等级与文档覆盖度深度联动 | ⚠️ 仅 9.8：`document_evidence=available` → evidence_score +5 |
+| §3.4 检索 | 元数据预过滤 `doc_type` / `report_period` | ⚠️ 主要为 `symbol` + `user_session_id` 后过滤 |
+| §3.4 向量模型 | BGE-large-zh-v1.5 | 使用 `all-MiniLM-L6-v2`（`RAG_EMBEDDING_MODEL` 可配） |
+| §3.2 解析 | MarkItDown + Unstructured.io | pymupdf 为主，markitdown 可选；非 Markdown PDF 自动推断章节标题 |
+| §9.3 表格 | camelot / pdfplumber | pdfplumber 默认启用（requirements.txt），camelot 备选 |
+| §5.2 时效性 | 冲突文档 `superseded` 版本 | Fact 层有；document chunk 层未做 |
+| §5.1 合规 | 完整 audit trail（每次回答记录 chunk_id） | chunk_id 入库 + Guard `[doc:N]`；无独立审计日志服务 |
+| §4 上传 | 用户确认内容合法性 | 无前端确认流程 |
+| §5.1 合规 | 产品免责声明 | 需在前端/报告层单独维护 |
+| §7 成功指标 | Recall@15、P95 延迟、覆盖率等 | 无自动化评测与监控面板 |
+
+### 10.3 运维与环境
+
+- 文档自动抓取：`DOC_FETCH_ENABLED=true`，依赖 `apscheduler`
+- 验收脚本：`python scripts/verify_p4.py --username ... --password ...`（HTTP 全链路）
+- 运行时数据（`rag_data/faiss_index` 等）不应提交 git
+
+### 10.4 后续可选增强（非 §9 范围）
+
+1. A/B 框架：对比「有/无 document_evidence」对 Guard 通过率与报告质量的影响  
+2. 文档级 `superseded` 与检索过滤  
+3. 中文 embedding 升级（BGE-large-zh）与标注集 Recall 评测  
+4. 分析审计表：记录每次 `analysis_id` 引用的 `chunk_id` 列表  
+5. 上传前合规确认弹窗 + 报告免责声明模板
+

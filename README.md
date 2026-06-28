@@ -12,8 +12,8 @@
 | 后端 | FastAPI + Python 3.12 |
 | 多智能体 | LangGraph StateGraph + Evidence Packet 前置 + Bull vs Bear 辩论子图 + 14 个专业 Agent |
 | 防幻觉 | Evidence Packet 字段溯源 + Guard 硬规则校验 + 冷启动评测 + 输出等级门控 |
-| 数据源 | 多 Provider 并行采集（yfinance / HKEX / EastMoney / AKShare）+ 自动降级与字段级来源去重，覆盖港股与美股 |
-| 知识库 | FAISS 动态事实缓存（doc_id 去重、TTL 过滤、冷启动回写） |
+| 数据源 | 多 Provider 并行采集（yfinance / SEC / Finnhub / EastMoney / AKShare 等）+ Fact Store 字段缓存 + 自动降级与字段级来源去重 |
+| 知识库 | FAISS 双轨索引：结构化事实缓存 + **文档 chunk RAG**（hybrid 向量+FTS5、时效加权、HKEX/SEC/News 自动摄取、用户私有上传） |
 | 数据库 | SQLite WAL 模式（分析记录、用户、会话、消息） |
 | 认证 | JWT（注册 / 登录 / 刷新） |
 | 国际化 | React i18n Context（English / 简体中文 / 粤语），自动检测浏览器语言 |
@@ -27,10 +27,17 @@
 
 ```bash
 cd alphapilot
-cp .env.example .env   # 编辑填入 API Keys
+cp .env.example .env   # 编辑填入 API Keys（DeepSeek / Google 等）
 pip install -r requirements.txt
+# 文档自动抓取（可选）: 在 .env 中设置 DOC_FETCH_ENABLED=true
 python -m api.main
 # API 运行在 http://localhost:8000
+```
+
+可选：Phase 4 验收脚本（需后端已启动 + 登录账号）
+
+```bash
+python scripts/verify_p4.py --username <user> --password <pass>
 ```
 
 ### 前端
@@ -57,10 +64,11 @@ docker compose -f alphapilot/docker-compose.yml up -d
                                       │
                                       ▼
                             Evidence Packet Builder
-                            ├── FAISS RAG 检索（score + metadata）
+                            ├── FAISS 结构化事实检索 + Fact Store 字段缓存
+                            ├── 文档感知 RAG（hybrid_retrieve: 向量 + FTS5 + 时效加权）
                             ├── 冷启动判断（symbol / similarity / coverage）
-                            ├── 多 Provider 并行采集（yfinance / HKEX / EastMoney / AKShare）
-                            ├── 字段级来源去重与 Evidence Packet 评分
+                            ├── 多 Provider 并行采集
+                            ├── 双轨证据：structured facts + document_evidence
                             └── 高质量 facts 回写 FAISS（去重 + TTL）
                                       │
                                       ▼
@@ -78,7 +86,7 @@ docker compose -f alphapilot/docker-compose.yml up -d
                                SQLite + Checkpointer
 ```
 
-**架构核心**：Agent 不直接调用工具或 RAG，只消费 `state.evidence_packet` 中的结构化事实。数据采集统一前置到 Evidence Packet Builder，Guard 对输出执行确定性硬规则校验（非 LLM 判断），不通过则带 corrections 重试（最多 2 次）。Bull vs Bear 辩论以子图形式嵌入，仅 `full_analysis` 时触发。
+**架构核心**：Agent 不直接调用工具或 RAG，只消费 `state.evidence_packet` 中的结构化事实与 **Document Evidence**（年报/公告/用户上传文档 chunk，带 `[doc:N]` 引用）。数据采集与文档检索统一前置到 Evidence Packet Builder；Guard 对输出执行确定性硬规则校验（含文档 grounding L1/L2/L3），不通过则带 corrections 重试（最多 2 次）。
 
 ## API 端点
 
@@ -96,6 +104,7 @@ docker compose -f alphapilot/docker-compose.yml up -d
 | POST | /backtest | 历史回测 |
 | POST | /alert | 实时监控告警 |
 | POST | /optimize | 投资组合优化 |
+| POST | /upload/document | 上传研究文档（PDF/Word/HTML/TXT，需登录，写入用户私有 RAG 空间） |
 | GET | /history | 分析历史列表 |
 | GET | /dashboard/stats | 仪表盘统计 |
 | GET | /health | 健康检查 |
@@ -110,8 +119,15 @@ alphapilot/
 ├── services/                 # 分析服务（SSE 流式 & 同步）
 ├── db/                       # SQLite 模型 & 仓储层
 ├── tools/                    # 多 Provider 数据采集（yfinance/HKEX/EastMoney/AKShare）
-├── knowledge/                # Evidence Packet 入库治理（质量门槛、TTL、去重）
-├── rag/                      # FAISS 动态事实缓存 + Chroma 辅助模块
+├── knowledge/                # 文档解析、分块、摄取、敏感扫描、定时抓取
+│   ├── document_chunker.py   # 结构/语义分块
+│   ├── pdf_parser.py         # PDF 解析（pymupdf / markitdown）
+│   ├── document_ingest.py    # 统一入库（公开抓取 + 用户上传）
+│   ├── sensitive_scanner.py  # 上传内容 PII 打码
+│   ├── scheduler.py          # HKEX/SEC/News 定时抓取
+│   └── fetchers/             # hkex / sec / news
+├── rag/                      # FAISS 检索、FTS5、文档注册与保留策略
+├── scripts/verify_p4.py      # Phase 4 一键验收（上传/隔离/打码）
 ├── schemas/                  # Evidence Packet / Fact / Coverage / GuardResult
 ├── evaluation/               # 冷启动评测集、指标、结构化报告
 ├── monitoring/               # Evidence/Guard 运行指标
@@ -142,5 +158,8 @@ deploy/                        # 生产部署脚本
 ## 文档
 
 - [架构设计](alphapilot/Docs/architecture.md)
+- [文档感知 RAG 方案与实现状态](Docs/文档提取与RAG功能.md)
+- [HK Fintech 竞争力优化方案](Docs/HK-Fintech-AI-竞争力优化方案.md)
+- [HK Fintech 开发方案（排期与任务）](Docs/HK-Fintech-AI-开发方案.md)
 - [Week 1-8 总结](alphapilot/Docs/Week_summary.md)
 
