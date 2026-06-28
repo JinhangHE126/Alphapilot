@@ -68,3 +68,6 @@ class GraphState(TypedDict, total=False):
 
     # Phase 4 — 用户上传私有空间（与登录 user_id 一致）
     user_session_id: str
+
+    # M2 — 文档 RAG 可选 doc_type 过滤（如 "annual_report"；空串=不过滤）
+    document_doc_type: str

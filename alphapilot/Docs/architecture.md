@@ -309,7 +309,8 @@ AlphaPilot 采用**证据前置 + 输出门控 + 后验校验**的纵深防御�
 **实现**：
 
 - `evidence_packet_builder` 先查 **Fact Store** 与 FAISS 结构化事实检索，过滤 symbol mismatch。
-- 调用 `attach_document_evidence()` → `hybrid_retrieve()`（向量 Top-20 + FTS5 Top-20 → RRF k=60 → 时效加权），写入 `packet.document_evidence`。
+- 调用 `attach_document_evidence()` → `hybrid_retrieve()`（向量 Top-20 + FTS5 Top-20 → RRF k=60 → 时效加权 + **M2 section/doc_type boost**），写入 `packet.document_evidence`。
+- 可选 `state.document_doc_type`（如 `annual_report`）传入后过滤 doc_type；默认空串不过滤。
 - 登录用户传入 `user_session_id`：公开 chunk + 当前用户私有上传 chunk 混合返回；无 session 时屏蔽私有 chunk。
 - RAG / Fact Store 不足时触发 `collect_all(symbol)` 冷启动采集。
 - `collect_all()` 聚合多 Provider 市场/基本面/新闻与 SEC/HKEX 披露。
@@ -507,7 +508,7 @@ POST /upload/document ──────────►       │               
 
 分析请求 (user_session_id = user_id)
     → attach_document_evidence()
-    → hybrid_retrieve(query, symbol, user_session_id)
+    → hybrid_retrieve(query, symbol, user_session_id, doc_type?)
     → 公开 chunk + 本人私有 chunk（混合）
     → render_packet_for_agent() → Agent / Guard
 ```
@@ -520,7 +521,7 @@ POST /upload/document ──────────►       │               
 | 解析 | `knowledge/pdf_parser.py` | PDF 文本（pymupdf / markitdown） |
 | 入库 | `knowledge/document_ingest.py` | 统一 ingest；用户上传跳过全局 20 文档 prune |
 | 抓取 | `knowledge/fetchers/*`, `scheduler.py` | 定时摄取；`DOC_FETCH_ENABLED=true` |
-| 检索 | `rag/retriever.py`, `rag/chunk_fts.py` | `hybrid_retrieve`, `retrieve_doc_chunks`, session 过滤 |
+| 检索 | `rag/retriever.py`, `rag/chunk_fts.py` | `hybrid_retrieve`, section/doc_type boost, `doc_type` 后过滤 |
 | 保留 | `rag/doc_registry.py` | 每 symbol 最多 20 份公开文档 |
 | 私有 | `knowledge/sensitive_scanner.py` | 身份证/银行卡/电话/邮箱打码 |
 | 接入 | `graph/document_evidence.py` | workflow 与测试共用 |

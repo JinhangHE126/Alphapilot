@@ -11,9 +11,11 @@ def attach_document_evidence(
     query: str,
     k: int = 5,
     user_session_id: str = "",
+    doc_type: str = "",
 ) -> EvidencePacket:
     """
     检索 document_chunk 并写入 packet.document_evidence。
+    doc_type: 可选后过滤（"annual_report" / "earnings_call" / "news"），空串=不过滤。
     失败时保持 document_evidence 为空，不抛异常。
     """
     try:
@@ -22,6 +24,7 @@ def attach_document_evidence(
             symbol=symbol,
             k=k,
             user_session_id=user_session_id,
+            doc_type=doc_type,
         )
         print(f"📊 attach_document_evidence: symbol={symbol}, results={len(doc_results)}")
         if doc_results:

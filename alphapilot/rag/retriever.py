@@ -42,6 +42,78 @@ HYBRID_FTS_K = 20
 HYBRID_DEFAULT_K = 10
 
 
+# ═══════════════════════════════════════════════════════════
+# 3.2.1 Section / doc_type boost
+# ═══════════════════════════════════════════════════════════
+
+SECTION_BOOST: Dict[str, float] = {
+    "risk factors": 1.25,
+    "item 1a": 1.25,
+    "md&a": 1.15,
+    "management discussion": 1.15,
+    "management's discussion": 1.15,
+    "risk management": 1.20,
+    "风险因素": 1.25,
+    "管理层讨论": 1.15,
+    "风险管理": 1.20,
+    "financial statements": 1.10,
+    "财务报表": 1.10,
+    "business overview": 1.05,
+    "主营业务": 1.05,
+}
+
+# 查询关键词 → 额外 boost 的 section key（英文统一，M1 已标准化 section）
+_QUERY_SECTION_BOOST_PAIRS: list[tuple[str, str, float]] = [
+    # (query keyword, section key, extra boost multiplier)
+    ("risk", "risk factors", 1.10),
+    ("regulatory", "risk factors", 1.10),
+    ("法规", "risk factors", 1.10),
+    ("监管", "risk factors", 1.10),
+    ("风险", "risk factors", 1.10),
+    ("管理", "md&a", 1.08),
+    ("经营", "md&a", 1.08),
+    ("management discussion", "md&a", 1.08),
+    ("财务", "financial statements", 1.08),
+    ("financial", "financial statements", 1.08),
+    ("营收", "md&a", 1.08),
+    ("收入", "md&a", 1.08),
+    ("revenue", "md&a", 1.08),
+    ("profit", "md&a", 1.08),
+    ("利润", "md&a", 1.08),
+]
+
+# doc_type 加权（3.2.1 补充）
+DOC_TYPE_BOOST: Dict[str, float] = {
+    "annual_report": 1.10,
+    "earnings_call": 1.05,
+}
+
+
+def _compute_section_boost(section: str, query: str = "") -> float:
+    """
+    根据 chunk section 计算 boost 系数。
+    基础 boost 来自 SECTION_BOOST 字典；
+    若 query 含特定关键词，额外乘以联动系数。
+    """
+    if not section:
+        return 1.0
+
+    section_lower = section.strip().lower()
+    base = 1.0
+    for key, mult in SECTION_BOOST.items():
+        if key in section_lower:
+            base = max(base, mult)
+
+    # 查询关键词联动
+    if query:
+        query_lower = query.lower()
+        for kw, sec_key, extra in _QUERY_SECTION_BOOST_PAIRS:
+            if kw in query_lower and sec_key in section_lower:
+                base = max(base, base * extra)
+
+    return round(base, 4)
+
+
 def recency_weight(publish_date: str | None) -> float:
     """Phase 3.11 — down-weight stale document chunks."""
     if not publish_date:
@@ -450,10 +522,20 @@ class RagRetriever:
                 continue
             similarity = self._distance_to_similarity(float(distance))
             weight = recency_weight(meta.get("publish_date", ""))
-            weighted = round(similarity * weight, 6)
+            # 3.2.1 — section boost after recency
+            section_boost = _compute_section_boost(
+                meta.get("section", ""), query
+            )
+            # 3.2.1 — doc_type boost
+            doc_boost = DOC_TYPE_BOOST.get(
+                str(meta.get("doc_type", "")).lower(), 1.0
+            )
+            weighted = round(similarity * weight * section_boost * doc_boost, 6)
             chunk = self._doc_chunk_from_document(doc)
             chunk["similarity"] = similarity
             chunk["recency_weight"] = weight
+            chunk["section_boost"] = section_boost
+            chunk["doc_type_boost"] = doc_boost
             chunk["weighted_score"] = weighted
             results.append((chunk, weighted))
         results.sort(key=lambda item: -item[1])
@@ -542,9 +624,11 @@ class RagRetriever:
         symbol: str = "",
         k: int = HYBRID_DEFAULT_K,
         user_session_id: str = "",
+        doc_type: str = "",
     ) -> List[Dict[str, Any]]:
         """
-        Phase 3.12 — 向量 Top-20 + FTS5 Top-20 → RRF(k=60) → Top-k，并应用时效加权。
+        Phase 3.12 + M2 — 向量 Top-20 + FTS5 Top-20 → RRF(k=60) → Top-k
+        支持 section boost + doc_type 后过滤。
         """
         if not self.vectorstore:
             return []
@@ -625,11 +709,25 @@ class RagRetriever:
                 continue
             if chunk.get("doc_id") in self._evicted_doc_ids:
                 continue
+            # 3.2.2 — doc_type 后过滤
+            if doc_type and meta:
+                cdt = str(meta.get("doc_type", "") or "").lower()
+                if cdt and cdt != doc_type.lower():
+                    continue
             weight = recency_weight(chunk.get("publish_date", ""))
-            score = rrf_score * weight
+            # 3.2.1 — section boost + doc_type boost
+            section_boost = _compute_section_boost(
+                meta.get("section", "") if meta else "", query
+            )
+            doc_boost = DOC_TYPE_BOOST.get(
+                str(meta.get("doc_type", "")).lower() if meta else "", 1.0
+            )
+            score = rrf_score * weight * section_boost * doc_boost
             chunk = dict(chunk)
             chunk["rrf_score"] = round(rrf_score, 6)
             chunk["recency_weight"] = weight
+            chunk["section_boost"] = section_boost
+            chunk["doc_type_boost"] = doc_boost
             chunk["hybrid_score"] = round(score, 6)
             final.append((chunk, score))
 
@@ -644,6 +742,11 @@ class RagRetriever:
             for chunk in fallback:
                 cid = chunk.get("chunk_id")
                 if cid and cid not in seen:
+                    # 3.2.2 — fallback 也做 doc_type 后过滤
+                    if doc_type:
+                        cdt = str(chunk.get("doc_type", "") or "").lower()
+                        if cdt and cdt != doc_type.lower():
+                            continue
                     results.append(chunk)
                     seen.add(cid)
                 if len(results) >= k:

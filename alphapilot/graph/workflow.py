@@ -389,6 +389,8 @@ def evidence_packet_builder(state: GraphState) -> dict:
     )
 
     # ── 文档感知 RAG：检索相关非结构化文档 chunk ──
+    # doc_type 留空 = 不过滤（annual_report / earnings_call / news 混合）。
+    # 需要仅财报时由调用方传入 state["document_doc_type"]，例如 "annual_report"。
     from graph.document_evidence import attach_document_evidence
     try:
         attach_document_evidence(
@@ -397,6 +399,7 @@ def evidence_packet_builder(state: GraphState) -> dict:
             query=f"{symbol} {user_instruction[:200]}",
             k=5,
             user_session_id=str(state.get("user_session_id", "") or ""),
+            doc_type=str(state.get("document_doc_type", "") or ""),
         )
         if packet.document_evidence:
             print(f"📄 Document RAG: {len(packet.document_evidence)} chunks loaded")
