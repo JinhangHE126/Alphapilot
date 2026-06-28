@@ -36,6 +36,7 @@ from db.repository import (
     create_session,
     create_user,
     delete_analysis_record,
+    get_analysis_citations,
     get_analysis_detail,
     get_analysis_events,
     get_session,
@@ -43,6 +44,7 @@ from db.repository import (
     list_analysis_history,
     list_messages,
     list_sessions,
+    save_analysis_citations,
 )
 from graph.state import GraphState
 from graph.user_profile import load_user_profile, save_user_profile
@@ -260,12 +262,24 @@ async def analyze(request: AnalyzeRequest, current_user: dict[str, Any] = Depend
         thread_id=thread_id,
     )
     add_message(session_id, "assistant", result["final_report"], node_name="recommendation_agent")
+    guard = result.get("guard_check")
+    final_score = float(guard.get("confidence_score", 0)) if isinstance(guard, dict) else 0.0
     complete_analysis_record(
         analysis_id,
         report=result["final_report"],
         recommendation=result.get("recommendation"),
+        final_score=final_score,
         status="completed",
     )
+    # 3.3.2 — 同步路径也写 citations
+    citations = result.get("citations", {})
+    if citations and isinstance(citations, dict):
+        save_analysis_citations(
+            analysis_id=analysis_id,
+            chunk_ids=citations.get("chunk_ids", []),
+            doc_markers=citations.get("doc_markers"),
+            evidence_snapshot=citations.get("evidence_snapshot"),
+        )
 
     return success({
         "session_id": session_id,
@@ -363,13 +377,17 @@ async def analyze_stream(request: AnalyzeStreamRequest, current_user: dict[str, 
             final_score=final_score,
             status="completed",
         )
-        complete_analysis_record(
-            analysis_id,
-            report=final_payload.get("final_report", ""),
-            recommendation=final_payload.get("recommendation"),
-            final_score=float(final_payload.get("guard_check", {}).get("confidence_score", 0) if isinstance(final_payload.get("guard_check"), dict) else 0),
-            status="completed",
-        )
+        # 3.3.2 — 写入 citations（Guard 通过后）
+        guard_is_valid = isinstance(guard, dict) and guard.get("is_valid", False)
+        if guard_is_valid:
+            citations = final_payload.get("citations", {})
+            if citations and isinstance(citations, dict):
+                save_analysis_citations(
+                    analysis_id=analysis_id,
+                    chunk_ids=citations.get("chunk_ids", []),
+                    doc_markers=citations.get("doc_markers"),
+                    evidence_snapshot=citations.get("evidence_snapshot"),
+                )
 
     headers = {
         "Cache-Control": "no-cache",
@@ -594,7 +612,8 @@ async def get_history_detail(analysis_id: int, current_user: dict[str, Any] = De
     if not record:
         raise HTTPException(status_code=404, detail="Analysis not found")
     events = get_analysis_events(analysis_id)
-    return success({"id": analysis_id, **record, "events": events})
+    citations = get_analysis_citations(analysis_id)
+    return success({"id": analysis_id, **record, "events": events, "citations": citations})
 
 
 @api.delete("/history/{analysis_id}")

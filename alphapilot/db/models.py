@@ -117,6 +117,25 @@ def init_db() -> None:
             ON analysis_events (analysis_id)
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS analysis_citations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                analysis_id INTEGER NOT NULL,
+                chunk_ids TEXT NOT NULL,
+                doc_markers TEXT,
+                evidence_snapshot TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (analysis_id) REFERENCES analysis_history(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_citations_analysis
+            ON analysis_citations(analysis_id)
+            """
+        )
         _migrate_users(conn)
 
 

@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 import os
 import uuid
 from datetime import datetime
@@ -242,6 +243,49 @@ def delete_analysis_record(analysis_id: int, user_id: int) -> bool:
             (analysis_id, user_id),
         )
         return cursor.rowcount > 0
+
+
+def save_analysis_citations(
+    analysis_id: int,
+    chunk_ids: list[str],
+    doc_markers: list[str] | None = None,
+    evidence_snapshot: list[dict[str, Any]] | None = None,
+) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM analysis_citations WHERE analysis_id = ?",
+            (analysis_id,),
+        )
+        conn.execute(
+            """
+            INSERT INTO analysis_citations (analysis_id, chunk_ids, doc_markers, evidence_snapshot)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                analysis_id,
+                json.dumps(chunk_ids, ensure_ascii=False),
+                json.dumps(doc_markers, ensure_ascii=False) if doc_markers else None,
+                json.dumps(evidence_snapshot, ensure_ascii=False) if evidence_snapshot else None,
+            ),
+        )
+
+
+def get_analysis_citations(analysis_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT chunk_ids, doc_markers, evidence_snapshot, created_at FROM analysis_citations WHERE analysis_id = ?",
+            (analysis_id,),
+        ).fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        for field in ("chunk_ids", "doc_markers", "evidence_snapshot"):
+            if result.get(field):
+                try:
+                    result[field] = json.loads(result[field])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return result
 
 
 def get_user_stats(user_id: int) -> dict[str, Any]:

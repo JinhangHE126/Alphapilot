@@ -890,10 +890,12 @@ def _normalize_symbol(symbol: str | None) -> str:
 
 
 def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, thread_id: str, language: str | None = None) -> dict[str, Any]:
-    """Run LangGraph workflow synchronously and return final results."""
+    """Run LangGraph workflow synchronously and return final results (including citations)."""
     normalized_symbol = _normalize_symbol(stock_symbol)
     final_report = ""
     recommendation = None
+    guard_check = None
+    evidence_packet = None
 
     lang_instruction = _language_instruction(language)
     enriched_message = f"[股票代码: {normalized_symbol}] {user_message}{lang_instruction}"
@@ -916,10 +918,22 @@ def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, threa
                 final_report = str(update["final_report"])
             if node_name == "recommendation_agent" and update.get("messages"):
                 recommendation = _strip_json_blocks(_safe_text(update["messages"][-1]))
+            if node_name in ("guard_agent", "guard") and "guard_check" in update:
+                guard_check = update["guard_check"]
+                if isinstance(guard_check, dict):
+                    evidence_packet = guard_check.get("evidence_packet")
+
+    from services.citations import build_citations
+    citations = build_citations(
+        final_report=final_report,
+        evidence_packet=evidence_packet if isinstance(evidence_packet, dict) else None,
+    )
 
     return {
         "final_report": final_report or "\u5206\u6790\u5b8c\u6210",
         "recommendation": recommendation,
+        "guard_check": guard_check,
+        "citations": citations,
     }
 
 
@@ -1235,6 +1249,14 @@ def stream_analysis_events(
 
     ep = guard_check.get("evidence_packet", {}) if guard_check else {}
     output_level = ep.get("allowed_output_level", "") if isinstance(ep, dict) else ""
+
+    # 3.3.2 — 构建 citations
+    from services.citations import build_citations
+    done_payload["citations"] = build_citations(
+        final_report=final_report,
+        evidence_packet=ep if isinstance(ep, dict) else None,
+    )
+
     if output_level == "limited_analysis_partial":
         done_payload["disclaimer"] = (
             "\u672c\u5206\u6790\u56e0\u90e8\u5206\u5173\u952e\u6570\u636e\u7f3a\u5931\uff0c"
