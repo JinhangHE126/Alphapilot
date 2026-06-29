@@ -18,10 +18,11 @@ import FinancialTrendsPanel from "../components/FinancialTrendsPanel";
 import RiskGauge from "../components/RiskGauge";
 import { generateMarkdownReport, downloadMarkdownReport, downloadPDFReport } from "../services/reportExporter";
 import DebatePanel from "../components/DebatePanel";
+import CitationsPanel from "../components/CitationsPanel";
 import { useTranslation } from "../i18n";
 import { createSession } from "../services/api";
 import { uploadDocument } from "../services/api";
-import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, DocumentEvidenceItem, TargetPriceData, RiskLevelData, parseRiskLevelFromContent } from "../services/sse";
+import { streamAnalyze, StreamEvent, GuardCheck, EvidencePacketData, DocumentEvidenceItem, TargetPriceData, RiskLevelData, AnalysisCitations, parseRiskLevelFromContent } from "../services/sse";
 
 function detectLanguage(text: string): string {
   const stripped = text.replace(/\s/g, "");
@@ -257,6 +258,7 @@ export default function AnalyzePage() {
   const [evidencePacket, setEvidencePacket] = useState<EvidencePacketData | null>(null);
   const [targetPrice, setTargetPrice] = useState<TargetPriceData | null>(null);
   const [riskLevel, setRiskLevel] = useState<RiskLevelData | null>(null);
+  const [citations, setCitations] = useState<AnalysisCitations | null>(null);
   const prevDefaultPrompt = useRef(t("analyze.defaultPrompt"));
 
   useEffect(() => {
@@ -344,6 +346,7 @@ export default function AnalyzePage() {
     setEvidencePacket(null);
     setTargetPrice(null);
     setRiskLevel(null);
+    setCitations(null);
     try {
       const sessionId = await ensureSession();
       await streamAnalyze(
@@ -457,6 +460,9 @@ export default function AnalyzePage() {
               }
               if (evt.data.risk_level) {
                 setRiskLevel(evt.data.risk_level);
+              }
+              if (evt.data.citations) {
+                setCitations(evt.data.citations);
               }
               return prev;
             });
@@ -913,6 +919,12 @@ export default function AnalyzePage() {
               <MarkdownContent content={guardCheck.final_reasoning} />
             </div>
           </div>
+        </section>
+      )}
+
+      {guardCheck && (
+        <section className="card">
+          <CitationsPanel citations={citations} />
         </section>
       )}
     </div>

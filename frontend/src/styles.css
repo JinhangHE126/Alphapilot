@@ -3166,6 +3166,98 @@ select option {
   line-height: 1.4;
 }
 
+/* ── Audit Trail / Citations ── */
+.citations-panel {
+  margin-top: 0.25rem;
+}
+
+.citations-panel--compact .citations-table-wrap {
+  max-height: 240px;
+}
+
+.citations-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+}
+
+.citations-panel-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.citations-count {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: rgba(96, 165, 250, 0.85);
+  background: rgba(59, 130, 246, 0.12);
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+}
+
+.citations-sub {
+  margin: 0 0 0.65rem;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.citations-empty {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.citations-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.55rem;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.citations-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+
+.citations-table th,
+.citations-table td {
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: top;
+}
+
+.citations-table th {
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.62rem;
+}
+
+.citations-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.citations-marker {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.12);
+  padding: 0.08rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.68rem;
+}
+
+.citations-chunk-id {
+  color: rgba(167, 243, 208, 0.9);
+  font-size: 0.65rem;
+  word-break: break-all;
+}
+
+.citations-card .citations-panel-header h4 {
+  font-size: 1rem;
+}
+
 /* ── Financial 数据来源 ── */
 .fin-sources {
   display: flex;

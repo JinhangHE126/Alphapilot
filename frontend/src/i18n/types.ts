@@ -179,4 +179,15 @@ export type TranslationDict = {
     eventTimeline: string;
     noEvents: string;
   };
+  citations: {
+    title: string;
+    subtitle: string;
+    empty: string;
+    noChunks: string;
+    chunkCount: string;
+    colMarker: string;
+    colChunkId: string;
+    colSection: string;
+    colSource: string;
+  };
 };

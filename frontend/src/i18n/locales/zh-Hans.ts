@@ -170,4 +170,15 @@ export const zhHans: TranslationDict = {
     eventTimeline: "事件时间线",
     noEvents: "暂无事件记录。",
   },
+  citations: {
+    title: "文档引用审计（Audit Trail）",
+    subtitle: "最终报告中 [doc:N] 标记映射到向量库 chunk_id，落库可追溯。",
+    empty: "本次分析暂无引用审计记录。",
+    noChunks: "报告中未检测到 [doc:N] 引用。",
+    chunkCount: "{{count}} 个 chunk",
+    colMarker: "报告标记",
+    colChunkId: "Chunk ID",
+    colSection: "章节",
+    colSource: "来源",
+  },
 };

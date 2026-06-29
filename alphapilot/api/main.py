@@ -377,17 +377,15 @@ async def analyze_stream(request: AnalyzeStreamRequest, current_user: dict[str, 
             final_score=final_score,
             status="completed",
         )
-        # 3.3.2 — 写入 citations（Guard 通过后）
-        guard_is_valid = isinstance(guard, dict) and guard.get("is_valid", False)
-        if guard_is_valid:
-            citations = final_payload.get("citations", {})
-            if citations and isinstance(citations, dict):
-                save_analysis_citations(
-                    analysis_id=analysis_id,
-                    chunk_ids=citations.get("chunk_ids", []),
-                    doc_markers=citations.get("doc_markers"),
-                    evidence_snapshot=citations.get("evidence_snapshot"),
-                )
+        # 3.3.2 — 写入 citations（每次完成的分析均记录引用的 chunk）
+        citations = final_payload.get("citations", {})
+        if citations and isinstance(citations, dict):
+            save_analysis_citations(
+                analysis_id=analysis_id,
+                chunk_ids=citations.get("chunk_ids", []),
+                doc_markers=citations.get("doc_markers"),
+                evidence_snapshot=citations.get("evidence_snapshot"),
+            )
 
     headers = {
         "Cache-Control": "no-cache",

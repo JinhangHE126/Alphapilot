@@ -171,4 +171,15 @@ export const en: TranslationDict = {
     eventTimeline: "Event Timeline",
     noEvents: "No events recorded.",
   },
+  citations: {
+    title: "Document Citation Audit Trail",
+    subtitle: "[doc:N] markers in the final report mapped to vector-store chunk_ids.",
+    empty: "No citation audit record for this analysis.",
+    noChunks: "No [doc:N] citations detected in the report.",
+    chunkCount: "{{count}} chunk(s)",
+    colMarker: "Marker",
+    colChunkId: "Chunk ID",
+    colSection: "Section",
+    colSource: "Source",
+  },
 };

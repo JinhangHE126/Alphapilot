@@ -164,7 +164,8 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 | 项 | 内容 |
 |----|------|
 | **文件** | `services/analysis_service.py`, `graph/workflow.py` 或 `agents/guard_agent.py` 之后 |
-| **逻辑** | 1) 从 `final_report` 正则提取 `[doc:N]`；2) 映射 `evidence_packet.document_evidence[N-1].chunk_id`；3) Guard 通过后 `complete_analysis_record` 时写入 citations |
+| **逻辑** | 1) 从 `final_report` 正则提取 `[doc:N]`；2) 映射 `evidence_packet.document_evidence[N-1].chunk_id`；3) 分析完成时写入 `analysis_citations`（流式/同步路径） |
+| **前端** | `CitationsPanel`：分析页 Guard 通过后展示；历史详情 `GET /history/{id}` 回读 |
 | **兜底** | 无 `[doc:N]` 时仍保存当时 `document_evidence` 的 chunk_id 列表（检索命中快照） |
 
 #### 3.3.3 API
@@ -301,7 +302,7 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 
 - [x] AAPL 或 0700.HK 年报 ingest 后，Risk Factors / MD&A 相关 chunk 可被 `hybrid_retrieve` 命中
 - [x] Recommendation 报告含 Executive Synthesis + `[doc:N]` 文档小节
-- [x] `GET /history/{id}` 返回 `citations.chunk_ids`
+- [x] `GET /history/{id}` 返回 `citations.chunk_ids`；分析页/历史详情展示 Audit Trail 表格
 - [x] `scripts/verify_p4.py` 仍通过（回归 P4）— 2026-06-29 HTTP 模式验收通过
 - [x] README 含 Demo 链接（见根目录 Demo 小节）
 - [ ] README 含 2–3 张 Demo 截图（待补；链接与 sample 报告已就绪）

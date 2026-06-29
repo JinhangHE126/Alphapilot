@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import CitationsPanel from "../components/CitationsPanel";
 import MarkdownContent from "../components/MarkdownContent";
 import { useTranslation } from "../i18n";
 import { deleteHistory, getHistoryDetail } from "../services/api";
+import type { AnalysisCitations } from "../services/sse";
 
 type EventItem = {
   id: number;
@@ -51,6 +53,8 @@ export default function AnalysisDetailPage() {
     );
   }
 
+  const citations = (record.citations as AnalysisCitations | null | undefined) ?? null;
+
   return (
     <div className="page">
       <section className="card">
@@ -91,6 +95,10 @@ export default function AnalysisDetailPage() {
             emptyFallback={t("detail.noReport")}
           />
         </div>
+      </section>
+
+      <section className="card citations-card">
+        <CitationsPanel citations={citations} />
       </section>
 
       <section className="card">

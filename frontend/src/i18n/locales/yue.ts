@@ -170,4 +170,15 @@ export const yue: TranslationDict = {
     eventTimeline: "事件時間線",
     noEvents: "暫時未有事件記錄。",
   },
+  citations: {
+    title: "文檔引用審計（Audit Trail）",
+    subtitle: "最終報告中 [doc:N] 標記映射到向量庫 chunk_id，落庫可追溯。",
+    empty: "本次分析暫無引用審計記錄。",
+    noChunks: "報告中未檢測到 [doc:N] 引用。",
+    chunkCount: "{{count}} 個 chunk",
+    colMarker: "報告標記",
+    colChunkId: "Chunk ID",
+    colSection: "章節",
+    colSource: "來源",
+  },
 };
