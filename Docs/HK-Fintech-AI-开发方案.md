@@ -51,8 +51,8 @@ Week 1                    Week 2                    Week 3（缓冲）
 | **M2** 检索 boost ✅ | `section` / `doc_type` 加权 | `test_retriever_m2.py` 通过；`hybrid_retrieve` section/doc_type boost |
 | **M3** Audit Trail ✅ | DB 落库 + API | `test_analysis_citations.py`；`GET /history/{id}` 返回 citations |
 | **M4** Recommendation ✅ | 新 prompt 结构 | 0700.HK full_analysis 人工验收；Executive Synthesis + `[doc:N]` |
-| **M5** Demo | AAPL + 0700.HK 各 1 份 full_analysis 报告 | Guard Valid；报告可对外展示 |
-| **M6** 包装 | 免责声明、上传确认、README Demo 区 | 前端可勾选确认；报告页展示免责 |
+| **M5** Demo ✅ | AAPL + 0700.HK 各 1 份 full_analysis 报告 | Guard Valid；报告可对外展示；见 `Docs/demo/` |
+| **M6** 包装 ✅ | 免责声明、上传确认、README Demo 区 | 前端可勾选确认；报告页展示免责；API consent_at 记录 |
 
 ---
 
@@ -238,9 +238,9 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 
 | 任务 | 文件 | 说明 |
 |------|------|------|
-| 上传确认 | `frontend/src/pages/AnalyzePage.tsx` | checkbox：「确认上传内容为合法公开资料或个人研究笔记」 |
-| 免责声明 | `AnalyzePage.tsx` / 报告底部组件 | 固定文案：非投资建议、GenAI 生成、需人工复核 |
-| API（可选） | `api/main.py` upload | 记录 `consent_at` 到 metadata 或日志 |
+| 上传确认 | `frontend/src/pages/AnalyzePage.tsx` | checkbox：「确认上传内容为合法公开资料或个人研究笔记」 ✅ |
+| 免责声明 | `AnalyzePage.tsx` / 报告底部组件 | 固定文案：非投资建议、GenAI 生成、需人工复核 ✅ |
+| API（可选） | `api/main.py` upload | 记录 `consent_at` 到 metadata 或日志 ✅ |
 
 ### 4.2 评估脚本（Medium，时间允许）
 
@@ -279,7 +279,7 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 | 任务 | 产出 |
 |------|------|
 | Demo 报告润色 + 截图 | M5 定稿 |
-| 4.1 合规 UI | M6 |
+| 4.1 合规 UI | M6 ✅ |
 | 4.2 评估脚本（可选） | 指标数字供面试 |
 
 ---
@@ -304,7 +304,7 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 - [x] `GET /history/{id}` 返回 `citations.chunk_ids`
 - [ ] `scripts/verify_p4.py` 仍通过（回归 P4）
 - [x] README 含 Demo 链接与 2–3 张截图
-- [ ] 分析页有免责声明；上传有确认勾选
+- [x] 分析页有免责声明；上传有确认勾选
 
 ---
 
@@ -327,3 +327,5 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 |------|------|
 | 2026-06-28 | 初版：由竞争力优化方案拆解为工程任务、里程碑与排期 |
 | 2026-06-28 | M1–M4 验收完成：见 `Docs/M1-M4-验收报告.md`；里程碑表 M1–M4 ✅ |
+| 2026-06-29 | M5 Demo 完成：`scripts/prepare_demo_ingest.py`、`scripts/run_demo_analysis.sh`、`Docs/demo/AAPL_analysis_sample.md`、`Docs/demo/0700.HK_analysis_sample.md`、README Demo 小节 ✅ |
+| 2026-06-29 | M6 合规 UI 完成：上传确认 checkbox、报告底部免责声明、API consent_at 审计日志 ✅ |

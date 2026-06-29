@@ -520,6 +520,7 @@ async def upload_document(
     publish_date: str = Form(default=""),
     report_period: str = Form(default=""),
     language: str = Form(default="zh"),
+    consent_at: str = Form(default="", description="用户确认上传内容合规的时间戳 (ISO 8601)"),
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     from knowledge.document_ingest import ingest_file
@@ -559,7 +560,12 @@ async def upload_document(
         "report_period": report_period or "",
         "language": language,
         "page": "",
+        "consent_at": consent_at or now,
     }
+
+    # 记录上传合规审计日志
+    if consent_at:
+        print(f"[upload] consent_at={consent_at} user={user_session_id} symbol={symbol.upper()} doc_type={doc_type} file={safe_name}")
 
     try:
         written = ingest_file(

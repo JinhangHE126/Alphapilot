@@ -251,6 +251,7 @@ export default function AnalyzePage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDocType, setUploadDocType] = useState("annual_report");
   const [uploadFeedback, setUploadFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [uploadConsent, setUploadConsent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [evidencePacket, setEvidencePacket] = useState<EvidencePacketData | null>(null);
@@ -314,9 +315,15 @@ export default function AnalyzePage() {
         uploadFile,
         stockSymbol.trim().toUpperCase(),
         uploadDocType,
+        "user_uploaded",
+        undefined,
+        undefined,
+        undefined,
+        new Date().toISOString(),
       );
       setUploadFeedback({ ok: true, msg: `${result.message}` });
       setUploadFile(null);
+      setUploadConsent(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : "上传失败";
@@ -557,11 +564,21 @@ export default function AnalyzePage() {
               <button
                 type="button"
                 className="btn btn-primary btn-inline"
-                disabled={!uploadFile || !stockSymbol.trim() || running}
+                disabled={!uploadFile || !stockSymbol.trim() || !uploadConsent || running}
                 onClick={handleUpload}
               >
                 上传入库
               </button>
+              <label className="upload-consent-label" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={uploadConsent}
+                  onChange={(e) => setUploadConsent(e.target.checked)}
+                  disabled={running}
+                  style={{ cursor: "pointer" }}
+                />
+                确认上传内容为合法公开资料或个人研究笔记，不包含内幕信息或侵权内容
+              </label>
               {uploadFeedback && (
                 <span className={`upload-feedback ${uploadFeedback.ok ? "upload-ok" : "upload-err"}`}>
                   {uploadFeedback.ok ? <Check size={14} /> : <X size={14} />}
@@ -829,6 +846,14 @@ export default function AnalyzePage() {
               </>
             )}
           </section>
+
+          {/* ── 免责声明 ── */}
+          {report && !running && (
+            <div className="disclaimer-box">
+              <p className="disclaimer-title">免责声明</p>
+              <p>本报告由 AlphaPilot 多智能体系统基于公开市场数据与文档自动生成，<strong>不构成任何形式的投资建议</strong>。所有分析内容（包括但不限于目标价、风险评估、仓位建议）均为 AI 模型基于历史数据的推演，不保证准确性与完整性。投资者应独立判断，并在必要时咨询持牌专业顾问。AI 生成内容可能存在事实性错误或遗漏，请务必人工复核后再做决策。</p>
+            </div>
+          )}
         </div>
       </div>
 

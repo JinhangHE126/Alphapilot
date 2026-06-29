@@ -92,6 +92,7 @@ export async function uploadDocument(
   publishDate?: string,
   reportPeriod?: string,
   language?: string,
+  consentAt?: string,
 ) {
   const token = getToken();
   const headers: Record<string, string> = {};
@@ -105,6 +106,7 @@ export async function uploadDocument(
   if (publishDate) formData.append("publish_date", publishDate);
   if (reportPeriod) formData.append("report_period", reportPeriod);
   if (language) formData.append("language", language);
+  if (consentAt) formData.append("consent_at", consentAt);
 
   const response = await fetch(`${API_BASE}/upload/document`, {
     method: "POST",

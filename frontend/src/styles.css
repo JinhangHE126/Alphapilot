@@ -1038,6 +1038,28 @@ select option {
   color: #f87171;
 }
 
+/* ── 免责声明 ── */
+.disclaimer-box {
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.18);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.6;
+}
+.disclaimer-title {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: rgba(245, 158, 11, 0.85);
+  margin: 0 0 6px 0;
+}
+.disclaimer-box strong {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
 .analyze-input-group {
   display: grid;
   gap: 6px;

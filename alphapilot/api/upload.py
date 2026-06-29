@@ -44,6 +44,7 @@ async def upload_document(
     publish_date: str = Form(default="", description="发布日期，ISO date"),
     report_period: str = Form(default="", description="报告期，如 2024-12-31"),
     language: str = Form(default="zh", description="文档语言"),
+    consent_at: str = Form(default="", description="用户确认上传内容合规的时间戳 (ISO 8601)"),
     user_session_id: str = Form(default="", description="用户会话 ID（私有空间隔离）"),
 ):
     # ── 校验文件扩展名 ──
@@ -83,7 +84,14 @@ async def upload_document(
         "report_period": report_period or "",
         "language": language,
         "page": "",
+        "consent_at": consent_at or now,
     }
+
+    if consent_at:
+        print(
+            f"[upload] consent_at={consent_at} user_session={user_session_id} "
+            f"symbol={symbol.upper()} doc_type={doc_type} file={safe_name}"
+        )
 
     # ── 解析 + 分块 + 入库 ──
     try:
