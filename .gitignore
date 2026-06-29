@@ -28,6 +28,27 @@ alphapilot/config/sing-box.agent.example.json
 
 # 本地持久化数据
 rag_data/
+alphapilot/rag_data/
 hf_cache/
 checkpoints/
 data/
+
+# 密钥与云资源（切勿上传）
+AWS/
+*.pem
+
+# 本地 Demo notebook（非产品代码）
+Demo/
+
+# 比赛 / 提案 / 内部分析（仅本地保留）
+Docs/Alphapilot_Proposal.pdf
+Docs/Proposal.md
+Docs/BOCHK Challenge 2026 - AlphaPilot Proposal.md
+Docs/HK-Fintech-AI-竞争力优化方案.md
+Docs/中銀香港創新先驅大賽2026計劃書.pptx
+Docs/rag_evidence_packet_analysis.html
+Docs/AWS EC2 实际配置.md
+Docs/Not_Use/
+
+# 前端构建缓存
+*.tsbuildinfo
