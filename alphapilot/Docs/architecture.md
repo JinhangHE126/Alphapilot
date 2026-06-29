@@ -1,8 +1,8 @@
-# AlphaPilot 系统架构 v4.3
+# AlphaPilot 系统架构 v4.4
 
-> 当前版本以 **Evidence Packet 前置构造 + 双轨证据（结构化 Fact + Document Evidence）+ Bull vs Bear 多空辩论 + Guard 硬规则校验 + 文档感知 RAG** 为核心。  
+> 当前版本以 **Evidence Packet 前置构造 + 双轨证据（结构化 Fact + Document Evidence）+ Bull vs Bear 多空辩论 + Guard 硬规则校验 + 文档感知 RAG + Audit Trail** 为核心。  
 > 旧版「Agent 各自调工具/RAG」的模式已收敛为「Builder 统一采集证据，Agent 只消费证据」。  
-> v4.2 新增 Bull vs Bear 辩论子图；**v4.3 落地文档感知 RAG（Phase 1–4）**：公开文档自动摄取、用户私有上传、混合检索与 Guard 文档 grounding。
+> v4.2 新增 Bull vs Bear 辩论子图；v4.3 落地文档感知 RAG（Phase 1–4）；**v4.4（M3–M6）** 补充 `analysis_citations` 审计落库、Recommendation Executive Synthesis、上传 `consent_at` 与前端 CitationsPanel。
 
 ## 1. 系统全景
 
@@ -30,7 +30,7 @@
 │    → Market/Fundamental/News → Bull vs Bear 辩论 → Strategy/Risk  │
 │    → full_analysis 时才进入 Portfolio/Backtest/Recommendation      │
 │                                                                  │
-│  持久化: SQLite (checkpointer + 业务表 + Fact Store)              │
+│  持久化: SQLite (checkpointer + 业务表 + analysis_citations + Fact Store) │
 │  知识库: FAISS（事实 + document_chunk）+ FTS5 全文索引              │
 │  文档摄取: scheduler (HKEX/SEC/News) + 用户上传 API               │
 │  用户画像: JSON 文件 (risk_preference, horizon)                   │
@@ -52,7 +52,7 @@
 | 文档摄取   | pymupdf / markitdown + APScheduler  | HKEX/SEC/News 定时抓取；用户上传 PDF/Word/HTML/TXT；敏感信息打码 |
 | 防幻觉    | Evidence Packet + Guard hard rules  | 输出等级门控、字段级来源追溯、冷启动拒答/降级                                     |
 | 认证     | JWT (HS256)                         | register / login / refresh / me                             |
-| 实时通信   | SSE (Server-Sent Events)            | agent_start / agent_output / agent_done                     |
+| 实时通信   | SSE (Server-Sent Events)            | agent_start / agent_output / agent_core_conclusion / evidence_packet / analysis_complete（含 citations） |
 | 数据采集   | 多 Provider + Fact Store            | yfinance / SEC / Finnhub / EastMoney / AKShare 等；字段级 TTL 与优先级去重 |
 | CI/CD  | GitHub Actions + GHCR + Docker      | 前后端独立镜像 + SSH 部署                                            |
 
@@ -76,7 +76,7 @@
 | **Comparison**      | `comparison_agent`                        | DeepSeek          | `tools=[]`，专项对比入口                   | ❌ 自然语言                                             |
 | **Alert**           | `alert_agent`                             | DeepSeek          | `tools=[]`，基于 Packet 指标生成告警         | ❌ 自然语言                                             |
 | **Portfolio Opt**   | `portfolio_optimization_agent`            | DeepSeek          | `tools=[]`，专项组合优化入口                 | ❌ 自然语言                                             |
-| **Recommendation**  | `recommendation_agent`                    | DeepSeek          | `tools=[]`，仅 full analysis 或个性化入口使用 | ❌ 自然语言                                             |
+| **Recommendation**  | `recommendation_agent`                    | DeepSeek          | `tools=[]`，仅 full analysis 或个性化入口使用 | ❌ 自然语言（**Executive Synthesis** 六段式，含 `[doc:N]`） |
 | **Guard**           | `guard_agent`                             | Python hard rules | 不调工具，基于 Evidence Packet 确定性校验       | ✅ dict (is_valid, confidence, issues, corrections) |
 
 
@@ -206,13 +206,18 @@ START → evidence_packet_builder → orchestrator
 
 ```
 stream_analysis_events()
-  ├── yield "analysis_start"     → 前端初始化 Agent 卡片
+  ├── yield "analysis_start"        → session / symbol / thread
   ├── for chunk in langgraph_app.stream():
-  │     ├── yield "agent_start"  → 卡片进入 running 动画
-  │     ├── yield "agent_output" → 内容流式追加
-  │     └── yield "agent_done"   → 卡片标记 done
-  └── yield "analysis_complete"  → 最终报告 + recommendation
+  │     ├── yield "evidence_packet" → facts、chart、document_evidence（前端财务快照等）
+  │     ├── yield "agent_start"     → 卡片 running
+  │     ├── yield "agent_output"    → Agent 正文
+  │     ├── yield "agent_core_conclusion" → 核心结论卡片（情绪/置信度）
+  │     ├── yield "target_price" / "risk_level" → 估值与风险结构化事件
+  │     └── yield "agent_done"
+  └── yield "analysis_complete"     → final_report、guard_check、citations、disclaimer
 ```
+
+流式请求结束后，`api/main.py` 将报告写入 `analysis_history`，并将 `build_citations()` 结果写入 `analysis_citations`（每次完成的分析均落库，不限于 Guard 通过）。
 
 ## 6. 数据持久化
 
@@ -226,6 +231,7 @@ stream_analysis_events()
 | `messages`         | 对话历史   | session_id, role, content, node_name                               |
 | `analysis_history` | 分析记录   | user_id, stock_symbol, report, recommendation, status, final_score |
 | `analysis_events`  | 流式事件日志 | analysis_id, seq_num, agent_name, event_type, content              |
+| `analysis_citations` | **文档引用审计** | analysis_id, chunk_ids (JSON), doc_markers, evidence_snapshot      |
 
 
 ### 6.2 LangGraph Checkpointer
@@ -243,6 +249,19 @@ stream_analysis_events()
 - `horizon`: short / medium / long → 影响选股时间框架
 - 通过 `GET/PUT /profile` API 管理，分析时自动注入工作流
 
+### 6.4 Audit Trail（M3）
+
+分析完成时由 `services/citations.py` 的 `build_citations()`：
+
+1. 从 `final_report` 正则提取 `[doc:N]`（大小写不敏感）；
+2. 映射 `evidence_packet.document_evidence[N-1].chunk_id`；
+3. 经 `save_analysis_citations()` 写入 `analysis_citations`；
+4. `GET /history/{analysis_id}` 返回 `citations`；前端 `CitationsPanel` 在分析页与历史详情展示。
+
+无 `[doc:N]` 时的兜底：保存当时全部 `document_evidence` 的 chunk_id 列表（检索快照，非严格「引用」语义）。
+
+**文件**：`services/citations.py`, `db/repository.py`, `api/main.py`, `frontend/src/components/CitationsPanel.tsx`
+
 ## 7. 前端架构
 
 ### 7.1 路由结构
@@ -252,9 +271,9 @@ stream_analysis_events()
 | -------------- | ------------------ | --------------------- |
 | `/login`       | LoginPage          | 登录/注册双模式              |
 | `/`            | DashboardPage      | 统计总览 + 最近分析           |
-| `/analyze`     | AnalyzePage        | SSE 实时分析 + Agent 进度卡片 + **文档上传** |
+| `/analyze`     | AnalyzePage        | SSE 分析、Agent 卡片、财务快照、多空博弈、估值/风险面板、Guard、**CitationsPanel**、文档上传（**consent 勾选**）、报告**免责声明** |
 | `/history`     | HistoryPage        | 分页列表 + 股票筛选 + 删除      |
-| `/history/:id` | AnalysisDetailPage | 单次分析事件时间线             |
+| `/history/:id` | AnalysisDetailPage | 报告全文 + **文档引用审计** + 事件时间线             |
 | `/settings`    | SettingsPage       | 用户画像配置                |
 
 
@@ -384,13 +403,13 @@ Agent 侧通过 `render_packet_for_agent()` 输出 `### Document Evidence`，每
 
 1. **证据级熔断**：无 Packet、symbol mismatch、`insufficient_evidence` → 硬拒
 2. **输出级约束**：limited 级别禁止目标价、强推荐等
-3. **Keyword grounding**（仅非 full）：输出提到某类指标 → Packet 里必须有对应 field
-4. **数值 grounding**（部分）：提到指标且 Packet 有值 → 报告里的数要对得上
+3. **Keyword / field grounding**：输出提到某类指标 → Packet 里必须有对应 field；**`full_analysis` 与 limited 均阻断**（非仅 limited）
+4. **数值 grounding**：提到指标且 Packet 有值 → 报告数值未逐字出现时为 **warning**，一般不阻断
 5. **文档 grounding**（Phase 2）：
    - **L1**：`[doc:N]` 必须在 `document_evidence[N-1]` 范围内
-   - **L2**：疑似文档引用段落与 chunk embedding 相似度 ≥ 0.45（段内已有合法 `[doc:N]` 则跳过）
-   - **L3**：文档引用句式粗检；`document_evidence` 为空时升为 issues
-   - `FULL_ANALYSIS` 时 L1/L2 可降级为 warnings，不阻断
+   - **L2**：疑似文档引用段落与 chunk embedding 相似度阈值校验（段内已有合法 `[doc:N]` 可跳过）
+   - **L3**：文档引用句式粗检；`document_evidence` 为空却写文档结论时升为 issues
+   - **`full_analysis`**：字段级 grounding **仍阻断**；文档 L1/L2 **issues 降级为 warnings**，不阻断 `is_valid`
 
 #### 工作流程
 
@@ -526,7 +545,7 @@ POST /upload/document ──────────►       │               
 | 私有 | `knowledge/sensitive_scanner.py` | 身份证/银行卡/电话/邮箱打码 |
 | 接入 | `graph/document_evidence.py` | workflow 与测试共用 |
 | API | `api/main.py` `/upload/document`, `api/upload.py` | 登录上传 |
-| 验收 | `scripts/verify_p4.py` | 上传 + 隔离 + 打码一键测试 |
+| 验收 | `alphapilot/scripts/verify_p4.py` | 上传 + 隔离 + 打码一键测试 |
 
 ### 12.4 环境变量（文档抓取）
 
@@ -538,13 +557,25 @@ DOC_FETCH_INTERVAL_HOURS=6
 
 ### 12.5 尚未实现（见 RAG 文档 §10）
 
-A/B 测试框架、document 级 `superseded`、BGE-large-zh 向量升级、完整 analysis 审计表、上传合规确认 UI 等。
+A/B 测试框架、document 级 `superseded`、BGE-large-zh 向量升级、Prometheus 全量监控等。
+
+**已实现（原 §10 差距项）**：`analysis_citations` 审计表、`GET /history/{id}` citations、上传 `consent_at` 与前端确认勾选、报告免责声明。
+
+### 12.6 离线评估（M6，仓库根目录）
+
+| 脚本 | 用途 |
+| ---- | ---- |
+| `scripts/eval_doc_recall.py` | 文档检索 Recall@5 / @15 |
+| `evaluation/guard_grounding_report.py` | Guard grounding、`[doc:N]` ↔ chunk 对齐 |
+| `alphapilot/scripts/verify_p4.py` | 上传 / 隔离 / 打码 HTTP 验收 |
+
+详见 [`Docs/M6-评估脚本开发文档.md`](../../Docs/M6-评估脚本开发文档.md)。
 
 ---
 
-## 13. 数据层演进：Fact Store 与多 Provider（进行中）
+## 13. 数据层演进：Fact Store 与多 Provider
 
-当前 v4.3 已具备 **Fact Store（SQLite）+ 多 Provider 适配 + 文档 RAG**。后续重点为冲突检测、评测指标与审计链路，而非从零搭建 Fact Store：
+当前 v4.4 已具备 **Fact Store（SQLite）+ 多 Provider 适配 + 文档 RAG + Audit Trail**。后续重点为冲突检测引擎、评测指标扩展与可观测性，而非从零搭建 Fact Store：
 
 ```
 Polygon / Tiingo / Alpha Vantage / SEC / HKEX / yfinance

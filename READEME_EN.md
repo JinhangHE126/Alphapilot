@@ -1,44 +1,194 @@
 # AlphaPilot
 
 [![中文](https://img.shields.io/badge/lang-简体中文-red)](README.md)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](alphapilot/requirements.txt)
+[![React 18](https://img.shields.io/badge/react-18-61dafb)](frontend/package.json)
+[![LangGraph](https://img.shields.io/badge/orchestration-LangGraph-412991)](alphapilot/graph/)
 
-Multi-Agent Stock Investment Analysis Platform — Production-Grade Web Application
+**Evidence-first, multi-agent equity research platform** — Evidence Packet · document RAG · Guard hard rules · `[doc:N]` audit trail
 
-## Highlights
+<p align="center">
+  <img src="Docs/demo/screenshots/0628.gif" width="49%" alt="0700.HK analyze page: chart, agents, core conclusions" />
+  <img src="Docs/demo/screenshots/0629.gif" width="49%" alt="0700.HK full SSE analysis demo" />
+</p>
 
-- **Anti-hallucination by design**: Evidence Packet pre-construction + deterministic Guard hard-rule validation — agents consume verified facts, not raw LLM guesswork.
-- **Bull vs Bear debate subgraph**: Multi-round adversarial reasoning embedded in the LangGraph workflow, with Strategy synthesizing both sides into a final Buy/Hold/Sell recommendation.
-- **Multi-market data pipeline**: Parallel collection from yfinance, HKEX, EastMoney, and AKShare, with automatic fallback and field-level source attribution across HK & US markets.
-- **Cold-start evaluation suite**: Automated evals measuring output-level accuracy, hallucination rate, and guard compliance — runnable before every release.
-- **Full-stack delivery**: Dockerized FastAPI + React + JWT + SQLite, with SSE streaming, i18n (EN/ZH/Yue), dashboard, and CI/CD.
+**Full walkthrough (~3 min)**
 
-## Tech Stack
+| Platform | Link |
+|----------|------|
+| Bilibili | _Replace with BV URL after upload_ |
+| LinkedIn | _Replace with post URL after upload_ |
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 18 + Vite + TypeScript |
-| Backend | FastAPI + Python 3.12 |
-| Multi-Agent | LangGraph StateGraph + Evidence Packet Pre-construction + Bull vs Bear Debate Subgraph + 14 Specialized Agents |
-| Anti-Hallucination | Evidence Packet field-level traceability + Guard hard-rule validation + Cold-start evaluation + Output-level gating |
-| Data Sources | Multi-provider parallel collection (yfinance / HKEX / EastMoney / AKShare) with automatic fallback and field-level source deduplication, covering HK & US markets |
-| Knowledge Base | FAISS dynamic fact cache (doc_id dedup, TTL filtering, cold-start write-back) |
-| Database | SQLite WAL mode (analysis records, users, sessions, messages) |
-| Authentication | JWT (register / login / refresh) |
-| Internationalization | React i18n Context (English / Simplified Chinese / Cantonese) with automatic browser language detection |
-| Real-time | SSE (Server-Sent Events) streaming with progressive agent visualization |
-| CI/CD | GitHub Actions + Docker + GHCR |
-| Deployment | Docker Compose (Nginx frontend + FastAPI backend) |
+> **Disclaimer**: For research and engineering demonstration only. Outputs are not investment advice. Read the disclaimer on the analysis page; private document uploads require explicit consent.
+
+---
+
+## What It Is
+
+AlphaPilot wires **data collection → document retrieval → multi-agent reasoning → fact checking → persisted reports** into one auditable pipeline:
+
+1. **Evidence Packet Builder** runs before the Orchestrator: market/fundamental/news providers plus **Document Evidence** from filings, announcements, and user-uploaded PDFs.
+2. **14+ specialized agents** (including Bull vs Bear debate) consume a **single** `evidence_packet` — they do not call tools or RAG on their own.
+3. **Guard Agent** applies deterministic checks (field grounding, symbol match, document `[doc:N]` grounding) with optional correction retries.
+4. **Audit Trail** maps `[doc:N]` in the final report to vector-store `chunk_id`s in SQLite; exposed via History API and the UI.
+
+Compared with “single-turn chat + bolt-on RAG”, this project emphasizes **control, traceability, and degradation paths** (`insufficient` / `limited` / `full_analysis`) — relevant for Fintech grounding and compliance narratives.
+
+---
+
+## Core Highlights
+
+| Capability | Description |
+|------------|-------------|
+| **Evidence Packet first** | Collection, hybrid retrieval, scoring, and `allowed_output_level` before agent routing |
+| **Dual-track evidence** | `structured_facts` (yfinance, EastMoney, AKShare, …) + `document_evidence` (HKEX, SEC, uploads) |
+| **Document-aware RAG** | FAISS + FTS5 hybrid search, section/doc_type boost, recency weighting, per-session upload isolation |
+| **Bull vs Bear debate** | Subgraph on `full_analysis`; Strategy weights Market 25% + Fundamental 35% + News 15% + Debate 25% |
+| **Executive Synthesis** | Recommendation synthesizes cross-agent insights and tensions — not per-agent repetition |
+| **Guard anti-hallucination** | Field- and document-level grounding (L1–L3), output-level gating, cold-start limited paths |
+| **Audit Trail** | `analysis_citations` persists `chunk_ids`; **Document Citation Audit** table on analyze & history pages |
+
+---
+
+## Demo
+
+End-to-end outputs from **M1–M6** (PDF parse → chunking → section-boost retrieval → Evidence Packet → agents → Guard → `[doc:N]` audit):
+
+| Symbol | Market | Sample report | Typical metrics (`full_analysis`) |
+|--------|--------|---------------|-----------------------------------|
+| **0700.HK** Tencent | HK | [0700.HK_analysis_sample.md](Docs/demo/0700.HK_analysis_sample.md) | Evidence **97** · Guard ✅ · Strategy **Hold** (65) |
+| **AAPL** Apple | US | [AAPL_analysis_sample.md](Docs/demo/AAPL_analysis_sample.md) | SEC 10-K · Risk Factors / MD&A · Executive Synthesis |
+
+**UI**: financial snapshot, bull/bear debate, valuation summary, risk dashboard, Guard checklist, **Audit Trail** panel. GIFs and full video links are at the top of this file.
+
+<details>
+<summary><strong>Reproduce the demo (expand)</strong></summary>
+
+From the repo root (scripts add `alphapilot` to `PYTHONPATH`):
+
+```bash
+cd alphapilot
+
+# 1. Rebuild / verify document ingest
+PYTHONPATH=. python ../scripts/reingest_0700.py
+PYTHONPATH=. python ../scripts/prepare_demo_ingest.py --symbol AAPL
+
+# 2. Full pipeline (no HTTP; writes JSON + Markdown)
+PYTHONPATH=. python ../scripts/run_analysis_direct.py 0700.HK
+
+# 3. Or via Web UI (API + frontend running)
+# bash ../scripts/run_demo_analysis.sh 0700.HK
+
+# 4. Offline evaluation (optional)
+PYTHONPATH=. python ../scripts/eval_doc_recall.py
+PYTHONPATH=. python ../evaluation/guard_grounding_report.py
+
+# 5. P4 regression: upload / session isolation / redaction (API + test account)
+python scripts/verify_p4.py --username <user> --password <pass>
+# Or set VERIFY_P4_USERNAME / VERIFY_P4_PASSWORD
+```
+
+</details>
+
+---
+
+## Architecture
+
+```text
+User → React (EN / ZH / Yue) → FastAPI → LangGraph StateGraph
+                                      │
+                                      ▼
+                            Evidence Packet Builder
+                            ├── FAISS structured facts + Fact Store cache
+                            ├── hybrid_retrieve (vector + FTS5 + recency)
+                            ├── multi-provider collection + field dedup
+                            ├── document_evidence (public fetch + user upload)
+                            └── scoring → allowed_output_level
+                                      │
+                                      ▼
+                                 Orchestrator
+                            ├── insufficient → Guard → END
+                            ├── limited    → Market + Fundamental + News
+                            │               → Strategy → Risk → Guard → END
+                            └── full       → Market + Fundamental + News
+                                            → Bull vs Bear debate (≤2 rounds)
+                                            → Strategy → Risk
+                                            → Portfolio → Backtest → Recommendation
+                                            → Guard → END
+                                      │
+                                      ▼
+                    SQLite (analyses · events · analysis_citations · sessions)
+```
+
+**Principle**: agents **never** call market APIs or RAG directly; they read `state.evidence_packet`. Streaming uses **SSE** (`agent_start` / `agent_output` / `analysis_complete` including `citations`).
+
+See [alphapilot/Docs/architecture.md](alphapilot/Docs/architecture.md) for the full v4.3 design (some sections in Chinese).
+
+---
+
+## Agents
+
+| Agent | Node | Role | Tools |
+|-------|------|------|-------|
+| Market | `market_data_expert` | Technical summary | Packet only |
+| Fundamental | `fundamental_expert` | Fundamentals | Packet only |
+| News | `news_sentiment_expert` | News & sentiment | Packet only |
+| Bull / Bear | `debate_stage` | Adversarial debate | Packet only |
+| Strategy | `strategy_expert` | Buy/Hold/Sell synthesis | Packet only |
+| Risk | `risk_expert` | Risk score & stops | Packet only |
+| Portfolio | `portfolio_agent` | Position sizing | `full_analysis` only |
+| Backtesting | `backtesting_agent` | Backtest narrative | `full_analysis` only |
+| Recommendation | `recommendation_agent` | Executive Synthesis | full / personalized |
+| Guard | `guard_agent` | Hard rules (no LLM) | Deterministic Python |
+
+System nodes: `evidence_packet_builder`, `orchestrator`.
+
+---
+
+## Audit Trail
+
+After each completed analysis:
+
+1. `services/citations.build_citations()` extracts `[doc:N]` from `final_report`;
+2. Maps to `evidence_packet.document_evidence[N-1].chunk_id`;
+3. Persists to SQLite `analysis_citations` (`chunk_ids`, `doc_markers`, `evidence_snapshot`);
+4. Shown on the **analyze page** (below Guard) and **history detail** via `GET /history/{id}` → `citations`.
+
+```json
+{
+  "citations": {
+    "chunk_ids": ["0700.HK_Q1_2026_..._Financial_Statements_p12_i01"],
+    "doc_markers": ["doc:3"],
+    "evidence_snapshot": [
+      { "chunk_id": "...", "section": "Financial Statements", "source": "HKEX" }
+    ]
+  }
+}
+```
+
+> Guard’s “Sources (40)” lists **structured fact providers** (yfinance, Reuters, …). Audit Trail tracks **document chunk** citations — not the same thing.
+
+---
 
 ## Quick Start
+
+### Requirements
+
+- Python **3.12+**
+- Node.js **18+**
+- At least one LLM API key (recommended: **DeepSeek**; optional Gemini)
 
 ### Backend
 
 ```bash
 cd alphapilot
-cp .env.example .env   # edit and fill in API Keys
 pip install -r requirements.txt
+# Recommended: pip install pdfplumber
+
+# Configure alphapilot/.env (do not commit secrets); see deploy/.env.prod.example
+# Required: DEEPSEEK_API_KEY, JWT_SECRET (≥32 random bytes in production)
 python -m api.main
-# API running at http://localhost:8000
+# → http://localhost:8000
 ```
 
 ### Frontend
@@ -47,109 +197,154 @@ python -m api.main
 cd frontend
 npm install
 npm run dev
-# Dev server at http://localhost:5173, automatically proxies API to 8000
+# → http://localhost:5173  (proxies /api → 8000)
 ```
 
-### Docker (One-Command)
+### Docker (optional)
 
 ```bash
 docker compose -f alphapilot/docker-compose.yml up -d
-# Backend: http://localhost:8000
-# Frontend: use deploy/docker-compose.prod.yml for production with Nginx
+# Production: deploy/docker-compose.prod.yml
 ```
 
-## Architecture
+### Environment variables (common)
 
-```text
-User → React Frontend (i18n EN/ZH/Yue) → FastAPI → LangGraph StateGraph
-                                           │
-                                           ▼
-                                 Evidence Packet Builder
-                                 ├── FAISS RAG retrieval (score + metadata)
-                                 ├── Cold-start detection (symbol / similarity / coverage)
-                                 ├── Multi-provider parallel collection
-                                 │   (yfinance / HKEX / EastMoney / AKShare)
-                                 ├── Field-level source dedup & Evidence Packet scoring
-                                 └── High-quality fact write-back to FAISS (dedup + TTL)
-                                           │
-                                           ▼
-                                      Orchestrator
-                                 ├── insufficient → Guard reject → END
-                                 ├── limited → Market + Fundamental + News
-                                 │           → Strategy → Risk → Guard → END
-                                 └── full    → Market + Fundamental + News
-                                              → Bull vs Bear Debate Subgraph (max 2 rounds)
-                                              → Strategy → Risk
-                                              → Portfolio → Backtest → Recommendation
-                                              → Guard → END
-                                           │
-                                           ▼
-                                    SQLite + Checkpointer
-```
+| Variable | Purpose |
+|----------|---------|
+| `DEEPSEEK_API_KEY` | Primary LLM (per-agent routing) |
+| `GOOGLE_API_KEY` | Optional Gemini / embeddings |
+| `JWT_SECRET` | JWT signing; **do not use** default `change_this_in_prod` |
+| `ENABLED_DATA_PROVIDERS` | e.g. `yfinance,sec_edgar,akshare,eastmoney` |
+| `DOC_FETCH_ENABLED` | `true` for scheduled HKEX/SEC/News fetch |
+| `DOC_FETCH_SYMBOLS` | e.g. `TSLA,AAPL,0700.HK` |
+| `HF_TOKEN` | Optional; fewer HF rate-limit warnings when Guard loads embeddings |
+| `VERIFY_P4_*` | Credentials / API URL for P4 acceptance script |
 
-**Core principle**: agents never call tools or RAG directly — they consume structured facts from `state.evidence_packet`. Data collection is centralized in the Evidence Packet Builder before any agent runs. The Guard agent performs deterministic hard-rule validation (not LLM-based judgment) and triggers up to 2 correction retries on failure. The Bull vs Bear debate runs as an embedded subgraph, triggered only at the `full_analysis` output level.
+Proxies (e.g. China): see `alphapilot/config/proxy.py` (`MARKET_PROXY`, `LLM_PROXY`, …).
 
-## API Endpoints
+---
+
+## Quality & Acceptance
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/eval_doc_recall.py` | Document Recall@5 / @15 (curated queries) |
+| `evaluation/guard_grounding_report.py` | Guard grounding & `[doc:N]` ↔ chunk alignment |
+| `alphapilot/scripts/verify_p4.py` | HTTP upload, session isolation, redaction, workflow |
+| `alphapilot/test/test_analysis_citations.py` | Audit Trail unit tests |
+
+Details: [Docs/M6-评估脚本开发文档.md](Docs/M6-评估脚本开发文档.md) (Chinese).
+
+---
+
+## API Overview
+
+Base path: `/api` (Vite proxy). Authenticated routes: `Authorization: Bearer <token>`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/auth/register` | User registration |
-| POST | `/auth/login` | User login |
-| POST | `/auth/refresh` | Refresh JWT token |
-| GET | `/auth/me` | Current user info |
-| GET / PUT | `/profile` | User profile (risk preference, investment horizon) |
-| GET / POST | `/sessions` | Session management |
-| POST | `/analyze` | Core analysis (synchronous) |
-| POST | `/analyze/stream` | Core analysis (SSE streaming) |
-| POST | `/compare` | Stock comparison |
-| POST | `/backtest` | Historical backtesting |
-| POST | `/alert` | Real-time monitoring alerts |
-| POST | `/optimize` | Portfolio optimization |
-| GET | `/history` | Analysis history |
-| GET | `/dashboard/stats` | Dashboard statistics |
+| POST | `/auth/register` · `/login` · `/refresh` | Auth |
+| GET/PUT | `/profile` | Risk preference, investment horizon |
+| GET/POST | `/sessions` | Sessions & messages |
+| POST | `/analyze` | Sync analysis |
+| POST | `/analyze/stream` | **SSE streaming** (recommended) |
+| POST | `/upload/document` | PDF upload; requires `consent_at` |
+| GET | `/history` | Analysis list |
+| GET | `/history/{id}` | Detail with `events` + **`citations`** |
+| GET | `/dashboard/stats` | Dashboard |
 | GET | `/health` | Health check |
 
-## Project Structure
+Also: `/compare`, `/backtest`, `/alert`, `/optimize`.
+
+---
+
+## Compliance & Product
+
+- **Report disclaimer** on the analysis page — not investment advice.
+- **Upload consent** checkbox; API logs `consent_at`.
+- **SFC GenAI (engineering angle)**: unified evidence via Evidence Packet, Guard hard rules, Audit Trail, and human-readable reports to reduce untraceable hallucination risk (not legal advice).
+
+---
+
+## Tech Stack
+
+| Layer | Stack |
+|-------|-------|
+| Frontend | React 18 + Vite + TypeScript, custom dark theme |
+| Backend | FastAPI + Uvicorn + Python 3.12 |
+| Orchestration | LangGraph StateGraph + SQLite checkpointer |
+| LLM | DeepSeek / Gemini per agent (`config/llm.py`) |
+| Vectors | FAISS (`all-MiniLM-L6-v2`) + FTS5 |
+| Database | SQLite WAL (users, sessions, analyses, events, citations) |
+| Real-time | SSE |
+| i18n | English / Simplified Chinese / Cantonese |
+| CI/CD | GitHub Actions + Docker + GHCR |
+
+---
+
+## Project Layout
 
 ```text
-alphapilot/
-├── api/main.py              # FastAPI routes & middleware
-├── agents/                   # 14 specialized agents (incl. Bull/Bear debate & Guard)
-├── graph/                    # LangGraph StateGraph workflow & debate subgraph
-├── services/                 # Analysis service (SSE streaming & synchronous)
-├── db/                       # SQLite models & repository layer
-├── tools/                    # Multi-provider data collection (yfinance/HKEX/EastMoney/AKShare)
-├── knowledge/                # Evidence Packet ingestion governance (quality gate, TTL, dedup)
-├── rag/                      # FAISS dynamic fact cache + Chroma auxiliary
-├── schemas/                  # Evidence Packet / Fact / Coverage / GuardResult
-├── evaluation/               # Cold-start eval set, metrics, structured reports
-├── monitoring/               # Evidence/Guard runtime counters
-├── prompts/                  # Supervisor prompts
-├── Dockerfile & compose
-frontend/
-├── src/pages/                # Dashboard, Analyze, History, Settings, Login
-├── src/services/             # API client & SSE stream parser
-├── src/i18n/                 # i18n (English / 简体中文 / 粤语)
-├── Dockerfile & nginx.conf
-deploy/                        # Production deployment scripts
-.github/workflows/             # CI/CD pipelines
+Alphapilot/
+├── alphapilot/           # Python backend
+│   ├── api/              # FastAPI
+│   ├── agents/           # 14 agents + Guard
+│   ├── graph/            # Workflow & debate subgraph
+│   ├── services/         # analysis_service, citations
+│   ├── knowledge/        # PDF parse, ingest, scheduler
+│   ├── rag/              # hybrid_retrieve, FAISS
+│   └── scripts/verify_p4.py
+├── frontend/             # React SPA
+├── scripts/              # Demo, eval, reingest (repo root)
+├── evaluation/
+├── Docs/
+└── deploy/
 ```
+
+---
 
 ## User Profile
 
-Each user can configure:
+Configure in **Settings** or `GET/PUT /profile`:
 
-- **Risk Preference**: Low / Medium / High — affects recommendation aggressiveness
-- **Investment Horizon**: Short-term / Medium-term / Long-term — influences stock selection logic and time frame
+- **Risk preference**: Low / Medium / High — affects Recommendation tone and sizing
+- **Investment horizon**: Short / Medium / Long — injected into LangGraph state
 
-Profile is managed via `GET/PUT /profile` and automatically injected into the LangGraph workflow.
+---
 
 ## CI/CD
 
-- **CI** (pull_request / push): Backend Ruff Lint + Pytest, Frontend ESLint + TypeScript + Vitest + Build
-- **CD** (push to main): Quality gate → Docker build (frontend + backend) → Push to GHCR → SSH remote deploy
+- **CI**: Backend Ruff + Pytest; frontend ESLint + TypeScript + Vitest + build
+- **CD**: Image build → GHCR → SSH deploy (`.github/workflows/`)
 
-## Documents
+---
 
-- [Architecture Design](alphapilot/Docs/architecture.md) (Chinese)
-- [中文 README](README.md)
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [architecture.md](alphapilot/Docs/architecture.md) | System design, agents, SSE, GraphState |
+| [文档提取与RAG功能.md](Docs/文档提取与RAG功能.md) | Document RAG design & status (Chinese) |
+| [HK-Fintech-AI-竞争力优化方案.md](Docs/HK-Fintech-AI-竞争力优化方案.md) | Portfolio narrative (Chinese, optional) |
+
+Milestones, acceptance reports, and eval guides live under [`Docs/`](Docs/).  
+Simplified Chinese readme: [README.md](README.md).
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Startup `pdfplumber=False` | `pip install pdfplumber` for better tables |
+| Many HuggingFace HEAD requests before Guard | First embedding load; set `HF_TOKEN` or pre-download model |
+| `InsecureKeyLengthWarning` (JWT) | Use `JWT_SECRET` ≥ 32 random bytes |
+| No document chunks in analysis | Run `reingest_0700.py` or `prepare_demo_ingest.py` |
+| No agent text in server terminal | Content is SSE-only; use UI or `GET /history/{id}` |
+| Analysis interrupted in dev | Avoid code edits triggering `--reload` mid-run |
+
+---
+
+## License
+
+Personal portfolio and engineering demo. Configure secrets, hosting, and compliance before any production use.
