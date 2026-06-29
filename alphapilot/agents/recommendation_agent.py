@@ -94,7 +94,21 @@ def _render_document_evidence(ep: dict) -> str:
         return ""
 
     lines = ["### Document Evidence (non-structured, from reports & filings)"]
+    valid_count = sum(
+        1
+        for dc in doc_evidence
+        if isinstance(dc, dict) and str(dc.get("content", "")).strip()
+    )
+    lines.append(
+        f"- Valid citation markers ONLY: [doc:1] through [doc:{valid_count}]. "
+        "Do NOT use a higher number or invent content not shown below."
+    )
     lines.append("- Cite chunks as [doc:N] (N = chunk number below). Do NOT invent content not shown here.")
+    if valid_count >= 2:
+        lines.append(
+            "- REQUIRED diversity: use at least TWO **different** markers in the full report "
+            f"(e.g. [doc:1] and [doc:2]). Do NOT cite only [doc:{valid_count}] repeatedly."
+        )
     for i, dc in enumerate(doc_evidence):
         if not isinstance(dc, dict):
             continue
@@ -235,6 +249,13 @@ LIMITED_ANALYSIS_PARTIAL constraints:
 - Document Evidence claims must include [doc:N] and match chunk content; omit doc section if chunks are insufficient.
 """
 
+        doc_evidence = ep.get("document_evidence", []) if isinstance(ep, dict) else []
+        doc_chunk_count = sum(
+            1
+            for dc in doc_evidence
+            if isinstance(dc, dict) and str(dc.get("content", "")).strip()
+        )
+
         system_prompt = f"""
 You are Recommendation Agent - AlphaPilot personalized investment recommendation expert.
 
@@ -252,7 +273,9 @@ User Profile:
 You have access to the "### Document Evidence" section below.
 When it is non-empty, you MUST:
 - Include a dedicated "## 文档证据" (Document Evidence) subsection.
-- Cite at least 2 distinct [doc:N] markers in that subsection.
+- Cite at least 2 **distinct** [doc:N] markers (e.g. [doc:1] and [doc:2], NOT [doc:4] four times).
+- Spread citations across sections 一–五; each distinct marker should appear at most twice in the whole report.
+- When {doc_chunk_count} or more chunks are available, never use only a single marker number for all citations.
 - Use document evidence to add qualitative depth (management outlook, risk disclosures, strategic positioning).
 Only paraphrase facts explicitly present in the Document Evidence text — do NOT invent filings or metrics.
 Prioritize official company documents (annual reports, earnings call transcripts) over third-party research reports.

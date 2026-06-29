@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from knowledge.document_chunker import (
     normalize_section_name,
+    _sanitize_section_name,
     _section_to_slug,
     _make_semantic_chunk_id,
     chunk_by_headings,
@@ -64,6 +65,17 @@ from knowledge.pdf_parser import (
 ])
 def test_normalize_section_name(raw, expected):
     assert normalize_section_name(raw) == expected
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("", "General"),
+    ("# #", "General"),
+    ("##", "General"),
+    ("CONDENSED CONSOLIDATED INCOME STATEMENT", "Financial Statements"),
+    ("Some Random Title", "Some Random Title"),
+])
+def test_sanitize_section_name(raw, expected):
+    assert _sanitize_section_name(raw) == expected
 
 
 # ═══════════════════════════════════════════════════════════

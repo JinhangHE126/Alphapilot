@@ -227,7 +227,7 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 #### 3.5.3 产出物
 
 - `Docs/demo/AAPL_analysis_sample.md`（脱敏摘要 + `[doc:N]` 示例）
-- `Docs/demo/0700HK_analysis_sample.md`
+- `Docs/demo/0700.HK_analysis_sample.md`（最新 sample；旧路径 `0700HK_analysis_sample.md` 可弃用）
 - README「Demo」小节链接上述文件
 
 ---
@@ -246,8 +246,8 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 
 | 文件 | 说明 |
 |------|------|
-| `scripts/eval_doc_recall.py` | 10–20 条人工标注 query → Recall@5 / @15 |
-| `evaluation/guard_grounding_report.py` | 统计 Guard doc grounding 通过率 |
+| `scripts/eval_doc_recall.py` | 15 条人工标注 query → Recall@5 / @15 ✅ |
+| `evaluation/guard_grounding_report.py` | 统计 Guard doc grounding 通过率 ✅ |
 
 ### 4.3 README / 面试材料
 
@@ -280,7 +280,7 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 |------|------|
 | Demo 报告润色 + 截图 | M5 定稿 |
 | 4.1 合规 UI | M6 ✅ |
-| 4.2 评估脚本（可选） | 指标数字供面试 |
+| 4.2 评估脚本（可选） | 指标数字供面试 ✅（见 `Docs/M6-评估脚本开发文档.md`） |
 
 ---
 
@@ -302,8 +302,9 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 - [x] AAPL 或 0700.HK 年报 ingest 后，Risk Factors / MD&A 相关 chunk 可被 `hybrid_retrieve` 命中
 - [x] Recommendation 报告含 Executive Synthesis + `[doc:N]` 文档小节
 - [x] `GET /history/{id}` 返回 `citations.chunk_ids`
-- [ ] `scripts/verify_p4.py` 仍通过（回归 P4）
-- [x] README 含 Demo 链接与 2–3 张截图
+- [x] `scripts/verify_p4.py` 仍通过（回归 P4）— 2026-06-29 HTTP 模式验收通过
+- [x] README 含 Demo 链接（见根目录 Demo 小节）
+- [ ] README 含 2–3 张 Demo 截图（待补；链接与 sample 报告已就绪）
 - [x] 分析页有免责声明；上传有确认勾选
 
 ---
@@ -329,3 +330,6 @@ CREATE INDEX idx_citations_analysis ON analysis_citations(analysis_id);
 | 2026-06-28 | M1–M4 验收完成：见 `Docs/M1-M4-验收报告.md`；里程碑表 M1–M4 ✅ |
 | 2026-06-29 | M5 Demo 完成：`scripts/prepare_demo_ingest.py`、`scripts/run_demo_analysis.sh`、`Docs/demo/AAPL_analysis_sample.md`、`Docs/demo/0700.HK_analysis_sample.md`、README Demo 小节 ✅ |
 | 2026-06-29 | M6 合规 UI 完成：上传确认 checkbox、报告底部免责声明、API consent_at 审计日志 ✅ |
+| 2026-06-29 | M6 评估脚本完成：`scripts/eval_doc_recall.py`、`evaluation/guard_grounding_report.py`；修复见 `Docs/M6-评估脚本开发文档.md` §5 |
+| 2026-06-29 | P4 回归：`alphapilot/scripts/verify_p4.py` HTTP 模式验收通过；§7 清单 P4 项 ✅ |
+| 2026-06-29 | **方案关账**：M1–M6 工程交付完成；§7 仅剩 README Demo 截图待补 |

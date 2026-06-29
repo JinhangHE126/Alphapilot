@@ -56,7 +56,24 @@ _SECTION_RULES: list[tuple[str, str]] = [
     (r"行業[概覽览]", "Industry Overview"),
     (r"风险[管理]", "Risk Management"),
     (r"風險[管理]", "Risk Management"),
+    # 港股季报 / 财报表头
+    (r"CONDENSED\s+CONSOLIDATED", "Financial Statements"),
+    (r"CONSOLIDATED\s+(INCOME|BALANCE|CASH)", "Financial Statements"),
+    (r"損益|损益", "Financial Statements"),
+    (r"收入表", "Financial Statements"),
 ]
+
+
+def _sanitize_section_name(raw_name: str) -> str:
+    """空标题、纯标点（如 # #）→ General；否则走 normalize_section_name。"""
+    if not raw_name or not str(raw_name).strip():
+        return "General"
+    name = normalize_section_name(str(raw_name).strip())
+    if not name or not name.strip():
+        return "General"
+    if not re.sub(r"[^\w]", "", name):
+        return "General"
+    return name
 
 
 def normalize_section_name(raw_name: str) -> str:
@@ -117,11 +134,11 @@ def chunk_by_headings(text: str, chunk_size: int = 1200, overlap: int = 200) -> 
         if title_match:
             level = len(title_match.group(1))
             raw_title = title_match.group(2).strip()
-            title = normalize_section_name(raw_title)
+            title = _sanitize_section_name(raw_title)
             body = section[title_match.end():].strip()
         else:
             level = 0
-            title = ""
+            title = "General"
             body = section
 
         if _count_tokens_approx(body) <= chunk_size:
@@ -259,7 +276,7 @@ def _build_chunk_results(
     section_counter: Dict[str, int] = {}
 
     for i, c in enumerate(sections):
-        sec_name = c.get("section", "")
+        sec_name = _sanitize_section_name(c.get("section", ""))
         page = c.get("page", "")
         contains_table = c.get("contains_table", False)
 
@@ -309,7 +326,7 @@ def chunk_with_metadata(
         sections = chunk_by_headings(text, chunk_size=1200, overlap=200)
     else:
         chunks_raw = chunk_semantic(text, chunk_size=800, overlap=150)
-        sections = [{"section": "", "level": 0, "content": c} for c in chunks_raw]
+        sections = [{"section": "General", "level": 0, "content": c} for c in chunks_raw]
 
     return _build_chunk_results(sections, metadata)
 

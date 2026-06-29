@@ -4,7 +4,10 @@ Standalone module (no LLM/graph deps) — safe to import in tests.
 from __future__ import annotations
 
 import re
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def build_citations(
@@ -33,7 +36,14 @@ def build_citations(
     for n_str in markers:
         try:
             n = int(n_str) - 1  # 转为 0-based index
-            if n < 0 or n >= len(doc_evidence) or n in seen_n:
+            if n < 0 or n >= len(doc_evidence):
+                logger.warning(
+                    "Skipping out-of-range [doc:%s]; document_evidence has %s chunk(s)",
+                    n_str,
+                    len(doc_evidence),
+                )
+                continue
+            if n in seen_n:
                 continue
             seen_n.add(n)
             doc_markers.append(f"doc:{int(n_str)}")

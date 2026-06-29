@@ -53,6 +53,10 @@ async def main():
     de = ep.get("document_evidence", []) or []
 
     markers = re.findall(r"\[doc:\s*\d+\]", final_report, re.IGNORECASE)
+    distinct_doc_nums = sorted(set(int(m) for m in re.findall(r"\[doc:\s*(\d+)\]", final_report, re.I)))
+
+    grounding_warnings = guard_check.get("grounding_warnings", []) or []
+    all_warnings = list(guard_check.get("warnings", []) or []) + list(grounding_warnings)
 
     print(f"\n{'='*60}")
     print(f"RESULTS")
@@ -60,10 +64,11 @@ async def main():
     print(f"Guard Valid: {guard_check.get('is_valid')}")
     print(f"Confidence: {guard_check.get('confidence_score')}")
     print(f"Issues: {guard_check.get('issues', [])}")
-    print(f"Warnings: {guard_check.get('warnings', [])}")
+    print(f"Warnings: {all_warnings}")
     print(f"Document evidence chunks: {len(de)}")
     print(f"Report length: {len(final_report)} chars")
     print(f"[doc:N] markers: {markers}")
+    print(f"Distinct [doc:N]: {distinct_doc_nums}")
     print(f"Citations chunk_ids: {citations.get('chunk_ids', [])}")
 
     # Section checklist
@@ -90,7 +95,8 @@ async def main():
             "confidence": guard_check.get("confidence_score"),
             "output_level": guard_check.get("output_level"),
             "issues": guard_check.get("issues", []),
-            "warnings": guard_check.get("warnings", []),
+            "warnings": all_warnings,
+            "grounding_warnings": grounding_warnings,
         },
         "document_evidence_chunks": len(de),
         "evidence_sections": list(set(ev.get("section", "") for ev in de if ev.get("section"))),

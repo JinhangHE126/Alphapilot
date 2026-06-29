@@ -270,6 +270,23 @@ def _find_ungrounded_doc_claims(
             "Recommendation should reference at least 2 document chunks with [doc:N] markers."
         )
 
+    if citation_matches and len(doc_evidence) >= 2:
+        cited_nums = [int(n) for n in citation_matches]
+        distinct = len(set(cited_nums))
+        if distinct < 2:
+            warnings.append(
+                "Document citation diversity low: report uses only "
+                f"{distinct} distinct [doc:N] marker(s) but {len(doc_evidence)} chunks are available. "
+                "Use at least 2 different markers (e.g. [doc:1] and [doc:2])."
+            )
+        repeat = max(cited_nums.count(n) for n in set(cited_nums))
+        if repeat >= 4:
+            top = max(set(cited_nums), key=lambda n: cited_nums.count(n))
+            warnings.append(
+                f"Document citation repetition: [doc:{top}] appears {repeat} times; "
+                "spread citations across distinct chunks."
+            )
+
     for pat in _DOC_CITATION_PATTERNS_CN + _DOC_CITATION_PATTERNS_EN:
         if re.search(pat, output_text, re.IGNORECASE):
             has_doc_pattern = True
@@ -482,8 +499,8 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
         issues.extend(grounding_issues)
         issues.extend(doc_grounding_issues)
     else:
-        # FULL_ANALYSIS 下文档 grounding 不阻断，但 L1/L2 issues 降级并入 warnings
-        # 以保留审计链（否则 FULL 模式下 doc grounding 问题会被静默丢弃）
+        # FULL_ANALYSIS: field-level Ungrounded claim 仍阻断；文档 grounding 降级为 warning
+        issues.extend(grounding_issues)
         if doc_grounding_issues:
             grounding_warnings = list(grounding_warnings) + [
                 f"[FULL_ANALYSIS-downgraded] {issue}" for issue in doc_grounding_issues

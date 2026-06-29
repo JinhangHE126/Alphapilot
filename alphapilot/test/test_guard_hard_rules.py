@@ -250,3 +250,47 @@ def test_doc_grounding_skips_heuristic_annual_report_phrase(monkeypatch):
     issues, _ = _find_ungrounded_doc_claims(output, ep)
     l2_issues = [i for i in issues if "similarity=" in i]
     assert not l2_issues
+
+
+def test_doc_grounding_warns_low_citation_diversity():
+    from agents.guard_agent import _find_ungrounded_doc_claims
+    from schemas.evidence_packet import Coverage, DocumentChunk, EvidencePacket
+
+    ep = EvidencePacket(
+        symbol="0700.HK",
+        request_type="comprehensive_analysis",
+        is_cold_start=False,
+        coverage=Coverage(document_evidence="available"),
+        facts=[],
+        document_evidence=[
+            DocumentChunk(
+                chunk_id="c1", content="Revenue segment A", source="HKEX",
+                doc_id="d1", doc_type="earnings_call", section="General",
+                page="1", publish_date="2026-05-13", report_period="Q1",
+                symbol="0700.HK",
+            ),
+            DocumentChunk(
+                chunk_id="c2", content="Revenue segment B", source="HKEX",
+                doc_id="d1", doc_type="earnings_call", section="Financial Statements",
+                page="2", publish_date="2026-05-13", report_period="Q1",
+                symbol="0700.HK",
+            ),
+            DocumentChunk(
+                chunk_id="c3", content="Segment C", source="HKEX",
+                doc_id="d1", doc_type="earnings_call", section="General",
+                page="3", publish_date="2026-05-13", report_period="Q1",
+                symbol="0700.HK",
+            ),
+            DocumentChunk(
+                chunk_id="c4", content="Segment D", source="HKEX",
+                doc_id="d1", doc_type="earnings_call", section="General",
+                page="4", publish_date="2026-05-13", report_period="Q1",
+                symbol="0700.HK",
+            ),
+        ],
+    )
+    output = "Earnings note [doc:4]. Again [doc:4]. And [doc:4]. Once more [doc:4]."
+    issues, warnings = _find_ungrounded_doc_claims(output, ep)
+    assert not issues
+    assert any("diversity low" in w.lower() for w in warnings)
+    assert any("repetition" in w.lower() for w in warnings)
