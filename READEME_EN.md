@@ -16,8 +16,8 @@
 
 | Platform | Link |
 |----------|------|
-| Bilibili | _Replace with BV URL after upload_ |
-| LinkedIn | _Replace with post URL after upload_ |
+| Bilibili | [0700.HK full walkthrough (~3 min, 中文)](https://www.bilibili.com/video/BV1b6KX67ES3/) |
+| LinkedIn | [Project post + demo (EN)](https://www.linkedin.com/feed/update/urn:li:activity:7477410007341244416/) |
 
 > **Disclaimer**: For research and engineering demonstration only. Outputs are not investment advice. Read the disclaimer on the analysis page; private document uploads require explicit consent.
 

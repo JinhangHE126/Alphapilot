@@ -16,8 +16,8 @@
 
 | 平台 | 链接 |
 |------|------|
-| Bilibili | _上传后替换为 BV 链接_ |
-| LinkedIn | _上传后替换为帖子链接_ |
+| Bilibili | [0700.HK 全链路演示（约 3 分钟）](https://www.bilibili.com/video/BV1b6KX67ES3/) |
+| LinkedIn | [Full demo walkthrough (EN)](https://www.linkedin.com/feed/update/urn:li:activity:7477410007341244416/) |
 
 > **免责声明**：本系统仅供研究与工程演示，输出不构成任何投资建议。使用前请阅读分析页底部免责声明；上传私有文档需勾选确认。
 
