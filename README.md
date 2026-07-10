@@ -92,6 +92,30 @@ python scripts/verify_p4.py --username <user> --password <pass>
 
 ---
 
+## 📊 Performance & Evaluation
+
+AlphaPilot 提供离线文档检索评测（[`scripts/eval_doc_recall.py`](scripts/eval_doc_recall.py)），在 **15 条人工标注 query** 上衡量 hybrid RAG 的 section 召回率（HKEX / SEC 财报）。评测环境：`reingest_0700.py` + `prepare_demo_ingest.py --symbol AAPL`，FAISS 索引 **603** vectors。
+
+| 评测集 | Queries | Recall@5 | Recall@15 |
+| :--- | :---: | :---: | :---: |
+| **Overall** | 15 | **73.3%** | **86.7%** |
+| AAPL (SEC 10-K) | 11 | 72.7% | 90.9% |
+| 0700.HK | 2 | 100% | 100% |
+| Cross-symbol | 2 | 50.0% | 50.0% |
+
+*评测方法：对每条 query 调用 `hybrid_retrieve(k=15)`；若 top-5 / top-15 中任一 chunk 的 `section` 与 `expected_sections` 子串匹配则计为命中。通过阈值：Recall@5 ≥ 70%（**PASS**）。*
+
+*Hybrid retrieval：FAISS (`all-MiniLM-L6-v2`) + SQLite FTS5，RRF (k=60)，Section / Doc-Type Boost。*
+
+```bash
+cd alphapilot
+PYTHONPATH=. python ../scripts/eval_doc_recall.py
+```
+
+更详细的失败 case 分析与改进记录见 [Docs/M6-评估脚本开发文档.md](Docs/M6-评估脚本开发文档.md)。
+
+---
+
 ## 系统架构
 
 ```

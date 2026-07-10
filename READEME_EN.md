@@ -92,6 +92,30 @@ python scripts/verify_p4.py --username <user> --password <pass>
 
 ---
 
+## 📊 Performance & Evaluation
+
+AlphaPilot ships an offline document-retrieval benchmark ([`scripts/eval_doc_recall.py`](scripts/eval_doc_recall.py)) measuring **section recall** on **15 curated queries** (HKEX / SEC filings). Eval environment: `reingest_0700.py` + `prepare_demo_ingest.py --symbol AAPL`, FAISS index **603** vectors.
+
+| Eval set | Queries | Recall@5 | Recall@15 |
+| :--- | :---: | :---: | :---: |
+| **Overall** | 15 | **73.3%** | **86.7%** |
+| AAPL (SEC 10-K) | 11 | 72.7% | 90.9% |
+| 0700.HK | 2 | 100% | 100% |
+| Cross-symbol | 2 | 50.0% | 50.0% |
+
+*Method: `hybrid_retrieve(k=15)` per query; a hit counts if any top-5 / top-15 chunk `section` partially matches `expected_sections`. Pass threshold: Recall@5 ≥ 70% (**PASS**).*
+
+*Hybrid retrieval: FAISS (`all-MiniLM-L6-v2`) + SQLite FTS5, RRF (k=60), section / doc-type boost.*
+
+```bash
+cd alphapilot
+PYTHONPATH=. python ../scripts/eval_doc_recall.py
+```
+
+Failure analysis and tuning notes: [Docs/M6-评估脚本开发文档.md](Docs/M6-评估脚本开发文档.md).
+
+---
+
 ## Architecture
 
 ```text
@@ -135,7 +159,7 @@ See [alphapilot/Docs/architecture.md](alphapilot/Docs/architecture.md) for the f
 | News | `news_sentiment_expert` | News & sentiment | Packet only |
 | Bull / Bear | `debate_stage` | Adversarial debate | Packet only |
 | Strategy | `strategy_expert` | Buy/Hold/Sell synthesis | Packet only |
-| Risk | `risk_expert` | Risk score & stops | Packet only |
+| Risk | `risk_expert` | Risk score & stops | Packet only | 
 | Portfolio | `portfolio_agent` | Position sizing | `full_analysis` only |
 | Backtesting | `backtesting_agent` | Backtest narrative | `full_analysis` only |
 | Recommendation | `recommendation_agent` | Executive Synthesis | full / personalized |
