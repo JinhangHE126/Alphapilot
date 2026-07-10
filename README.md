@@ -114,6 +114,20 @@ PYTHONPATH=. python ../scripts/eval_doc_recall.py
 
 更详细的失败 case 分析与改进记录见 [Docs/M6-评估脚本开发文档.md](Docs/M6-评估脚本开发文档.md)。
 
+### 🛡️ 生产级防幻觉纵深防御
+
+AlphaPilot **不依赖**「让 LLM 自我纠错」来防幻觉，而是在 Agent 编排前/后施加 **5 层确定性硬防御**（详见 [architecture.md §9](alphapilot/Docs/architecture.md)）：
+
+| 防线 | 拦截的幻觉 / 失效类型 | 校验机制 | 失败处理 |
+| :--- | :--- | :--- | :--- |
+| **Layer 0: Evidence Builder** | 无上下文的编造指标、冷启动空分析 | 统一前置采集 + 多 Provider 优先级去重 + 文档 RAG | 触发冷启动采集或条件降级 |
+| **Layer 1: Fact Schema** | 无来源事实、字段不完整 | Pydantic `EvidencePacket` / `Fact` 硬校验 | Schema 拒绝，不进入编排 |
+| **Layer 2: Output Level** | 证据不足时的目标价 / 强推荐 | 多因子 `EvidenceScore` → `allowed_output_level` | 自动降级为 `limited_analysis` / `data_summary_only` / `insufficient_evidence` |
+| **Layer 3: Isolated State** | Agent 私自调工具、跨 Agent 事实不一致 | `tools=[]`；只读静态 `EvidencePacket` | 上下文锁定，禁止漂移采集 |
+| **Layer 4: Guard Hard Rules** | 标的 mismatch、未 grounding 的 `[doc:N]`、禁止词 | 确定性 Python 规则 + embedding 相似度 | **Soft failure 最多重试 2 次**（`GUARD_MAX_RETRIES=2`），注入 corrections 后重跑 |
+
+Guard grounding 离线报告：`evaluation/guard_grounding_report.py`。
+
 ---
 
 ## 系统架构
@@ -146,6 +160,13 @@ PYTHONPATH=. python ../scripts/eval_doc_recall.py
 
 **设计原则**：Agent **不直接**调用行情 API 或 RAG；只读 `state.evidence_packet`。Guard 对最终报告做确定性校验；流式分析通过 **SSE** 推送 `agent_start` / `agent_output` / `analysis_complete`（含 `citations`）。
 
+### 💡 架构范式：Evidence Before Reasoning
+
+传统「Naive Agent + 松散 Tools」循环在生产环境常见问题：**上下文漂移**、Token 成本膨胀、多 Agent 结论互相矛盾。AlphaPilot 用 LangGraph 强制执行：
+
+1. **职责分离**：数据采集、校验、评分全部收敛在 `Evidence Packet Builder`，**先于**任何 Agent 节点执行。
+2. **不可变事实源**：下游 14 个专业 Agent 均为 **只读消费者**（`tools=[]`），共享同一份经校验的 `EvidencePacket`，保证全图事实对称。
+
 更完整的架构说明见 [alphapilot/Docs/architecture.md](alphapilot/Docs/architecture.md)。
 
 ---
@@ -169,7 +190,18 @@ PYTHONPATH=. python ../scripts/eval_doc_recall.py
 
 ---
 
-## 证据审计（Audit Trail）
+## 🔒 企业安全、合规与审计
+
+面向机构级部署场景，内置数据隐私与可追溯控制（工程实现，**非法律合规认证**）：
+
+| 能力 | 实现 |
+|------|------|
+| **多租户文档隔离** | 用户上传 PDF/Word/HTML 绑定 `user_session_id`；`hybrid_retrieve` 与 FAISS 元数据过滤，私有 chunk 不跨用户泄漏（见 `test_session_isolation.py`、`verify_p4.py`） |
+| **PII 自动打码** | `sensitive_scanner`：入库前 **正则扫描**身份证、银行卡、电话、邮箱，替换为 `[REDACTED]` |
+| **引用审计落库** | 报告内 `[doc:N]` → `chunk_id` 映射写入 SQLite `analysis_citations`，供合规回溯 |
+| **上传知情同意** | Web 上传需勾选确认；API 记录 `consent_at` 时间戳 |
+
+### Audit Trail 数据流
 
 每次分析完成后：
 
@@ -322,8 +354,7 @@ npm run dev
 ## 合规与产品
 
 - **报告免责声明**：分析页报告底部展示；不构成投资建议。
-- **上传确认**：上传私有文档前需勾选同意；API 记录 `consent_at` 审计字段。
-- **SFC GenAI 叙事（工程侧）**：高风险 use case 通过 Evidence Packet 统一证据源、Guard 硬规则、Audit Trail 与人工可读报告降低幻觉与不可追溯风险（非法律意见）。
+- **GenAI 治理叙事（工程侧）**：Evidence Packet 统一证据源、Guard 硬规则、Audit Trail 与可降级输出，对齐金融机构常见的 GenAI 可追溯性要求（**非法律意见**）。
 
 ---
 
@@ -374,10 +405,20 @@ Alphapilot/
 
 ---
 
-## CI/CD
+## CI/CD 与质量门禁
 
-- **CI**（PR / push）：后端 Ruff + Pytest；前端 ESLint + TypeScript + Vitest + Build
-- **CD**（push main）：镜像构建 → GHCR → SSH 部署（见 `.github/workflows/`）
+仓库由 **GitHub Actions** 守护，每次 PR / push 到 `main` / `dev` 自动回归（见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)）：
+
+| 门禁 | 工具 / 检查项 |
+|------|----------------|
+| **Python 代码风格** | `Ruff` lint |
+| **Agent 边界约束** | CI 禁止 `agents/` 直接 import `tools.*`（强制只读 Packet 架构） |
+| **后端单测** | `Pytest`（auth / sessions 等） |
+| **前端 Lint** | `ESLint` |
+| **类型安全** | TypeScript `tsc -b` strict 检查 |
+| **前端单测** | `Vitest` + production `build` |
+
+**CD**（push `main`）：多阶段 Docker 构建 → **GHCR** 推送 → SSH 部署（[`.github/workflows/cd.yml`](.github/workflows/cd.yml)、[`deploy/README.md`](deploy/README.md)）。每日备份：[`nightly-backup.yml`](.github/workflows/nightly-backup.yml)。
 
 ---
 

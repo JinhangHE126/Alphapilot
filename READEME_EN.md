@@ -114,6 +114,20 @@ PYTHONPATH=. python ../scripts/eval_doc_recall.py
 
 Failure analysis and tuning notes: [Docs/M6-评估脚本开发文档.md](Docs/M6-评估脚本开发文档.md).
 
+### 🛡️ Production-Grade Anti-Hallucination Framework
+
+AlphaPilot does **not** rely on “LLM self-correction” for grounding. Instead it enforces a **5-layer deterministic defense** before and after agent orchestration (see [architecture.md §9](alphapilot/Docs/architecture.md)):
+
+| Layer | Targeted failure / hallucination | Verification | On failure |
+| :--- | :--- | :--- | :--- |
+| **Layer 0: Evidence Builder** | Fabricated metrics, cold-start empty analysis | Unified pre-routing ingestion + multi-provider dedup + document RAG | Cold-start fetch or conditional downgrade |
+| **Layer 1: Fact Schema** | Unsourced facts, incomplete fields | Pydantic `EvidencePacket` / `Fact` validation | Hard schema rejection before routing |
+| **Layer 2: Output Level** | Strong calls on thin evidence | Multi-factor `EvidenceScore` → `allowed_output_level` | Downgrade to `limited_analysis` / `data_summary_only` / `insufficient_evidence` |
+| **Layer 3: Isolated State** | Agents calling tools independently, divergent facts | `tools=[]`; read-only static `EvidencePacket` | Context lock — no drift collection |
+| **Layer 4: Guard Hard Rules** | Symbol mismatch, ungrounded `[doc:N]`, forbidden terms | Deterministic Python rules + embedding similarity | **Soft failure retry (max 2)**, `GUARD_MAX_RETRIES=2`, with injected corrections |
+
+Offline Guard report: `evaluation/guard_grounding_report.py`.
+
 ---
 
 ## Architecture
@@ -146,6 +160,13 @@ User → React (EN / ZH / Yue) → FastAPI → LangGraph StateGraph
 
 **Principle**: agents **never** call market APIs or RAG directly; they read `state.evidence_packet`. Streaming uses **SSE** (`agent_start` / `agent_output` / `analysis_complete` including `citations`).
 
+### 💡 Architecture Paradigm: Evidence Before Reasoning
+
+Naive “agent + loose tools” loops often fail in production: **context drift**, runaway token cost, and conflicting cross-agent conclusions. AlphaPilot uses LangGraph to enforce:
+
+1. **Separation of concerns** — fetch, validate, and score all happen in `Evidence Packet Builder` **before** any agent node runs.
+2. **Immutable truth source** — all 14 downstream agents are **read-only consumers** (`tools=[]`) of one validated `EvidencePacket`, keeping facts symmetric across the graph.
+
 See [alphapilot/Docs/architecture.md](alphapilot/Docs/architecture.md) for the full v4.3 design (some sections in Chinese).
 
 ---
@@ -159,7 +180,7 @@ See [alphapilot/Docs/architecture.md](alphapilot/Docs/architecture.md) for the f
 | News | `news_sentiment_expert` | News & sentiment | Packet only |
 | Bull / Bear | `debate_stage` | Adversarial debate | Packet only |
 | Strategy | `strategy_expert` | Buy/Hold/Sell synthesis | Packet only |
-| Risk | `risk_expert` | Risk score & stops | Packet only | 
+| Risk | `risk_expert` | Risk score & stops | Packet only |
 | Portfolio | `portfolio_agent` | Position sizing | `full_analysis` only |
 | Backtesting | `backtesting_agent` | Backtest narrative | `full_analysis` only |
 | Recommendation | `recommendation_agent` | Executive Synthesis | full / personalized |
@@ -169,7 +190,18 @@ System nodes: `evidence_packet_builder`, `orchestrator`.
 
 ---
 
-## Audit Trail
+## 🔒 Enterprise Security, Compliance & Audit
+
+Built for institutional deployment scenarios with privacy and provenance controls (**engineering controls, not legal certification**):
+
+| Capability | Implementation |
+|------------|----------------|
+| **Multi-tenant document isolation** | User uploads bound to `user_session_id`; `hybrid_retrieve` + FAISS metadata filters prevent cross-user leakage (`test_session_isolation.py`, `verify_p4.py`) |
+| **PII redaction** | `sensitive_scanner`: **regex-based** scan for ID, bank card, phone, email → `[REDACTED]` before ingest |
+| **Citation audit persistence** | Report `[doc:N]` → `chunk_id` mappings stored in SQLite `analysis_citations` |
+| **Upload consent** | Web upload requires explicit checkbox; API records `consent_at` timestamp |
+
+### Audit Trail flow
 
 After each completed analysis:
 
@@ -322,8 +354,7 @@ Also: `/compare`, `/backtest`, `/alert`, `/optimize`.
 ## Compliance & Product
 
 - **Report disclaimer** on the analysis page — not investment advice.
-- **Upload consent** checkbox; API logs `consent_at`.
-- **SFC GenAI (engineering angle)**: unified evidence via Evidence Packet, Guard hard rules, Audit Trail, and human-readable reports to reduce untraceable hallucination risk (not legal advice).
+- **GenAI governance (engineering angle)**: unified evidence via Evidence Packet, Guard hard rules, Audit Trail, and degradation paths — aligned with common institutional traceability themes (**not legal advice**).
 
 ---
 
@@ -373,10 +404,20 @@ Configure in **Settings** or `GET/PUT /profile`:
 
 ---
 
-## CI/CD
+## CI/CD & Quality Gates
 
-- **CI**: Backend Ruff + Pytest; frontend ESLint + TypeScript + Vitest + build
-- **CD**: Image build → GHCR → SSH deploy (`.github/workflows/`)
+The repo is guarded by **GitHub Actions** on every PR / push to `main` / `dev` (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+| Gate | Tool / check |
+|------|----------------|
+| **Python style** | `Ruff` lint |
+| **Agent boundary enforcement** | CI blocks direct `tools.*` imports from `agents/` (read-only Packet architecture) |
+| **Backend unit tests** | `Pytest` (auth / sessions, …) |
+| **Frontend lint** | `ESLint` |
+| **Type safety** | TypeScript `tsc -b` strict check |
+| **Frontend unit tests** | `Vitest` + production `build` |
+
+**CD** (push `main`): multi-stage Docker build → **GHCR** → SSH deploy ([`.github/workflows/cd.yml`](.github/workflows/cd.yml), [`deploy/README.md`](deploy/README.md)). Nightly backup: [`nightly-backup.yml`](.github/workflows/nightly-backup.yml).
 
 ---
 
