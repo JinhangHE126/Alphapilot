@@ -194,42 +194,79 @@ PYTHONPATH=. python ../scripts/eval_doc_recall.py
 
 ---
 
-## 快速开始
+## 🚀 快速开始
 
-### 环境要求
+配置好 API Key 后，**两条极速通道**任选其一（完整本地开发见文末折叠区）。
 
-- Python **3.12+**
-- Node.js **18+**（前端）
-- 至少一个 LLM API Key（推荐 **DeepSeek**；可选 Gemini）
+### 1. 配置环境
 
-### 1. 后端
+```bash
+git clone <repo-url> Alphapilot && cd Alphapilot
+cp alphapilot/.env.example alphapilot/.env
+# 编辑 alphapilot/.env — 必填 DEEPSEEK_API_KEY；Web UI / API 还需 JWT_SECRET（≥32 字节随机串）
+```
+
+**环境要求**：Python **3.12+**；Web UI 另需 Node.js **18+**。LLM 推荐 **DeepSeek**（可选 Gemini 作备用）。
+
+### Option A：🐍 CLI 一键体验（推荐 · 无需 Web UI）
+
+验证多 Agent 管线、Guard 规则与文档 RAG，直接在终端出报告（约数分钟，视 LLM 响应而定）：
+
+```bash
+bash scripts/quickstart.sh              # 默认分析 0700.HK
+bash scripts/quickstart.sh --demo AAPL  # 指定标的
+```
+
+脚本会自动：`pip install` → 检查 FAISS 索引（首次会 re-ingest）→ 运行 `run_analysis_direct.py`。
+
+等价手动命令：
 
 ```bash
 cd alphapilot
 pip install -r requirements.txt
-# 推荐表格解析: pip install pdfplumber
-
-# 在 alphapilot/.env 中配置（勿提交密钥），参考 deploy/.env.prod.example
-# 必填: DEEPSEEK_API_KEY, JWT_SECRET（生产环境 ≥32 字节随机串）
-python -m api.main
-# → http://localhost:8000  （开发模式带 --reload）
+PYTHONPATH=. python ../scripts/reingest_0700.py                        # 首次
+PYTHONPATH=. python ../scripts/prepare_demo_ingest.py --symbol AAPL   # 首次
+PYTHONPATH=. python ../scripts/run_analysis_direct.py 0700.HK
 ```
 
-### 2. 前端
+### Option B：🐳 Docker（API 后端）
+
+启动 FastAPI + SQLite（**不含** React 前端；开发 compose 仅 API 容器）：
 
 ```bash
-cd frontend
-npm install
-npm run dev
+bash scripts/quickstart.sh --docker
+# 或: docker compose -f alphapilot/docker-compose.yml up -d --build
+```
+
+- API 健康检查：http://localhost:8000/health  
+- **Web UI** 需另开终端：
+
+```bash
+cd frontend && npm install && npm run dev
 # → http://localhost:5173  （Vite 代理 /api → 8000）
 ```
 
-### 3. Docker（可选）
+生产全栈（预构建镜像、Nginx 前端）见 [`deploy/docker-compose.prod.yml`](deploy/docker-compose.prod.yml) 与 [`deploy/README.md`](deploy/README.md)。
+
+<details>
+<summary><strong>本地全栈开发（前后端分离，展开）</strong></summary>
 
 ```bash
-docker compose -f alphapilot/docker-compose.yml up -d
-# 生产前后端见 deploy/docker-compose.prod.yml
+# 终端 1 — 后端
+cd alphapilot
+pip install -r requirements.txt
+# 推荐表格解析: pip install pdfplumber
+python -m api.main
+# → http://localhost:8000
+
+# 终端 2 — 前端
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5173
 ```
+
+</details>
 
 ### 环境变量（常用）
 
@@ -244,7 +281,7 @@ docker compose -f alphapilot/docker-compose.yml up -d
 | `HF_TOKEN` | 可选；减少 Guard 文档 grounding 拉取 HF 模型时的限速告警 |
 | `VERIFY_P4_*` | P4 验收脚本账号与 API URL |
 
-代理（国内环境）：见 `alphapilot/config/proxy.py` 中 `MARKET_PROXY` / `LLM_PROXY` 等。
+代理（国内环境）：见 `alphapilot/config/proxy.py` 中 `MARKET_PROXY` / `LLM_PROXY` 等。更多生产变量见 [`deploy/.env.prod.example`](deploy/.env.prod.example)。
 
 ---
 
@@ -320,7 +357,7 @@ Alphapilot/
 │   ├── db/                     # SQLite 模型与 repository
 │   └── scripts/verify_p4.py    # P4 验收
 ├── frontend/                   # React SPA
-├── scripts/                    # Demo / eval / reingest（仓库根目录）
+├── scripts/                    # Demo / eval / reingest / quickstart（仓库根目录）
 ├── evaluation/                 # guard_grounding_report 等
 ├── Docs/                       # 方案、验收、demo 样本
 └── deploy/                     # 生产 compose 与 env 示例

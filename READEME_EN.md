@@ -194,42 +194,79 @@ After each completed analysis:
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-### Requirements
+Get AlphaPilot running in minutes. Pick one fast path below (full local dev is in the collapsible section).
 
-- Python **3.12+**
-- Node.js **18+**
-- At least one LLM API key (recommended: **DeepSeek**; optional Gemini)
+### 1. Setup environment
 
-### Backend
+```bash
+git clone <repo-url> Alphapilot && cd Alphapilot
+cp alphapilot/.env.example alphapilot/.env
+# Edit alphapilot/.env — required: DEEPSEEK_API_KEY; Web UI / API also needs JWT_SECRET (≥32 random chars)
+```
+
+**Requirements**: Python **3.12+**; Node.js **18+** for the Web UI. LLM: **DeepSeek** recommended (Gemini optional).
+
+### Option A: 🐍 CLI one-click demo (recommended · no Web UI)
+
+Exercise the multi-agent pipeline, Guard rules, and document RAG; report prints to the terminal (runtime depends on LLM latency):
+
+```bash
+bash scripts/quickstart.sh              # default: 0700.HK
+bash scripts/quickstart.sh --demo AAPL  # custom symbol
+```
+
+The script runs `pip install` → checks FAISS index (re-ingest on first run) → `run_analysis_direct.py`.
+
+Manual equivalent:
 
 ```bash
 cd alphapilot
 pip install -r requirements.txt
-# Recommended: pip install pdfplumber
-
-# Configure alphapilot/.env (do not commit secrets); see deploy/.env.prod.example
-# Required: DEEPSEEK_API_KEY, JWT_SECRET (≥32 random bytes in production)
-python -m api.main
-# → http://localhost:8000
+PYTHONPATH=. python ../scripts/reingest_0700.py                        # first time
+PYTHONPATH=. python ../scripts/prepare_demo_ingest.py --symbol AAPL   # first time
+PYTHONPATH=. python ../scripts/run_analysis_direct.py 0700.HK
 ```
 
-### Frontend
+### Option B: 🐳 Docker (API backend)
+
+Starts FastAPI + SQLite (**no** React frontend in the dev compose file):
 
 ```bash
-cd frontend
-npm install
-npm run dev
+bash scripts/quickstart.sh --docker
+# or: docker compose -f alphapilot/docker-compose.yml up -d --build
+```
+
+- API health: http://localhost:8000/health  
+- **Web UI** in a second terminal:
+
+```bash
+cd frontend && npm install && npm run dev
 # → http://localhost:5173  (proxies /api → 8000)
 ```
 
-### Docker (optional)
+Production full stack (prebuilt images, Nginx): [`deploy/docker-compose.prod.yml`](deploy/docker-compose.prod.yml) and [`deploy/README.md`](deploy/README.md).
+
+<details>
+<summary><strong>Full local dev (split backend + frontend)</strong></summary>
 
 ```bash
-docker compose -f alphapilot/docker-compose.yml up -d
-# Production: deploy/docker-compose.prod.yml
+# Terminal 1 — backend
+cd alphapilot
+pip install -r requirements.txt
+# Recommended: pip install pdfplumber
+python -m api.main
+# → http://localhost:8000
+
+# Terminal 2 — frontend
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5173
 ```
+
+</details>
 
 ### Environment variables (common)
 
@@ -244,7 +281,7 @@ docker compose -f alphapilot/docker-compose.yml up -d
 | `HF_TOKEN` | Optional; fewer HF rate-limit warnings when Guard loads embeddings |
 | `VERIFY_P4_*` | Credentials / API URL for P4 acceptance script |
 
-Proxies (e.g. China): see `alphapilot/config/proxy.py` (`MARKET_PROXY`, `LLM_PROXY`, …).
+Proxies (e.g. China): see `alphapilot/config/proxy.py` (`MARKET_PROXY`, `LLM_PROXY`, …). Production template: [`deploy/.env.prod.example`](deploy/.env.prod.example).
 
 ---
 
@@ -319,7 +356,7 @@ Alphapilot/
 │   ├── rag/              # hybrid_retrieve, FAISS
 │   └── scripts/verify_p4.py
 ├── frontend/             # React SPA
-├── scripts/              # Demo, eval, reingest (repo root)
+├── scripts/              # Demo, eval, reingest, quickstart (repo root)
 ├── evaluation/
 ├── Docs/
 └── deploy/
