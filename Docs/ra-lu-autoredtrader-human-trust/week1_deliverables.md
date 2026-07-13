@@ -17,7 +17,7 @@
 | RDR=1 or narrative shift | ✅ S2-001 RDR=1; S4 narrative shift on both; S2-002 / S4-002 narrative shift |
 | MER > 0 (reliable runs) | ✅ 0.2 on S2-002, S4-001, S4-002 |
 
-**Selected stimuli for Week 2 packaging (draft):**
+**Selected stimuli for Week 2 packaging (finalized 2026-07-13):**
 
 | Stimulus | Source run | Rationale |
 |----------|------------|-----------|
@@ -54,9 +54,10 @@
 | [s4_filing_perturbations.md](./assets/s4_filing_perturbations.md) | 4 | S4 扰动草稿（Numerical + Concept） |
 | [s4_filing_perturbations.json](./assets/s4_filing_perturbations.json) | 4 | S4 机器可读候选 + 原文 |
 | [attacked_prerun_results.json](./assets/attacked_prerun_results.json) | 5 | **4 次 prerun 汇总 MER/RDR** |
+| [stimuli/](./assets/stimuli/) | 2 | **S1–S4 刺激物 markdown/HTML** |
 | [assets/README.md](./assets/README.md) | — | Assets 索引 |
 
-*Week 2 pending:* `G1_S1–S4.png`, `G2_*`, `G3_*`, `technical_log_AAPL.json`
+*Week 2 Day 1–2 done:* [assets/stimuli/](./assets/stimuli/) · *pending:* `G1_S1–S4.png`, `G2_*`, `G3_*`, `technical_log_AAPL.json`
 
 ---
 
@@ -138,4 +139,4 @@ cd alphapilot && HF_HUB_OFFLINE=1 PYTHONPATH=. python ../scripts/run_attacked_pr
 
 ---
 
-*Week 2 next: package S1–S4 bodies · export G1/G2/G3 screenshots · fill §5 quality gates for human study.*
+*Week 2 next: export G1/G2/G3 screenshots · fill §5 quality gates for human study.*

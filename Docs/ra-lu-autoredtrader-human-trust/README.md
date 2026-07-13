@@ -2,7 +2,7 @@
 
 **Purpose:** Research proposal and application materials for RA outreach to Dr. Zhuoran Lu, bridging [AutoRedTrader](https://arxiv.org/html/2605.09185v1) (agent red-teaming) with human trust/reliance calibration using **AlphaPilot** as the testbed.
 
-**Status:** `Week 1 complete` · Week 2 stimuli packaging next · branch: `research/ra-lu-human-trust-pilot`
+**Status:** `Week 2 Day 1–2 complete` · G1/G2/G3 screenshots next · branch: `research/ra-lu-human-trust-pilot`
 
 **Week 1 index:** [week1_deliverables.md](./week1_deliverables.md)
 
@@ -54,7 +54,8 @@
 - [x] Day 4: Draft Filing perturbation (S4) — `assets/s4_filing_perturbations.md`
 - [x] Day 5: Prerun S2-B + S4-B — `assets/attacked_prerun_results.json` (2026-07-13)
 - [x] Week 1 file index — [week1_deliverables.md](./week1_deliverables.md)
-- [ ] Week 2: Export G1 / G2 / G3 UI views to `assets/`
+- [x] Week 2 Day 1–2: Package S1–S4 bodies — [assets/stimuli/](./assets/stimuli/)
+- [ ] Week 2 Day 3–5: Export G1 / G2 / G3 UI views to `assets/`
 - [ ] Pilot cognitive walkthrough (n=3)
 - [ ] Collect human data (target N≈18)
 - [ ] Finalize [02_research_memo_2page.md](./02_research_memo_2page.md) with preliminary findings

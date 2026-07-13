@@ -16,6 +16,7 @@ Place generated study materials here.
 | `s4_filing_perturbations.md` | Day 4 S4 attack drafts (MisGen Numerical + Concept) |
 | `s4_filing_perturbations.json` | Machine-readable S4 candidates |
 | `attacked_prerun_results.json` | Day 5 MER/RDR summary (4 runs) |
+| `stimuli/` | **Week 2 Day 1–2** · S1–S4 markdown/HTML + `stimuli_manifest.json` |
 | See [../week1_deliverables.md](../week1_deliverables.md) | Full Week 1 file index |
 | `preliminary_figures/` | Analysis plots for memo |
 
