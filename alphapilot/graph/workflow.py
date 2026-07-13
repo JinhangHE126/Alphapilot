@@ -407,6 +407,17 @@ def evidence_packet_builder(state: GraphState) -> dict:
         print(f"⚠️ Document RAG failed (non-critical): {exc}")
         packet.document_evidence = []
 
+    attack_cfg = state.get("evidence_attack") or {}
+    if attack_cfg:
+        from research.evidence_attack import apply_evidence_attack
+
+        attack_meta = apply_evidence_attack(packet, attack_cfg)
+        if attack_meta.get("applied"):
+            print(
+                f"🔴 Evidence attack applied: {attack_meta.get('stimulus_id')} "
+                f"({attack_meta.get('type')})"
+            )
+
     packet = detect_conflicts(packet)
     packet = compute_evidence_score(packet)
     guard_result = determine_output_level(packet)

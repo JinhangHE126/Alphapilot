@@ -71,3 +71,6 @@ class GraphState(TypedDict, total=False):
 
     # M2 — 文档 RAG 可选 doc_type 过滤（如 "annual_report"；空串=不过滤）
     document_doc_type: str
+
+    # Research pilot — optional evidence perturbation (see research/evidence_attack.py)
+    evidence_attack: dict

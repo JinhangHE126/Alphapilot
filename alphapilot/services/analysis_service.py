@@ -889,7 +889,14 @@ def _normalize_symbol(symbol: str | None) -> str:
     return (symbol or "").strip().upper()
 
 
-def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, thread_id: str, language: str | None = None) -> dict[str, Any]:
+def _run_workflow_sync(
+    user_message: str,
+    stock_symbol: str,
+    user_id: str,
+    thread_id: str,
+    language: str | None = None,
+    evidence_attack: dict | None = None,
+) -> dict[str, Any]:
     """Run LangGraph workflow synchronously and return final results (including citations)."""
     normalized_symbol = _normalize_symbol(stock_symbol)
     final_report = ""
@@ -910,6 +917,8 @@ def _run_workflow_sync(user_message: str, stock_symbol: str, user_id: str, threa
         "evidence_packet": None,
         "user_session_id": user_id,
     }
+    if evidence_attack:
+        initial_state["evidence_attack"] = evidence_attack
     config = {"configurable": {"thread_id": thread_id}}
 
     for chunk in langgraph_app.stream(initial_state, config=config, stream_mode="updates"):
