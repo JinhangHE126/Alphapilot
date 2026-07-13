@@ -55,9 +55,13 @@
 | [s4_filing_perturbations.json](./assets/s4_filing_perturbations.json) | 4 | S4 机器可读候选 + 原文 |
 | [attacked_prerun_results.json](./assets/attacked_prerun_results.json) | 5 | **4 次 prerun 汇总 MER/RDR** |
 | [stimuli/](./assets/stimuli/) | 2 | **S1–S4 刺激物 markdown/HTML** |
+| `G1_S1.png` … `G1_S4.png` | 3 | **G1 report-only 截图** |
+| `G2_S1.png` … `G2_S4.png` | 4 | **G2 facts-panel 截图** |
+| `G3_S1.png` … `G3_S4.png` | 5 | **G3 full-audit 截图** |
+| [technical_log_AAPL.json](./assets/technical_log_AAPL.json) | 6–7 | **MER/RDR machine-readable 总账本** |
 | [assets/README.md](./assets/README.md) | — | Assets 索引 |
 
-*Week 2 Day 1–2 done:* [assets/stimuli/](./assets/stimuli/) · *pending:* `G1_S1–S4.png`, `G2_*`, `G3_*`, `technical_log_AAPL.json`
+*Week 2 complete:* [assets/stimuli/](./assets/stimuli/) + `G1_S1–S4.png` + `G2_S1–S4.png` + `G3_S1–S4.png` + [technical_log_AAPL.json](./assets/technical_log_AAPL.json)
 
 ---
 
@@ -81,6 +85,10 @@
 | [scripts/prepare_demo_ingest.py](../../scripts/prepare_demo_ingest.py) | 1 | Ingest 验证（只读 FAISS） |
 | [scripts/run_analysis_direct.py](../../scripts/run_analysis_direct.py) | 2 | Clean baseline pipeline |
 | [scripts/run_attacked_prerun.py](../../scripts/run_attacked_prerun.py) | 5 | **攻击 prerun** (`--task s2b_2` / `s4b_1` / `s4b_2`) |
+| [scripts/export_g1_screenshots.py](../../scripts/export_g1_screenshots.py) | 3 | **G1 截图导出**（headless Chrome） |
+| [scripts/export_g2_screenshots.py](../../scripts/export_g2_screenshots.py) | 4 | **G2 截图导出**（facts panel + report） |
+| [scripts/export_g3_screenshots.py](../../scripts/export_g3_screenshots.py) | 5 | **G3 截图导出**（Guard + citations + report） |
+| [scripts/generate_technical_log.py](../../scripts/generate_technical_log.py) | 6–7 | **技术日志 JSON 生成** |
 | [alphapilot/research/evidence_attack.py](../../alphapilot/research/evidence_attack.py) | 5 | 注入逻辑 `apply_evidence_attack` |
 | [alphapilot/graph/workflow.py](../../alphapilot/graph/workflow.py) | 5 | `evidence_packet_builder` 注入钩子 |
 | [alphapilot/graph/state.py](../../alphapilot/graph/state.py) | 5 | `evidence_attack` state 字段 |
@@ -139,4 +147,4 @@ cd alphapilot && HF_HUB_OFFLINE=1 PYTHONPATH=. python ../scripts/run_attacked_pr
 
 ---
 
-*Week 2 next: export G1/G2/G3 screenshots · fill §5 quality gates for human study.*
+*Week 2 next: 3-person sanity check attacked reports · prep Week 3 form/instrumentation.*

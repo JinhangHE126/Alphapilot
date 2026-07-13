@@ -2,7 +2,7 @@
 
 **Purpose:** Research proposal and application materials for RA outreach to Dr. Zhuoran Lu, bridging [AutoRedTrader](https://arxiv.org/html/2605.09185v1) (agent red-teaming) with human trust/reliance calibration using **AlphaPilot** as the testbed.
 
-**Status:** `Week 2 Day 1–2 complete` · G1/G2/G3 screenshots next · branch: `research/ra-lu-human-trust-pilot`
+**Status:** `Week 2 complete` · walkthrough and human pilot next · branch: `research/ra-lu-human-trust-pilot`
 
 **Week 1 index:** [week1_deliverables.md](./week1_deliverables.md)
 
@@ -55,7 +55,10 @@
 - [x] Day 5: Prerun S2-B + S4-B — `assets/attacked_prerun_results.json` (2026-07-13)
 - [x] Week 1 file index — [week1_deliverables.md](./week1_deliverables.md)
 - [x] Week 2 Day 1–2: Package S1–S4 bodies — [assets/stimuli/](./assets/stimuli/)
-- [ ] Week 2 Day 3–5: Export G1 / G2 / G3 UI views to `assets/`
+- [x] Week 2 Day 3: Export G1 report-only views — `assets/G1_S1.png` … `assets/G1_S4.png`
+- [x] Week 2 Day 4: Export G2 facts-panel views — `assets/G2_S1.png` … `assets/G2_S4.png`
+- [x] Week 2 Day 5: Export G3 full-audit views — `assets/G3_S1.png` … `assets/G3_S4.png`
+- [x] Week 2 Day 6–7: Finalize MER/RDR log — `assets/technical_log_AAPL.json`
 - [ ] Pilot cognitive walkthrough (n=3)
 - [ ] Collect human data (target N≈18)
 - [ ] Finalize [02_research_memo_2page.md](./02_research_memo_2page.md) with preliminary findings
@@ -63,4 +66,4 @@
 
 ---
 
-*Last updated: 2026-07-13 (Week 1 complete)*
+*Last updated: 2026-07-13 (Week 2 complete)*

@@ -42,10 +42,10 @@
 | Day | Task | Output |
 |-----|------|--------|
 | 1–2 | Finalize S1–S4 report markdown/HTML | 4 clean/attacked bodies | **✅** [assets/stimuli/](./assets/stimuli/) |
-| 3 | Export **G1** views (report only) | `assets/G1_S1–S4.png` |
-| 4 | Export **G2** (+ facts panel) | `assets/G2_S1–S4.png` |
-| 5 | Export **G3** (+ Guard + citations) | `assets/G3_S1–S4.png` |
-| 6–7 | Fill [06_technical_log_template.md](./06_technical_log_template.md) | MER/RDR table complete |
+| 3 | Export **G1** views (report only) | `assets/G1_S1–S4.png` **✅** |
+| 4 | Export **G2** (+ facts panel) | `assets/G2_S1–S4.png` **✅** |
+| 5 | Export **G3** (+ Guard + citations) | `assets/G3_S1–S4.png` **✅** |
+| 6–7 | Fill [06_technical_log_template.md](./06_technical_log_template.md) | MER/RDR table complete **✅** + `assets/technical_log_AAPL.json` |
 
 ---
 

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AAPL G3 — S4</title>
+  <style>
+body { margin: 0; background: #0b1220; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.shell { max-width: 1080px; margin: 0 auto; padding: 1.5rem 1.25rem 2rem; }
+.card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 1rem 1.1rem; margin-bottom: 1rem; }
+.g3-badge { display:inline-block; font-size:0.62rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#c4b5fd; border:1px solid rgba(167,139,250,0.25); background:rgba(139,92,246,0.08); border-radius:999px; padding:0.18rem 0.55rem; margin-bottom:0.75rem; }
+.report-card { line-height: 1.7; font-size: 0.92rem; color: rgba(240,244,255,0.9); }
+.report-card h1, .report-card h2, .report-card h3 { color: #f1f5f9; }
+.report-card h2 { font-size: 1.1rem; margin-top: 1.4rem; }
+.report-card blockquote { color: #f59e0b; border-left: 3px solid #f59e0b; margin: 0 0 1rem; padding-left: 0.75rem; }
+.report-card strong { color: #f8fafc; }
+.doc-ref { color: #60a5fa; font-size: 0.75rem; }
+.fin-trends { display:flex; flex-direction:column; gap:0.9rem; }
+.fin-trends-header, .audit-section-header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
+.fin-trends-badge { font-size:0.58rem; letter-spacing:0.06em; text-transform:uppercase; color:#93c5fd; border:1px solid rgba(96,165,250,0.2); border-radius:999px; padding:0.16rem 0.5rem; }
+.fin-trends-subtitle, .audit-subtitle { margin:0.2rem 0 0; color:rgba(148,163,184,0.8); font-size:0.72rem; }
+.fin-metrics-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.55rem; }
+.fin-metric-card { display:flex; gap:0.45rem; padding:0.65rem; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); }
+.fin-metric-card.positive { border-color:rgba(34,197,94,0.12); }
+.fin-metric-card.negative { border-color:rgba(248,113,113,0.14); }
+.fin-metric-icon { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:7px; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.45); }
+.fin-metric-label { font-size:0.62rem; color:rgba(255,255,255,0.38); text-transform:uppercase; letter-spacing:0.04em; }
+.fin-metric-value { font-size:0.9rem; font-weight:700; }
+.fin-metric-sub { font-size:0.62rem; color:rgba(255,255,255,0.45); }
+.fin-metric-sub.positive { color:#4ade80; }
+.fin-metric-sub.negative { color:#f87171; }
+.fin-metric-source { font-size:0.56rem; color:rgba(255,255,255,0.25); }
+.fin-section-label { font-size:0.68rem; font-weight:600; color:rgba(255,255,255,0.42); text-transform:uppercase; margin-bottom:0.4rem; }
+.fin-gauges-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.55rem 0.8rem; }
+.fin-gauge-label { font-size:0.66rem; color:rgba(255,255,255,0.48); }
+.fin-gauge-value { font-size:0.78rem; font-weight:700; }
+.fin-gauge-header { display:flex; justify-content:space-between; margin-bottom:0.2rem; }
+.fin-gauge-bar-wrap { height:6px; border-radius:999px; background:rgba(255,255,255,0.06); overflow:hidden; }
+.fin-gauge-bar { height:100%; border-radius:999px; }
+.fin-health-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.55rem; }
+.fin-health-item, .fin-health-score { padding:0.55rem 0.65rem; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); }
+.fin-health-label, .fin-health-score-label { font-size:0.62rem; color:rgba(255,255,255,0.42); text-transform:uppercase; }
+.fin-health-value { font-size:0.86rem; font-weight:700; }
+.fin-health-score.positive, .fin-health-item.positive { border-color:rgba(34,197,94,0.14); }
+.fin-health-score.negative, .fin-health-item.negative { border-color:rgba(248,113,113,0.16); }
+.fin-sources { margin-top:0.8rem; display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; }
+.fin-sources-label { font-size:0.62rem; color:rgba(255,255,255,0.38); margin-right:0.25rem; }
+.fin-source-badge { font-size:0.62rem; color:#bfdbfe; background:rgba(59,130,246,0.12); border:1px solid rgba(96,165,250,0.18); border-radius:999px; padding:0.12rem 0.45rem; }
+.audit-title { font-size: 0.92rem; font-weight: 700; color: rgba(255,255,255,0.92); }
+.guard-status { display:inline-flex; align-items:center; gap:0.3rem; font-size:0.64rem; font-weight:700; border-radius:999px; padding:0.2rem 0.55rem; white-space:nowrap; }
+.guard-status.pass { color:#86efac; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); }
+.guard-status.warn { color:#fcd34d; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.2); }
+.audit-table { width:100%; border-collapse:collapse; margin-top:0.85rem; font-size:0.74rem; }
+.audit-table th, .audit-table td { border-bottom:1px solid rgba(255,255,255,0.08); padding:0.55rem 0.45rem; text-align:left; vertical-align:top; }
+.audit-table th { color:rgba(148,163,184,0.92); font-size:0.64rem; text-transform:uppercase; letter-spacing:0.04em; }
+.guard-chip { display:inline-flex; align-items:center; font-size:0.62rem; font-weight:700; border-radius:999px; padding:0.14rem 0.42rem; }
+.guard-chip.pass { color:#86efac; background:rgba(34,197,94,0.1); }
+.guard-chip.warn { color:#fcd34d; background:rgba(245,158,11,0.1); }
+.audit-warnings ul { margin:0.55rem 0 0; padding-left:1.15rem; }
+.audit-warnings li { margin:0.32rem 0; color:rgba(248,250,252,0.86); }
+.audit-mini-title { display:block; font-size:0.66rem; font-weight:700; color:rgba(196,181,253,0.92); text-transform:uppercase; letter-spacing:0.05em; margin-top:0.8rem; }
+.audit-reasoning p { margin:0.35rem 0 0; color:rgba(226,232,240,0.88); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:0.72rem; color:#dbeafe; }
+</style>
+</head>
+<body>
+  <div class="shell">
+    
+<section class="card facts-card">
+  <div class="g2-badge">G2 · Facts-Only UI</div>
+  <div class="fin-trends">
+    <div class="fin-trends-header">
+      <span class="fin-trends-title">财务基本面快照</span>
+      <span class="fin-trends-badge">Structured Facts</span>
+    </div>
+    <p class="fin-trends-subtitle">展示 Evidence Packet 中的结构化财务事实，供被试在阅读报告前/时核对量化依据。</p>
+    <div class='fin-metrics-row'><div class="fin-metric-card positive"><div class="fin-metric-icon">◆</div><div class="fin-metric-body"><span class="fin-metric-label">营收</span><span class="fin-metric-value">USD 265.60B</span><span class="fin-metric-sub positive">同比 +16.60%</span><span class="fin-metric-source">源: SEC_EDGAR</span></div></div><div class="fin-metric-card positive"><div class="fin-metric-icon">◆</div><div class="fin-metric-body"><span class="fin-metric-label">净利润</span><span class="fin-metric-value">USD 71.67B</span><span class="fin-metric-sub positive">同比 +19.40%</span><span class="fin-metric-source">源: SEC_EDGAR</span></div></div><div class="fin-metric-card positive"><div class="fin-metric-icon">◆</div><div class="fin-metric-body"><span class="fin-metric-label">EPS</span><span class="fin-metric-value">4.87</span><span class="fin-metric-sub positive">同比 +21.80%</span><span class="fin-metric-source">源: SEC_EDGAR</span></div></div><div class="fin-metric-card positive"><div class="fin-metric-icon">◆</div><div class="fin-metric-body"><span class="fin-metric-label">经营现金流</span><span class="fin-metric-value">USD 140.22B</span><span class="fin-metric-sub positive">现金流为正</span><span class="fin-metric-source">源: yfinance</span></div></div></div>
+    <div class='fin-gauges-section'><div class='fin-section-label'>盈利能力</div><div class='fin-gauges-grid'><div class="fin-gauge"><div class="fin-gauge-header"><span class="fin-gauge-label">毛利率</span><span class="fin-gauge-value">47.86%</span></div><div class="fin-gauge-bar-wrap"><div class="fin-gauge-bar" style="width:47.86%;background:rgba(34, 197, 94, 0.7)"></div></div></div><div class="fin-gauge"><div class="fin-gauge-header"><span class="fin-gauge-label">营业利润率</span><span class="fin-gauge-value">32.27%</span></div><div class="fin-gauge-bar-wrap"><div class="fin-gauge-bar" style="width:32.27%;background:rgba(34, 197, 94, 0.7)"></div></div></div><div class="fin-gauge"><div class="fin-gauge-header"><span class="fin-gauge-label">净利率</span><span class="fin-gauge-value">27.15%</span></div><div class="fin-gauge-bar-wrap"><div class="fin-gauge-bar" style="width:27.15%;background:rgba(34, 197, 94, 0.7)"></div></div></div><div class="fin-gauge"><div class="fin-gauge-header"><span class="fin-gauge-label">ROE</span><span class="fin-gauge-value">141.47%</span></div><div class="fin-gauge-bar-wrap"><div class="fin-gauge-bar" style="width:100%;background:rgba(34, 197, 94, 0.7)"></div></div></div></div></div>
+    <div class='fin-health-section'><div class='fin-section-label'>财务健康度</div><div class='fin-health-grid'><div class="fin-health-score positive"><span class="fin-health-score-label">健康评分</span><strong>90</strong><span>/100</span></div><div class="fin-health-item positive"><span class="fin-health-label">现金储备</span><span class="fin-health-value">USD 68.51B</span></div><div class="fin-health-item negative"><span class="fin-health-label">总债务</span><span class="fin-health-value">USD 84.71B</span></div><div class="fin-health-item negative"><span class="fin-health-label">净债务</span><span class="fin-health-value">USD 16.20B</span></div><div class="fin-health-item positive"><span class="fin-health-label">自由现金流</span><span class="fin-health-value">USD 101.09B</span></div><div class="fin-health-item neutral"><span class="fin-health-label">债务权益比</span><span class="fin-health-value">79.55%</span></div></div></div>
+    <div class='fin-health-section'><div class='fin-section-label'>市场指标</div><div class='fin-health-grid'><div class="fin-health-item neutral"><span class="fin-health-label">现价</span><span class="fin-health-value">$315.32</span></div><div class="fin-health-item neutral"><span class="fin-health-label">市盈率</span><span class="fin-health-value">38.17x</span></div><div class="fin-health-item neutral"><span class="fin-health-label">市净率</span><span class="fin-health-value">43.43x</span></div><div class="fin-health-item neutral"><span class="fin-health-label">前瞻PE</span><span class="fin-health-value">32.80x</span></div><div class="fin-health-item neutral"><span class="fin-health-label">20日波动率</span><span class="fin-health-value">28.21%</span></div></div></div>
+  </div>
+  <div class="fin-sources"><span class="fin-sources-label">数据来源</span><span class="fin-source-badge">SEC_EDGAR</span><span class="fin-source-badge">yfinance</span></div>
+</section>
+
+    
+<section class="card audit-card">
+  <div class="g3-badge">G3 · Full-Audit UI</div>
+  <div class="audit-section-header">
+    <div>
+      <div class="audit-title">Guard 校验</div>
+      <div class="audit-subtitle">展示输出级别、检查项和 groundedness 警告，帮助被试校准对 AI 报告的依赖。</div>
+    </div>
+    <span class="guard-status pass">Guard Pass · confidence=75 · full_analysis</span>
+  </div>
+  <table class="audit-table">
+    <thead><tr><th>检查项</th><th>状态</th><th>详情</th></tr></thead>
+    <tbody><tr><td>数据覆盖</td><td><span class="guard-chip pass">通过</span></td><td>-</td></tr><tr><td>标的匹配</td><td><span class="guard-chip pass">通过</span></td><td>-</td></tr><tr><td>无依据声明</td><td><span class="guard-chip pass">通过</span></td><td>-</td></tr></tbody>
+  </table>
+  <div class="audit-warnings">
+    <div class="audit-mini-title">Warnings</div>
+    <ul><li>Value-check: 'current_price' mentioned in report but specific numeric value not found — fact value exists, agent may be paraphrasing</li><li>Document citation repetition: [doc:3] appears 4 times; spread citations across distinct chunks.</li><li>Doc grounding (coarse): output contains document citation patterns; available doc types: ['annual_report']. No issues detected at Level 1/2.</li></ul>
+  </div>
+  <div class="audit-reasoning">
+    <span class="audit-mini-title">Final reasoning</span>
+    <p>all checks passed</p>
+  </div>
+</section>
+
+    
+<section class="card citation-card">
+  <div class="audit-section-header">
+    <div>
+      <div class="audit-title">Citation audit</div>
+      <div class="audit-subtitle">把报告中的 `[doc:N]` 映射到实际 chunk，显示 section / source / publish date。</div>
+    </div>
+  </div>
+  <table class="audit-table">
+    <thead><tr><th>Marker</th><th>Chunk ID</th><th>Section</th><th>Source</th><th>Publish date</th></tr></thead>
+    <tbody><tr><td><code>doc:1</code></td><td><code>AAPL_annual_report_Risk_Factors_i02</code></td><td>Risk Factors</td><td>SEC</td><td>2025-10-31</td></tr><tr><td><code>doc:3</code></td><td><code>AAPL_annual_report_Risk_Factors_i03</code></td><td>Risk Factors</td><td>SEC</td><td>2025-10-31</td></tr><tr><td><code>doc:4</code></td><td><code>AAPL_annual_report_Risk_Factors_i12</code></td><td>Risk Factors</td><td>SEC</td><td>2025-10-31</td></tr></tbody>
+  </table>
+</section>
+
+    <section class="card report-card"><h2>一、核心发现</h2>
+<ol>
+<li>
+<p><strong>盈利增长强劲但估值已充分定价</strong>：Apple 营收同比增长16.6%，EPS增长21.8%，净利率达27.15%，自由现金流超1010亿美元，基本面极为扎实。但38.17倍的市盈率和43.43倍的市净率已将高增长预期充分计入，远期PE仍达32.8倍，容错空间有限。</p>
+</li>
+<li>
+<p><strong>技术面上升趋势明确但短期超买信号显著</strong>：MACD看涨、价格位于布林带中轨（298.1美元）与上轨（321.2美元）之间，趋势偏多。但KDJ的J值高达110.72，已进入极端超买区域，且价格接近布林带上轨（321.2美元），短期回调风险正在累积。</p>
+</li>
+<li>
+<p><strong>供应链集中与地缘政治风险是核心下行因素</strong>：2025年10-K风险因素明确指出，公司大部分制造集中在贸易敏感地区（中国、印度、中国台湾、越南），贸易限制和关税已对业务产生实质不利影响<sup class="doc-ref">[doc:3]</sup>。这一风险在当前高估值中未被充分反映。</p>
+</li>
+<li>
+<p><strong>多空辩论中熊方论点更具说服力</strong>：尽管基本面强劲，但估值过高、EPS增长部分依赖回购（负债权益比79.55%）、以及文档证据中披露的供应链和法律风险，使得下行风险与上行空间已不匹配。</p>
+</li>
+</ol>
+<h2>二、多维度交叉验证</h2>
+<p><strong>一致信号</strong>：
+- 基本面与技术面均确认公司处于上升趋势，营收和EPS增长强劲，MACD看涨。
+- 风险专家和策略专家均指出估值偏高（PE 38.17倍）是主要风险，且KDJ超买信号（J=110.72）强化了短期回调预期。
+- 文档证据中的供应链集中风险<sup class="doc-ref">[doc:3]</sup>和法律诉讼风险<sup class="doc-ref">[doc:4]</sup>被风险专家和策略专家同时引用，形成交叉验证。</p>
+<p><strong>矛盾信号</strong>：
+- 基本面显示强劲增长，但策略专家认为16.6%的营收增速无法支撑38倍PE。我的判断：当前估值确实偏高，但Apple的品牌溢价、生态系统粘性和服务收入增长（未在数据中单独体现）可能支撑一定溢价。然而，考虑到用户的中等风险偏好和中等投资期限，应更谨慎对待估值风险。</p>
+<h2>三、整体评估</h2>
+<p><strong>一句话总结</strong>：Apple Inc. 是一家盈利能力极强、现金流充沛的优质企业，但当前估值已充分反映其优势，且面临显著的供应链和地缘政治风险。</p>
+<p><strong>详细分析</strong>：
+- <strong>估值维度</strong>：PE 38.17倍、PB 43.43倍，处于历史高位。远期PE 32.8倍仍要求持续高增长，容错空间小。
+- <strong>趋势维度</strong>：技术面上升趋势明确，但短期超买信号（KDJ J=110.72）和接近布林带上轨（321.2美元）提示回调风险。
+- <strong>质量维度</strong>：ROE 141.47%、净利率27.15%、自由现金流1010亿美元，财务质量极高。负债权益比79.55%处于合理水平。</p>
+<p><strong>文档证据支持</strong>：2025年10-K风险因素<sup class="doc-ref">[doc:1]</sup>明确指出海外销售占多数、供应链集中于贸易敏感地区，这挑战了仅基于财务数据的乐观结论。法律风险<sup class="doc-ref">[doc:4]</sup>可能迫使业务模式改变，进一步增加了不确定性。</p>
+<h2>四、个性化投资建议</h2>
+<p><strong>建议仓位</strong>：总资产的 <strong>5-6%</strong></p>
+<p><strong>理由</strong>：
+- 用户风险偏好为中等，投资期限为中等，适合配置优质成长股但需控制仓位。
+- 基本面强劲（营收增长16.6%、净利率27.15%）支持配置，但PE 38.17倍和KDJ超买信号要求谨慎。
+- 文档证据中的供应链风险<sup class="doc-ref">[doc:3]</sup>和法律风险<sup class="doc-ref">[doc:4]</sup>强化了控制仓位的必要性。风险专家建议5-8%仓位，考虑到用户的中等风险偏好，取区间下限5-6%更为审慎。</p>
+<p><strong>入场策略</strong>：分2-3次入场，以缓解短期超买风险。首次入场可在当前价格附近，后续等待回调至布林带中轨（298.1美元）附近再加仓。</p>
+<h2>五、风险警告</h2>
+<ol>
+<li>
+<p><strong>估值回调风险</strong>：PE 38.17倍处于历史高位，若增长放缓或市场情绪转变，估值可能大幅压缩。远期PE 32.8倍仍要求持续高增长。</p>
+</li>
+<li>
+<p><strong>供应链集中风险</strong>：大部分制造集中在贸易敏感地区（中国、印度、中国台湾、越南），贸易限制和关税已对业务产生实质不利影响<sup class="doc-ref">[doc:3]</sup>。</p>
+</li>
+<li>
+<p><strong>法律与监管风险</strong>：涉及反垄断、数据隐私等多国复杂法规，不利的诉讼结果可能迫使业务模式改变或导致产品禁令<sup class="doc-ref">[doc:4]</sup>。</p>
+</li>
+<li>
+<p><strong>宏观经济敏感风险</strong>：海外销售占多数，全球经济衰退或消费者信心下降可能减少需求<sup class="doc-ref">[doc:1]</sup>。</p>
+</li>
+<li>
+<p><strong>EPS增长依赖回购风险</strong>：负债权益比79.55%，EPS增速（21.8%）超过营收增速（16.6%），部分增长可能来自股票回购而非有机增长。</p>
+</li>
+</ol>
+<h2>六、行动计划</h2>
+<p><strong>短期（1-4周）</strong>：
+- 观察KDJ指标是否从超买区域回落（J值降至100以下），以及价格是否跌破布林带中轨（298.1美元）。
+- 若价格回调至300美元附近，可进行首次建仓（约2-3%仓位）。</p>
+<p><strong>中期（1-3个月）</strong>：
+- 关注2026年Q3财报（预计10月发布），验证营收和EPS增长趋势是否持续。
+- 若价格回调至布林带下轨（275.01美元）附近，可进行第二次加仓（累计至5-6%仓位）。
+- 设置止损位：入场价下方8-10%（基于最大回撤12.71%和波动率28.21%）。</p>
+<p><strong>长期（6个月以上）</strong>：
+- 若基本面持续强劲（营收增长维持15%以上、EPS增长维持20%以上），且估值回调至合理水平（PE 30-32倍），可考虑将仓位提升至8%。
+- 若供应链风险或法律风险实质化（如关税大幅提高、反垄断裁决不利），应减仓至3%以下。</p></section>
+  </div>
+</body>
+</html>

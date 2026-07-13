@@ -26,12 +26,20 @@ Machine-readable index: [stimuli_manifest.json](./stimuli_manifest.json)
 
 ```bash
 python scripts/package_stimuli.py
+python scripts/export_g2_screenshots.py
+python scripts/export_g3_screenshots.py
 ```
 
-## Next (Week 2 Day 3–5)
+## Day 3 Output
 
-Render G1/G2/G3 screenshots from these bodies:
+- `../G1_S1.png` … `../G1_S4.png` — exported (report only)
 
-- `../G1_S1.png` … `../G1_S4.png` — report only
-- `../G2_S1.png` … `../G2_S4.png` — + structured facts panel
-- `../G3_S1.png` … `../G3_S4.png` — + Guard warnings + citation audit
+## Day 4 Output
+
+- `G2_S1.html` … `G2_S4.html` — G2 composite pages (facts panel + report)
+- `../G2_S1.png` … `../G2_S4.png` — exported screenshots
+
+## Day 5 Output
+
+- `G3_S1.html` … `G3_S4.html` — G3 composite pages (facts panel + Guard + citation audit + report)
+- `../G3_S1.png` … `../G3_S4.png` — exported screenshots
