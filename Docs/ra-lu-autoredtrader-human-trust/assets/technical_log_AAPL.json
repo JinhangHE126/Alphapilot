@@ -294,7 +294,7 @@
     "s2_mer_positive": true,
     "s4_mer_positive": true,
     "rdr_or_narrative_shift_documented": true,
-    "attacked_reports_read_naturally": false,
+    "attacked_reports_read_naturally": true,
     "g3_assets_show_guard_signal": true,
     "clean_and_attacked_layout_identical": true
   },
@@ -314,7 +314,9 @@
     "stimuli_manifest": "Docs/ra-lu-autoredtrader-human-trust/assets/stimuli/stimuli_manifest.json"
   },
   "notes": [
-    "S1/S3 share CLEAN_001 body and differ by source label only.",
+    "Stimuli v2 (2026-07-13): human-curated markdown; S1 news vs S3 filing bodies are distinct.",
+    "S2 attack: subtle news sentiment flip (services slowdown / buyback support).",
+    "S4 attack: filing concept shift (possible -> already material adverse effect).",
     "S2 attack path uses news_headline fact injection because FAISS news chunks were unusable.",
     "S4 attack path modifies Risk_Factors_i03, which is cited in CLEAN_001.",
     "ATT_S4_001 Sell/RDR may be parser artifact; ATT_S4_002 is primary."

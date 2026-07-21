@@ -1,0 +1,67 @@
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 11222.29it/s]
+✅ 加载现有 FAISS 索引: rag_data/faiss_index
+📚 已加载 602 个已知 doc/chunk id 用于去重
+✅ rag/retriever.py → FAISS 本地离线 RAG | 模型: sentence-transformers/all-MiniLM-L6-v2 | 索引路径: rag_data/faiss_index
+======================================================================
+📊 Document Recall Evaluation (15 annotated queries)
+======================================================================
+
+[ 1] ✅@5  ✅@15  | `What are the primary risk factors for Apple's business?...`
+     expected=['risk factors']  top3=(Risk Factors, Risk Factors, Risk Factors)
+[ 2] ✅@5  ✅@15  | `Apple management discussion of financial condition and resul...`
+     expected=['md&a']  top3=(MD&A, MD&A, MD&A)
+[ 3] ❌@5  ❌@15  | `Apple business overview and operating segments...`
+     expected=['business', 'business overview']  top3=(Risk Factors, Risk Factors, Risk Factors)
+[ 4] ✅@5  ✅@15  | `供应链集中风险和贸易限制对苹果的影响...`
+     expected=['risk factors']  top3=(General, General, Risk Factors)
+[ 5] ❌@5  ✅@15  | `苹果现金流状况和自由现金流...`
+     expected=['cash flows', 'md&a']  top3=(Risk Factors, Risk Factors, Risk Factors)
+
+[ 6] ✅@5  ✅@15  | `Apple revenue growth and profit margins...`
+     expected=['md&a']  top3=(MD&A, MD&A, MD&A)
+[ 7] ✅@5  ✅@15  | `苹果负债权益比和债务结构...`
+     expected=['financial statements', 'md&a']  top3=(General, Risk Factors, Risk Factors)
+[ 8] ✅@5  ✅@15  | `Apple legal proceedings and regulatory risks...`
+     expected=['risk factors']  top3=(Risk Factors, Risk Factors, Risk Factors)
+📊 retrieve_doc_chunks: fetch_k=300, vector_hits=4, symbol=0700.HK
+📄 Document RAG fallback: widened search to 603 → 12 chunk(s) (was 4)
+[ 9] ✅@5  ✅@15  | `腾讯2026年第一季度收入构成...`
+     expected=['general', 'financial statements', 'tencent announces', 'income', 'revenue']  top3=(Financial Statements, Financial Statements, Financial Statements)
+[10] ✅@5  ✅@15  | `Tencent Q1 2026 revenue breakdown by segment...`
+     expected=['general', 'financial statements', 'tencent announces', 'quarter results', 'revenue']  top3=(TENCENT ANNOUNCES 2026 FIRST QUARTER RESULTS, TENCENT ANNOUNCES 2026 FIRST QUARTER RESULTS, OTHER FINANCIAL INFORMATION)
+
+[11] ✅@5  ✅@15  | `technology company supply chain concentration risks...`
+     expected=['risk factors']  top3=(Risk Factors, Risk Factors, Risk Factors)
+[12] ❌@5  ❌@15  | `company share repurchase program and buyback authorization...`
+     expected=['md&a', 'financial statements']  top3=(General)
+[13] ✅@5  ✅@15  | `监管合规风险...`
+     expected=['risk factors']  top3=(Risk Factors, Risk Factors, Risk Factors)
+[14] ✅@5  ✅@15  | `管理层经营讨论与分析...`
+     expected=['md&a']  top3=(MD&A, MD&A, Risk Factors)
+[15] ❌@5  ✅@15  | `财务报表附注和会计政策...`
+     expected=['financial statements']  top3=(General, Risk Factors, Risk Factors)
+
+======================================================================
+📈 RESULTS
+======================================================================
+  Total queries:     15
+  Recall@5:           11/15 = 73.3%
+  Recall@15:          13/15 = 86.7%
+
+  Breakdown by symbol:
+                  queries= 2  R@5=1/2=50.0%  R@15=1/2=50.0%
+    0700.HK       queries= 2  R@5=2/2=100.0%  R@15=2/2=100.0%
+    AAPL          queries=11  R@5=8/11=72.7%  R@15=10/11=90.9%
+
+  ❌ R@5 misses (4):
+    [3] AAPL | "Apple business overview and operating segments"
+         expected=['business', 'business overview']  got=['Risk Factors', 'Risk Factors', 'Risk Factors', 'Risk Factors', 'Risk Factors']
+    [5] AAPL | "苹果现金流状况和自由现金流"
+         expected=['cash flows', 'md&a']  got=['Risk Factors', 'Risk Factors', 'Risk Factors', 'Risk Factors', 'Risk Factors']
+    [12]  | "company share repurchase program and buyback authorization"
+         expected=['md&a', 'financial statements']  got=['General']
+    [15] AAPL | "财务报表附注和会计政策"
+         expected=['financial statements']  got=['General', 'Risk Factors', 'Risk Factors', 'Risk Factors', 'Risk Factors']
+
+  ✅ Overall: Recall@5=73.3% (PASS >= 70%)
+======================================================================

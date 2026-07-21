@@ -12,6 +12,7 @@ from export_g2_screenshots import (
     ASSETS_DIR,
     STIMULI_DIR,
     build_facts_panel_html,
+    load_facts,
     markdown_report_html,
     resolve_chrome_binary,
 )
@@ -60,7 +61,7 @@ def load_run_bundle(run_key: str) -> dict:
                     "detail": f"Distinct markers: {', '.join(data.get('citations', {}).get('doc_markers', [])) or 'none'}",
                 },
             },
-            "facts": [],
+            "facts": load_facts("CLEAN_001"),
             "citation_rows": [
                 {
                     "marker": marker,

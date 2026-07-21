@@ -9,8 +9,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import markdown
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STIMULI_DIR = REPO_ROOT / "Docs/ra-lu-autoredtrader-human-trust/assets/stimuli"
@@ -21,15 +19,21 @@ WINDOW_SIZE = "1400,4200"
 FACTS_FALLBACK = REPO_ROOT / "Docs/demo/AAPL_analysis_ATT_S2_002_20260713_160524.json"
 
 STIMULI = [
-    ("S1", "S1_news_clean.md", "G2_S1.html", "G2_S1.png", "ATT_S2_002"),
+    ("S1", "S1_news_clean.md", "G2_S1.html", "G2_S1.png", "CLEAN_001"),
     ("S2", "S2_news_attacked.md", "G2_S2.html", "G2_S2.png", "ATT_S2_002"),
-    ("S3", "S3_filing_clean.md", "G2_S3.html", "G2_S3.png", "ATT_S4_002"),
+    ("S3", "S3_filing_clean.md", "G2_S3.html", "G2_S3.png", "CLEAN_001"),
     ("S4", "S4_filing_attacked.md", "G2_S4.html", "G2_S4.png", "ATT_S4_002"),
 ]
 
 RUN_JSON = {
+    "CLEAN_001": REPO_ROOT / "Docs/demo/AAPL_analysis_20260711_172255.json",
     "ATT_S2_002": REPO_ROOT / "Docs/demo/AAPL_analysis_ATT_S2_002_20260713_160524.json",
     "ATT_S4_002": REPO_ROOT / "Docs/demo/AAPL_analysis_ATT_S4_002_20260713_161637.json",
+}
+
+# Clean demo JSON has no evidence_packet.facts; reuse baseline structured facts.
+FACTS_JSON_FALLBACK = {
+    "CLEAN_001": "ATT_S2_002",
 }
 
 DISPLAY_FIELDS = {
@@ -146,7 +150,12 @@ def load_facts(run_key: str) -> list[dict]:
     data = json.loads(path.read_text(encoding="utf-8"))
     guard = data.get("guard_full") or data.get("guard_check") or {}
     packet = guard.get("evidence_packet") or data.get("evidence_packet") or {}
-    return packet.get("facts") or []
+    facts = packet.get("facts") or []
+    if not facts:
+        fallback_key = FACTS_JSON_FALLBACK.get(run_key)
+        if fallback_key and fallback_key != run_key:
+            return load_facts(fallback_key)
+    return facts
 
 
 def metric_card(label: str, value: str, sub: str | None, tone: str, source: str | None) -> str:
@@ -312,12 +321,29 @@ def build_facts_panel_html(facts: list[dict]) -> str:
 """
 
 
+def markdown_body_to_html_fragment(body: str) -> str:
+    """Lightweight markdown → HTML (no third-party deps)."""
+    html = body
+    html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.M)
+    html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.M)
+    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+    html = re.sub(r"^> (.+)$", r"<p class=\"watermark\">\1</p>", html, flags=re.M)
+    html = re.sub(r"^---$", "<hr>", html, flags=re.M)
+    html = re.sub(r"^- (.+)$", r"<li>\1</li>", html, flags=re.M)
+    html = re.sub(r"(\[doc:\d+\])", r'<sup class="doc-ref">\1</sup>', html)
+    html = html.replace("\n\n", "</p><p>")
+    html = f"<p>{html}</p>"
+    html = re.sub(r"<p>(<h[12]>)", r"\1", html)
+    html = re.sub(r"(</h[12]>)</p>", r"\1", html)
+    html = re.sub(r"<p><li>", "<ul><li>", html)
+    html = re.sub(r"</li></p>", "</li></ul>", html)
+    return html
+
+
 def markdown_report_html(md_path: Path) -> str:
     text = md_path.read_text(encoding="utf-8")
     body = text.split("\n---\n", 1)[-1].strip() if "---" in text else text
-    html = markdown.markdown(body, extensions=["extra", "sane_lists"])
-    html = re.sub(r"\[doc:(\d+)\]", r'<sup class="doc-ref">[doc:\1]</sup>', html)
-    return html
+    return markdown_body_to_html_fragment(body)
 
 
 G2_CSS = """

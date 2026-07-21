@@ -192,7 +192,7 @@ def _find_ungrounded_doc_claims(
     """
     文档 Grounding 检查 (v2)。返回 (issues, warnings)。
 
-    Level 1 — chunk_id 精确匹配（issues，阻断）:
+    Level 1 — chunk_id 精确匹配 issues，阻断）:
     - 检查 [doc:N] 引用标记是否在 document_evidence 中存在
 
     Level 2 — 内容级语义匹配（issues，阻断）:
@@ -374,7 +374,7 @@ def _find_ungrounded_claims_v2(ep: EvidencePacket, output_text: str) -> tuple[li
 
 def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = "", all_output_text: str = "") -> dict:
     """
-    硬规则校验：不经过 LLM，确定性判定输出是否可以接受。
+    硬规则校验：不经过 LLM, 确定性判定输出是否可以接受。
     基于 Evidence Packet 中的事实和输出等级做熔断。
     """
     if not packet:
@@ -420,7 +420,7 @@ def _hard_rule_guard(packet: dict | None, final_output_text: str, symbol: str = 
     if symbol_issues:
         return {
             "is_valid": False,
-            "confidence_score": 0,
+            "confidence_score": 0, 
             "issues": symbol_issues,
             "corrections": ["rebuild evidence packet with correct symbol data"],
             "sources": [f.source for f in ep.facts],
