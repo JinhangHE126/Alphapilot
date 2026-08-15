@@ -35,6 +35,7 @@ def complete_analysis_audit(
     final_report: str | None = None,
     guard_check: dict[str, Any] | None = None,
     citations: dict[str, Any] | None = None,
+    stock_symbol: str = "",
     status: str = "completed",
 ) -> dict[str, Any] | None:
     """
@@ -42,6 +43,8 @@ def complete_analysis_audit(
 
     Does not invent model/prompt versions yet — those land in a later P0 step.
     """
+    from governance.claim_validation import validate_claims
+
     citations = citations if isinstance(citations, dict) else {}
     guard_check = guard_check if isinstance(guard_check, dict) else None
     evidence = None
@@ -49,6 +52,17 @@ def complete_analysis_audit(
         ep = guard_check.get("evidence_packet")
         if isinstance(ep, dict):
             evidence = ep
+
+    symbol = (stock_symbol or "").strip().upper()
+    if not symbol and isinstance(evidence, dict):
+        symbol = str(evidence.get("symbol") or "").strip().upper()
+
+    claim = validate_claims(
+        final_report=final_report or "",
+        evidence_packet=evidence,
+        citations=citations,
+        stock_symbol=symbol,
+    )
 
     risk_flags: list[str] = []
     if status == "failed":
@@ -58,6 +72,10 @@ def complete_analysis_audit(
         for issue in guard_check.get("issues") or []:
             if isinstance(issue, str) and issue:
                 risk_flags.append(issue[:120])
+    for item in claim.get("blocking_issues") or []:
+        code = item.get("code") if isinstance(item, dict) else None
+        if code and code not in risk_flags:
+            risk_flags.append(code)
 
     return update_audit_record(
         request_id,
@@ -65,7 +83,7 @@ def complete_analysis_audit(
         generated_output=final_report,
         guard_result=guard_check,
         cited_chunk_ids=citations.get("chunk_ids") or [],
-        citation_validation=citations.get("validation"),
+        citation_validation=claim.get("citation_validation"),
         evidence_packet_snapshot=evidence,
         risk_flags=risk_flags,
     )

@@ -301,6 +301,7 @@ async def analyze(
         final_report=result.get("final_report"),
         guard_check=guard if isinstance(guard, dict) else None,
         citations=citations if isinstance(citations, dict) else {},
+        stock_symbol=stock_symbol,
         status="completed",
     )
 
@@ -404,6 +405,7 @@ async def analyze_stream(
                     final_report="",
                     guard_check={"is_valid": False, "issues": [str(exc)[:200]]},
                     citations={},
+                    stock_symbol=stock_symbol,
                     status="failed",
                 )
                 yield f"event: error\ndata: {{\"detail\": \"{str(exc)}\"}}\n\n"
@@ -438,6 +440,7 @@ async def analyze_stream(
             final_report=final_payload.get("final_report"),
             guard_check=guard if isinstance(guard, dict) else None,
             citations=citations if isinstance(citations, dict) else {},
+            stock_symbol=stock_symbol,
             status="completed",
         )
 
