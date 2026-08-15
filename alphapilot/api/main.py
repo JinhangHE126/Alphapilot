@@ -13,7 +13,7 @@ import jwt
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
@@ -833,6 +833,42 @@ def _approval_http_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=500, detail="Approval action failed")
 
 
+_AUDIT_EXPORT_FIELDS = (
+    "request_id",
+    "analysis_id",
+    "timestamp_started",
+    "timestamp_completed",
+    "use_case",
+    "stock_symbol",
+    "data_sources",
+    "retrieved_document_ids",
+    "cited_chunk_ids",
+    "evidence_packet_snapshot",
+    "model_provider",
+    "model_name",
+    "model_version",
+    "prompt_version",
+    "generated_output",
+    "citation_validation",
+    "guard_result",
+    "risk_flags",
+    "human_reviewer",
+    "review_comments",
+    "approval_status",
+    "approval_timestamp",
+    "publication_status",
+    "kill_switch_status",
+)
+
+
+def _audit_export_payload(audit: dict[str, Any]) -> dict[str, Any]:
+    """Return the approved, portable subset of an audit record for export."""
+    return {
+        "export_format": "alphapilot-ai-audit-v1",
+        "audit_record": {field: audit.get(field) for field in _AUDIT_EXPORT_FIELDS},
+    }
+
+
 @api.get("/analyses/{analysis_id}/audit")
 async def get_analysis_audit(
     analysis_id: int,
@@ -845,6 +881,29 @@ async def get_analysis_audit(
     if not audit:
         raise HTTPException(status_code=404, detail="Audit record not found")
     return success(audit)
+
+
+@api.get("/analyses/{analysis_id}/audit/export")
+async def export_analysis_audit(
+    analysis_id: int,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """Download the ownership-scoped governance audit record as JSON."""
+    from db.repository import get_audit_record_by_analysis_id
+
+    _require_owned_analysis(analysis_id, current_user["id"])
+    audit = get_audit_record_by_analysis_id(analysis_id)
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+
+    return JSONResponse(
+        content=_audit_export_payload(audit),
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="analysis-{analysis_id}-audit.json"'
+            ),
+        },
+    )
 
 
 @api.post("/analyses/{analysis_id}/submit-review")
