@@ -3,7 +3,18 @@ import { useParams, useNavigate } from "react-router-dom";
 import CitationsPanel from "../components/CitationsPanel";
 import MarkdownContent from "../components/MarkdownContent";
 import { useTranslation } from "../i18n";
-import { deleteHistory, getHistoryDetail } from "../services/api";
+import {
+  approveAnalysis,
+  deleteHistory,
+  downloadAnalysisAudit,
+  getAnalysisAudit,
+  getHistoryDetail,
+  publishAnalysis,
+  rejectAnalysis,
+  requestAnalysisRevision,
+  submitAnalysisForReview,
+  type AuditRecord,
+} from "../services/api";
 import type { AnalysisCitations } from "../services/sse";
 
 type EventItem = {
@@ -22,6 +33,10 @@ export default function AnalysisDetailPage() {
   const [record, setRecord] = useState<Record<string, unknown> | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [error, setError] = useState("");
+  const [audit, setAudit] = useState<AuditRecord | null>(null);
+  const [governanceError, setGovernanceError] = useState("");
+  const [reviewComments, setReviewComments] = useState("");
+  const [isActionPending, setIsActionPending] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -31,6 +46,9 @@ export default function AnalysisDetailPage() {
         setEvents((data.events as EventItem[]) || []);
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("errors.loadDetail")));
+    getAnalysisAudit(Number(id))
+      .then(setAudit)
+      .catch((err) => setGovernanceError(err instanceof Error ? err.message : t("errors.loadGovernance")));
   }, [id, t]);
 
   async function handleDelete() {
@@ -40,6 +58,33 @@ export default function AnalysisDetailPage() {
       navigate("/history");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errors.deleteFailed"));
+    }
+  }
+
+  async function handleGovernanceAction(
+    action: "submit" | "approve" | "reject" | "revision" | "publish" | "download",
+  ) {
+    if (!id) return;
+    if ((action === "reject" || action === "revision") && !reviewComments.trim()) {
+      setGovernanceError(t("detail.reviewCommentRequired"));
+      return;
+    }
+
+    setGovernanceError("");
+    setIsActionPending(true);
+    try {
+      const analysisId = Number(id);
+      if (action === "submit") setAudit(await submitAnalysisForReview(analysisId));
+      if (action === "approve") setAudit(await approveAnalysis(analysisId, reviewComments.trim()));
+      if (action === "reject") setAudit(await rejectAnalysis(analysisId, reviewComments.trim()));
+      if (action === "revision") setAudit(await requestAnalysisRevision(analysisId, reviewComments.trim()));
+      if (action === "publish") setAudit(await publishAnalysis(analysisId));
+      if (action === "download") await downloadAnalysisAudit(analysisId);
+      if (action !== "download") setReviewComments("");
+    } catch (err) {
+      setGovernanceError(err instanceof Error ? err.message : t("errors.governanceActionFailed"));
+    } finally {
+      setIsActionPending(false);
     }
   }
 
@@ -99,6 +144,106 @@ export default function AnalysisDetailPage() {
 
       <section className="card citations-card">
         <CitationsPanel citations={citations} />
+      </section>
+
+      <section className="card governance-card">
+        <div className="governance-card-header">
+          <div>
+            <h3>{t("detail.governanceTitle")}</h3>
+            <p className="muted">{t("detail.governanceSubtitle")}</p>
+          </div>
+          {audit && (
+            <span className={`governance-status status-${audit.approval_status}`}>
+              {t(`detail.approvalStatus.${audit.approval_status}`)}
+            </span>
+          )}
+        </div>
+
+        {governanceError && <p className="error">{governanceError}</p>}
+        {!audit ? (
+          <p className="muted">{t("detail.noAudit")}</p>
+        ) : (
+          <>
+            <dl className="governance-summary">
+              <div>
+                <dt>{t("detail.publicationStatus")}</dt>
+                <dd>{t(`detail.publicationStatusValue.${audit.publication_status}`)}</dd>
+              </div>
+              <div>
+                <dt>{t("detail.guardStatus")}</dt>
+                <dd>{audit.guard_result?.is_valid ? t("detail.passed") : t("detail.notPassed")}</dd>
+              </div>
+              <div>
+                <dt>{t("detail.citationStatus")}</dt>
+                <dd>{audit.citation_validation?.claim_ok ? t("detail.passed") : t("detail.notPassed")}</dd>
+              </div>
+              <div>
+                <dt>{t("detail.killSwitchStatus")}</dt>
+                <dd>{audit.kill_switch_status || "-"}</dd>
+              </div>
+              {audit.human_reviewer && (
+                <div>
+                  <dt>{t("detail.reviewer")}</dt>
+                  <dd>{audit.human_reviewer}</dd>
+                </div>
+              )}
+              {audit.approval_timestamp && (
+                <div>
+                  <dt>{t("detail.reviewedAt")}</dt>
+                  <dd>{new Date(audit.approval_timestamp).toLocaleString()}</dd>
+                </div>
+              )}
+            </dl>
+
+            {audit.review_comments && (
+              <p className="governance-comments">
+                <strong>{t("detail.reviewComments")}:</strong> {audit.review_comments}
+              </p>
+            )}
+
+            {audit.approval_status === "pending_review" && (
+              <label className="governance-comment-input">
+                {t("detail.reviewComment")}
+                <textarea
+                  value={reviewComments}
+                  onChange={(event) => setReviewComments(event.target.value)}
+                  placeholder={t("detail.reviewCommentPlaceholder")}
+                  rows={3}
+                />
+              </label>
+            )}
+
+            <div className="governance-actions">
+              {(audit.approval_status === "draft" || audit.approval_status === "revision_requested") && (
+                <button className="btn primary" disabled={isActionPending} onClick={() => handleGovernanceAction("submit")}>
+                  {t("detail.submitReview")}
+                </button>
+              )}
+              {audit.approval_status === "pending_review" && (
+                <>
+                  <button className="btn primary" disabled={isActionPending} onClick={() => handleGovernanceAction("approve")}>
+                    {t("detail.approve")}
+                  </button>
+                  <button className="btn ghost" disabled={isActionPending} onClick={() => handleGovernanceAction("revision")}>
+                    {t("detail.requestRevision")}
+                  </button>
+                  <button className="btn ghost" disabled={isActionPending} onClick={() => handleGovernanceAction("reject")}>
+                    {t("detail.reject")}
+                  </button>
+                </>
+              )}
+              {audit.approval_status === "approved" && audit.publication_status !== "published" && (
+                <button className="btn primary" disabled={isActionPending} onClick={() => handleGovernanceAction("publish")}>
+                  {t("detail.publish")}
+                </button>
+              )}
+              <button className="btn ghost" disabled={isActionPending} onClick={() => handleGovernanceAction("download")}>
+                {t("detail.downloadAudit")}
+              </button>
+            </div>
+          </>
+        )}
+        <p className="governance-disclaimer">{t("detail.disclaimer")}</p>
       </section>
 
       <section className="card">

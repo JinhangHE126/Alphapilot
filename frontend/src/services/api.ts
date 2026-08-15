@@ -142,6 +142,69 @@ export async function deleteHistory(analysisId: number) {
   return request<null>(`/history/${analysisId}`, { method: "DELETE" });
 }
 
+export type AuditRecord = {
+  approval_status: string;
+  publication_status: string;
+  human_reviewer?: string | null;
+  review_comments?: string | null;
+  approval_timestamp?: string | null;
+  kill_switch_status?: string | null;
+  guard_result?: { is_valid?: boolean } | null;
+  citation_validation?: { ok?: boolean; claim_ok?: boolean } | null;
+};
+
+export async function getAnalysisAudit(analysisId: number) {
+  return request<AuditRecord>(`/analyses/${analysisId}/audit`);
+}
+
+export async function submitAnalysisForReview(analysisId: number) {
+  return request<AuditRecord>(`/analyses/${analysisId}/submit-review`, { method: "POST" });
+}
+
+export async function approveAnalysis(analysisId: number, comments?: string) {
+  return request<AuditRecord>(`/analyses/${analysisId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ comments: comments || null }),
+  });
+}
+
+export async function rejectAnalysis(analysisId: number, comments: string) {
+  return request<AuditRecord>(`/analyses/${analysisId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ comments }),
+  });
+}
+
+export async function requestAnalysisRevision(analysisId: number, comments: string) {
+  return request<AuditRecord>(`/analyses/${analysisId}/request-revision`, {
+    method: "POST",
+    body: JSON.stringify({ comments }),
+  });
+}
+
+export async function publishAnalysis(analysisId: number) {
+  return request<AuditRecord>(`/analyses/${analysisId}/publish`, { method: "POST" });
+}
+
+export async function downloadAnalysisAudit(analysisId: number) {
+  const token = getToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE}/analyses/${analysisId}/audit/export`, { headers });
+  if (!response.ok) {
+    const payload = (await response.json()) as { detail?: string; message?: string };
+    throw new Error(payload.detail || payload.message || "Audit export failed");
+  }
+
+  const downloadUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = `analysis-${analysisId}-audit.json`;
+  link.click();
+  URL.revokeObjectURL(downloadUrl);
+}
+
 export async function saveToken(token: string) {
   localStorage.setItem("alphapilot_token", token);
 }

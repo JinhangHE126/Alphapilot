@@ -552,6 +552,102 @@ select option {
   padding: 0.55rem 0.65rem;
 }
 
+.governance-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.governance-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.governance-card-header h3,
+.governance-card-header p {
+  margin: 0;
+}
+
+.governance-status {
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+
+.governance-status.status-approved,
+.governance-status.status-published {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+
+.governance-status.status-rejected {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.governance-status.status-pending_review,
+.governance-status.status-revision_requested {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+
+.governance-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.governance-summary div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.governance-summary dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.governance-summary dd {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.governance-comments,
+.governance-disclaimer {
+  margin: 0;
+  border-radius: 8px;
+  padding: 0.65rem;
+  background: rgba(99, 102, 241, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.governance-disclaimer {
+  font-style: italic;
+}
+
+.governance-comment-input {
+  max-width: 560px;
+}
+
+.governance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.governance-actions .btn:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .output {
   background: #0c1330;
   border: 1px solid var(--border);
