@@ -21,6 +21,7 @@ def build_citations(
     chunk_ids: list[str] = []
     doc_markers: list[str] = []
     evidence_snapshot: list[dict[str, Any]] = []
+    invalid_citations: list[str] = []
 
     # 提取文档证据列表
     doc_evidence = []
@@ -33,20 +34,26 @@ def build_citations(
     marker_pattern = re.compile(r"\[doc\s*:\s*(\d+)\]", re.IGNORECASE)
     markers = marker_pattern.findall(final_report or "")
     seen_n = set()
+    seen_invalid = set()
     for n_str in markers:
         try:
-            n = int(n_str) - 1  # 转为 0-based index
+            marker_num = int(n_str)
+            marker_id = f"doc:{marker_num}"
+            n = marker_num - 1  # 转为 0-based index
             if n < 0 or n >= len(doc_evidence):
                 logger.warning(
                     "Skipping out-of-range [doc:%s]; document_evidence has %s chunk(s)",
                     n_str,
                     len(doc_evidence),
                 )
+                if marker_id not in seen_invalid:
+                    invalid_citations.append(marker_id)
+                    seen_invalid.add(marker_id)
                 continue
             if n in seen_n:
                 continue
             seen_n.add(n)
-            doc_markers.append(f"doc:{int(n_str)}")
+            doc_markers.append(marker_id)
             dc = doc_evidence[n]
             if isinstance(dc, dict):
                 chunk_id = dc.get("chunk_id", "")
@@ -58,23 +65,25 @@ def build_citations(
                         "section": dc.get("section", ""),
                         "source": dc.get("source", ""),
                     })
+                elif marker_id not in seen_invalid:
+                    invalid_citations.append(marker_id)
+                    seen_invalid.add(marker_id)
         except (ValueError, IndexError):
             continue
 
-    # 2) 兜底：无 [doc:N] 时，保存当时所有 document_evidence 的 chunk_id
-    if not chunk_ids and doc_evidence:
-        for dc in doc_evidence:
-            if isinstance(dc, dict) and dc.get("chunk_id"):
-                chunk_ids.append(dc["chunk_id"])
-                evidence_snapshot.append({
-                    "chunk_id": dc["chunk_id"],
-                    "doc_id": dc.get("doc_id", ""),
-                    "section": dc.get("section", ""),
-                    "source": dc.get("source", ""),
-                })
+    has_docs = bool(doc_evidence)
+    missing_citations = has_docs and not chunk_ids
+    validation_ok = (not invalid_citations) and (not missing_citations)
 
     return {
         "chunk_ids": chunk_ids,
         "doc_markers": doc_markers or None,
         "evidence_snapshot": evidence_snapshot or None,
+        "validation": {
+            "ok": validation_ok,
+            "missing_citations": missing_citations,
+            "invalid_citations": invalid_citations,
+            "cited_count": len(chunk_ids),
+            "retrieved_count": len(doc_evidence),
+        },
     }

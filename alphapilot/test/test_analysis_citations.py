@@ -31,6 +31,8 @@ def test_extract_doc_markers_single():
     assert cit["chunk_ids"] == ["AAPL_annual_Risk_Factors_p45_i01"]
     assert len(cit["evidence_snapshot"]) == 1
     assert cit["evidence_snapshot"][0]["section"] == "Risk Factors"
+    assert cit["validation"]["ok"] is True
+    assert cit["validation"]["invalid_citations"] == []
 
 
 def test_extract_doc_markers_multiple():
@@ -70,9 +72,12 @@ def test_extract_doc_markers_out_of_range():
         ]
     }
     cit = build_citations(report, ep)
-    # 无合法 marker → 兜底全部 chunk_id
+    # 无合法 marker → 不应 fallback 冒充为有效引用
     assert cit["doc_markers"] is None
-    assert cit["chunk_ids"] == ["CHUNK_A"]
+    assert cit["chunk_ids"] == []
+    assert cit["validation"]["ok"] is False
+    assert cit["validation"]["missing_citations"] is True
+    assert cit["validation"]["invalid_citations"] == ["doc:99"]
 
 
 def test_extract_doc_markers_case_insensitive():
@@ -104,10 +109,10 @@ def test_extract_doc_markers_with_spaces():
 
 
 # ═══════════════════════════════════════════════════════════
-# 兜底逻辑：无 [doc:N] 时保存所有 chunk_id
+# 无引用时不应自动落库全部 chunk
 # ═══════════════════════════════════════════════════════════
 
-def test_fallback_saves_all_chunks():
+def test_no_marker_does_not_claim_all_chunks():
     report = "Analysis complete. No citations given."
     ep = {
         "document_evidence": [
@@ -117,8 +122,11 @@ def test_fallback_saves_all_chunks():
     }
     cit = build_citations(report, ep)
     assert cit["doc_markers"] is None
-    assert cit["chunk_ids"] == ["CHUNK_A", "CHUNK_B"]
-    assert len(cit["evidence_snapshot"]) == 2
+    assert cit["chunk_ids"] == []
+    assert cit["evidence_snapshot"] is None
+    assert cit["validation"]["ok"] is False
+    assert cit["validation"]["missing_citations"] is True
+    assert cit["validation"]["retrieved_count"] == 2
 
 
 def test_empty_document_evidence():
@@ -127,14 +135,18 @@ def test_empty_document_evidence():
     assert cit["chunk_ids"] == []
     assert cit["doc_markers"] is None
     assert cit["evidence_snapshot"] is None
+    assert cit["validation"]["ok"] is True
+    assert cit["validation"]["missing_citations"] is False
 
 
 def test_empty_report():
     cit = build_citations("", {"document_evidence": [
         {"chunk_id": "CHUNK_A", "doc_id": "doc_a", "section": "Risk Factors", "source": "SEC"},
     ]})
-    assert cit["chunk_ids"] == ["CHUNK_A"]  # fallback
+    assert cit["chunk_ids"] == []
     assert cit["doc_markers"] is None
+    assert cit["validation"]["ok"] is False
+    assert cit["validation"]["missing_citations"] is True
 
 
 # ═══════════════════════════════════════════════════════════
@@ -215,10 +227,14 @@ def test_citations_structure():
              "doc_id": "AAPL_annual_2024", "section": "Risk Factors", "source": "SEC"},
         ]}
     )
-    # 方案 schema: {chunk_ids, doc_markers, evidence_snapshot}
+    # 方案 schema: {chunk_ids, doc_markers, evidence_snapshot, validation}
     assert isinstance(cit["chunk_ids"], list)
     assert isinstance(cit["doc_markers"], list) or cit["doc_markers"] is None
     assert isinstance(cit["evidence_snapshot"], list) or cit["evidence_snapshot"] is None
+    assert isinstance(cit["validation"], dict)
+    assert "ok" in cit["validation"]
+    assert "missing_citations" in cit["validation"]
+    assert "invalid_citations" in cit["validation"]
     if cit["evidence_snapshot"]:
         snap = cit["evidence_snapshot"][0]
         assert "chunk_id" in snap

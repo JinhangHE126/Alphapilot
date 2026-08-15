@@ -65,6 +65,7 @@ def complete_analysis_audit(
         generated_output=final_report,
         guard_result=guard_check,
         cited_chunk_ids=citations.get("chunk_ids") or [],
+        citation_validation=citations.get("validation"),
         evidence_packet_snapshot=evidence,
         risk_flags=risk_flags,
     )
