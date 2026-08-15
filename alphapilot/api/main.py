@@ -250,8 +250,10 @@ async def analyze(
         complete_analysis_audit,
         get_request_id,
         record_security_rejection,
+        record_kill_switch_rejection,
         start_analysis_audit,
     )
+    from governance.kill_switch import is_output_enabled
     from governance.prompt_security import scan_prompt
     from services.analysis_service import run_analysis_once
 
@@ -281,6 +283,26 @@ async def analyze(
         user_id=current_user["id"],
         stock_symbol=stock_symbol,
     )
+    if not is_output_enabled():
+        complete_analysis_record(
+            analysis_id,
+            report="",
+            recommendation=None,
+            final_score=0.0,
+            status="failed",
+        )
+        record_kill_switch_rejection(
+            request_id,
+            reason="KILL_SWITCH_OUTPUT_PAUSED",
+            risk_flags=["KILL_SWITCH_OUTPUT_PAUSED"],
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "OUTPUT_PAUSED",
+                "message": "AI output is paused by kill switch",
+            },
+        )
     security = scan_prompt(body.message)
     if not security.allowed:
         complete_analysis_record(
@@ -305,12 +327,39 @@ async def analyze(
 
     safe_message = security.sanitized_text
     add_message(session_id, "user", safe_message, node_name="user_input")
-    result = run_analysis_once(
-        user_message=safe_message,
-        stock_symbol=stock_symbol,
-        user_id=str(current_user["id"]),
-        thread_id=thread_id,
-    )
+    try:
+        result = run_analysis_once(
+            user_message=safe_message,
+            stock_symbol=stock_symbol,
+            user_id=str(current_user["id"]),
+            thread_id=thread_id,
+        )
+    except Exception as exc:
+        fallback_report = "AI analysis is temporarily unavailable due to model/provider error. Please retry later."
+        complete_analysis_record(
+            analysis_id,
+            report=fallback_report,
+            recommendation=None,
+            final_score=0.0,
+            status="failed",
+        )
+        complete_analysis_audit(
+            request_id,
+            final_report=fallback_report,
+            guard_check={"is_valid": False, "issues": [f"MODEL_PROVIDER_ERROR: {str(exc)[:200]}"]},
+            citations={},
+            stock_symbol=stock_symbol,
+            status="failed",
+        )
+        return success({
+            "request_id": request_id,
+            "analysis_id": analysis_id,
+            "session_id": session_id,
+            "stock_symbol": stock_symbol,
+            "report": fallback_report,
+            "recommendation": None,
+            "degraded": True,
+        }, message="fallback")
     add_message(session_id, "assistant", result["final_report"], node_name="recommendation_agent")
     guard = result.get("guard_check")
     final_score = float(guard.get("confidence_score", 0)) if isinstance(guard, dict) else 0.0
@@ -357,9 +406,11 @@ async def analyze_stream(
     from governance.audit import (
         complete_analysis_audit,
         get_request_id,
+        record_kill_switch_rejection,
         record_security_rejection,
         start_analysis_audit,
     )
+    from governance.kill_switch import is_output_enabled
     from governance.prompt_security import scan_prompt
     from services.analysis_service import stream_analysis_events
 
@@ -389,6 +440,26 @@ async def analyze_stream(
         user_id=current_user["id"],
         stock_symbol=stock_symbol,
     )
+    if not is_output_enabled():
+        complete_analysis_record(
+            analysis_id,
+            report="",
+            recommendation=None,
+            final_score=0.0,
+            status="failed",
+        )
+        record_kill_switch_rejection(
+            request_id,
+            reason="KILL_SWITCH_OUTPUT_PAUSED",
+            risk_flags=["KILL_SWITCH_OUTPUT_PAUSED"],
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "OUTPUT_PAUSED",
+                "message": "AI output is paused by kill switch",
+            },
+        )
     security = scan_prompt(body.message)
     if not security.allowed:
         complete_analysis_record(
@@ -914,8 +985,18 @@ async def analyze_stream_get(
     session_id: Optional[str] = None,
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
+    from governance.kill_switch import is_output_enabled
     from governance.prompt_security import scan_prompt
     from services.analysis_service import stream_analysis_events
+
+    if not is_output_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "OUTPUT_PAUSED",
+                "message": "AI output is paused by kill switch",
+            },
+        )
 
     security = scan_prompt(message)
     if not security.allowed:

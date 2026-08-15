@@ -182,12 +182,19 @@ def request_revision(
 
 def publish(analysis_id: int) -> dict[str, Any]:
     """Publish only a human-approved report."""
+    from governance.kill_switch import is_publication_enabled
+
     audit = _audit_or_error(analysis_id)
     current = _status(audit)
     if current is not ApprovalStatus.APPROVED:
         raise ApprovalTransitionError(
             "NOT_APPROVED",
             f"Only approved reports can be published; current={current.value}",
+        )
+    if not is_publication_enabled():
+        raise ApprovalTransitionError(
+            "PUBLICATION_PAUSED",
+            "Publication is paused by kill switch",
         )
     if not audit.get("human_reviewer"):
         raise ApprovalTransitionError(

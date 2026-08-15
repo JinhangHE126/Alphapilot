@@ -44,6 +44,8 @@ def complete_analysis_audit(
     Does not invent model/prompt versions yet — those land in a later P0 step.
     """
     from governance.claim_validation import validate_claims
+    from governance.kill_switch import current_kill_switch_status
+    from governance.kill_switch import current_kill_switch_status
 
     citations = citations if isinstance(citations, dict) else {}
     guard_check = guard_check if isinstance(guard_check, dict) else None
@@ -86,6 +88,7 @@ def complete_analysis_audit(
         citation_validation=claim.get("citation_validation"),
         evidence_packet_snapshot=evidence,
         risk_flags=risk_flags,
+        kill_switch_status=current_kill_switch_status(),
     )
 
 
@@ -106,6 +109,8 @@ def record_security_rejection(
     risk_flags: list[str],
 ) -> dict[str, Any] | None:
     """Persist blocked-input outcome to audit trail."""
+    from governance.kill_switch import current_kill_switch_status
+
     clean_flags: list[str] = []
     for flag in risk_flags:
         f = str(flag).strip()
@@ -120,4 +125,35 @@ def record_security_rejection(
             "issues": ["INPUT_SECURITY_BLOCKED"],
         },
         risk_flags=clean_flags,
+        kill_switch_status=current_kill_switch_status(),
+    )
+
+
+def record_kill_switch_rejection(
+    request_id: str,
+    *,
+    reason: str,
+    risk_flags: list[str] | None = None,
+) -> dict[str, Any] | None:
+    """Persist output/publication pause decisions to audit trail."""
+    from governance.kill_switch import current_kill_switch_status
+
+    flags = list(risk_flags or [])
+    if reason and reason not in flags:
+        flags.append(reason)
+    deduped: list[str] = []
+    for flag in flags:
+        f = str(flag).strip()
+        if f and f not in deduped:
+            deduped.append(f)
+    return update_audit_record(
+        request_id,
+        timestamp_completed=_utc_now(),
+        generated_output=None,
+        guard_result={
+            "is_valid": False,
+            "issues": ["KILL_SWITCH_BLOCKED"],
+        },
+        risk_flags=deduped,
+        kill_switch_status=current_kill_switch_status(),
     )
