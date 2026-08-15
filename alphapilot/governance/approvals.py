@@ -194,6 +194,10 @@ def publish(analysis_id: int) -> dict[str, Any]:
             "REVIEWER_REQUIRED",
             "Approved report has no recorded reviewer",
         )
+    # Re-evaluate the same deterministic gates at publication time. This
+    # prevents an approved record from being published if its Guard or
+    # claim/citation validation was subsequently changed or invalidated.
+    _assert_review_gate(audit)
     return _update(
         audit,
         publication_status=PublicationStatus.PUBLISHED,

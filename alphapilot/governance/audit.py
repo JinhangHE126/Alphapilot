@@ -98,3 +98,26 @@ def get_request_id(http_request: Any) -> str:
     import uuid
 
     return str(uuid.uuid4())
+
+
+def record_security_rejection(
+    request_id: str,
+    *,
+    risk_flags: list[str],
+) -> dict[str, Any] | None:
+    """Persist blocked-input outcome to audit trail."""
+    clean_flags: list[str] = []
+    for flag in risk_flags:
+        f = str(flag).strip()
+        if f and f not in clean_flags:
+            clean_flags.append(f)
+    return update_audit_record(
+        request_id,
+        timestamp_completed=_utc_now(),
+        generated_output=None,
+        guard_result={
+            "is_valid": False,
+            "issues": ["INPUT_SECURITY_BLOCKED"],
+        },
+        risk_flags=clean_flags,
+    )

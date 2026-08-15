@@ -131,3 +131,33 @@ def test_only_approved_report_can_publish(valid_analysis):
     with pytest.raises(ApprovalTransitionError) as caught:
         publish(valid_analysis)
     assert caught.value.code == "NOT_APPROVED"
+
+
+def test_publish_rechecks_claim_validation_after_approval(valid_analysis):
+    submit_for_review(valid_analysis)
+    approve(valid_analysis, reviewer="reviewer", comments="Approved.")
+    update_audit_record(
+        f"approval-{valid_analysis}",
+        citation_validation={
+            "ok": False,
+            "claim_ok": False,
+            "blocking_issues": [{"code": "MISSING_CITATION"}],
+        },
+    )
+
+    with pytest.raises(ApprovalTransitionError) as caught:
+        publish(valid_analysis)
+    assert caught.value.code == "CLAIM_VALIDATION_FAILED"
+
+
+def test_publish_rechecks_guard_after_approval(valid_analysis):
+    submit_for_review(valid_analysis)
+    approve(valid_analysis, reviewer="reviewer", comments="Approved.")
+    update_audit_record(
+        f"approval-{valid_analysis}",
+        guard_result={"is_valid": False, "issues": ["report changed"]},
+    )
+
+    with pytest.raises(ApprovalTransitionError) as caught:
+        publish(valid_analysis)
+    assert caught.value.code == "GUARD_NOT_PASSED"

@@ -246,7 +246,13 @@ async def analyze(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     """核心分析接口"""
-    from governance.audit import complete_analysis_audit, get_request_id, start_analysis_audit
+    from governance.audit import (
+        complete_analysis_audit,
+        get_request_id,
+        record_security_rejection,
+        start_analysis_audit,
+    )
+    from governance.prompt_security import scan_prompt
     from services.analysis_service import run_analysis_once
 
     request_id = get_request_id(http_request)
@@ -262,7 +268,6 @@ async def analyze(
     session_id = session["id"]
     thread_id = f"user_{current_user['id']}_{session_id}"
 
-    add_message(session_id, "user", body.message, node_name="user_input")
     analysis_record = create_analysis_record(
         current_user["id"],
         stock_symbol,
@@ -276,8 +281,32 @@ async def analyze(
         user_id=current_user["id"],
         stock_symbol=stock_symbol,
     )
+    security = scan_prompt(body.message)
+    if not security.allowed:
+        complete_analysis_record(
+            analysis_id,
+            report="",
+            recommendation=None,
+            final_score=0.0,
+            status="failed",
+        )
+        record_security_rejection(
+            request_id,
+            risk_flags=security.risk_flags + ["INPUT_SECURITY_BLOCKED"],
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "INPUT_SECURITY_BLOCKED",
+                "message": "Input was blocked by prompt security controls",
+                "risk_flags": security.risk_flags,
+            },
+        )
+
+    safe_message = security.sanitized_text
+    add_message(session_id, "user", safe_message, node_name="user_input")
     result = run_analysis_once(
-        user_message=body.message,
+        user_message=safe_message,
         stock_symbol=stock_symbol,
         user_id=str(current_user["id"]),
         thread_id=thread_id,
@@ -325,7 +354,13 @@ async def analyze_stream(
     body: AnalyzeStreamRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
-    from governance.audit import complete_analysis_audit, get_request_id, start_analysis_audit
+    from governance.audit import (
+        complete_analysis_audit,
+        get_request_id,
+        record_security_rejection,
+        start_analysis_audit,
+    )
+    from governance.prompt_security import scan_prompt
     from services.analysis_service import stream_analysis_events
 
     request_id = get_request_id(http_request)
@@ -341,7 +376,6 @@ async def analyze_stream(
     session_id = session["id"]
     thread_id = f"user_{current_user['id']}_{session_id}"
 
-    add_message(session_id, "user", body.message, node_name="user_input")
     analysis_record = create_analysis_record(
         current_user["id"],
         stock_symbol,
@@ -355,12 +389,35 @@ async def analyze_stream(
         user_id=current_user["id"],
         stock_symbol=stock_symbol,
     )
+    security = scan_prompt(body.message)
+    if not security.allowed:
+        complete_analysis_record(
+            analysis_id,
+            report="",
+            recommendation=None,
+            final_score=0.0,
+            status="failed",
+        )
+        record_security_rejection(
+            request_id,
+            risk_flags=security.risk_flags + ["INPUT_SECURITY_BLOCKED"],
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "INPUT_SECURITY_BLOCKED",
+                "message": "Input was blocked by prompt security controls",
+                "risk_flags": security.risk_flags,
+            },
+        )
+    safe_message = security.sanitized_text
+    add_message(session_id, "user", safe_message, node_name="user_input")
 
     def event_generator():
         final_payload = {"final_report": "分析完成", "recommendation": None}
         seq_num = 0
         stream = stream_analysis_events(
-            user_message=body.message,
+            user_message=safe_message,
             stock_symbol=stock_symbol,
             user_id=str(current_user["id"]),
             thread_id=thread_id,
@@ -857,19 +914,32 @@ async def analyze_stream_get(
     session_id: Optional[str] = None,
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
+    from governance.prompt_security import scan_prompt
     from services.analysis_service import stream_analysis_events
+
+    security = scan_prompt(message)
+    if not security.allowed:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "INPUT_SECURITY_BLOCKED",
+                "message": "Input was blocked by prompt security controls",
+                "risk_flags": security.risk_flags,
+            },
+        )
+    safe_message = security.sanitized_text
 
     if session_id:
         session = get_session(session_id, current_user["id"])
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
     else:
-        session = create_session(current_user["id"], title=message[:60] or "New Session")
+        session = create_session(current_user["id"], title=safe_message[:60] or "New Session")
         session_id = session["id"]
 
     def event_generator():
         for event in stream_analysis_events(
-            user_message=message,
+            user_message=safe_message,
             stock_symbol=stock_symbol,
             user_id=str(current_user["id"]),
             thread_id=f"user_{current_user['id']}_{session_id}",
