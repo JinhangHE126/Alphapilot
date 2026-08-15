@@ -81,6 +81,7 @@ api.include_router(upload_router)
 @api.middleware("http")
 async def request_context_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request.state.request_id = request_id
     started = time.time()
     response = await call_next(request)
     elapsed_ms = int((time.time() - started) * 1000)
@@ -234,30 +235,45 @@ async def get_session_messages(session_id: str, current_user: dict[str, Any] = D
 
 
 @api.post("/analyze")
-async def analyze(request: AnalyzeRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+async def analyze(
+    http_request: Request,
+    body: AnalyzeRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
     """核心分析接口"""
+    from governance.audit import complete_analysis_audit, get_request_id, start_analysis_audit
     from services.analysis_service import run_analysis_once
 
+    request_id = get_request_id(http_request)
+    stock_symbol = body.stock_symbol or "TSLA"
+
     session = None
-    if request.session_id:
-        session = get_session(request.session_id, current_user["id"])
+    if body.session_id:
+        session = get_session(body.session_id, current_user["id"])
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
     else:
-        session = create_session(current_user["id"], title=request.message[:60] or "New Session")
+        session = create_session(current_user["id"], title=body.message[:60] or "New Session")
     session_id = session["id"]
     thread_id = f"user_{current_user['id']}_{session_id}"
 
-    add_message(session_id, "user", request.message, node_name="user_input")
+    add_message(session_id, "user", body.message, node_name="user_input")
     analysis_record = create_analysis_record(
         current_user["id"],
-        request.stock_symbol or "TSLA",
+        stock_symbol,
         analysis_type="analyze",
     )
     analysis_id = analysis_record["id"]
+    start_analysis_audit(
+        request_id,
+        analysis_id=analysis_id,
+        session_id=session_id,
+        user_id=current_user["id"],
+        stock_symbol=stock_symbol,
+    )
     result = run_analysis_once(
-        user_message=request.message,
-        stock_symbol=request.stock_symbol or "TSLA",
+        user_message=body.message,
+        stock_symbol=stock_symbol,
         user_id=str(current_user["id"]),
         thread_id=thread_id,
     )
@@ -280,46 +296,70 @@ async def analyze(request: AnalyzeRequest, current_user: dict[str, Any] = Depend
             doc_markers=citations.get("doc_markers"),
             evidence_snapshot=citations.get("evidence_snapshot"),
         )
+    complete_analysis_audit(
+        request_id,
+        final_report=result.get("final_report"),
+        guard_check=guard if isinstance(guard, dict) else None,
+        citations=citations if isinstance(citations, dict) else {},
+        status="completed",
+    )
 
     return success({
+        "request_id": request_id,
+        "analysis_id": analysis_id,
         "session_id": session_id,
-        "stock_symbol": request.stock_symbol or "TSLA",
+        "stock_symbol": stock_symbol,
         "report": result["final_report"],
         "recommendation": result["recommendation"],
     })
 
 @api.post("/analyze/stream")
-async def analyze_stream(request: AnalyzeStreamRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+async def analyze_stream(
+    http_request: Request,
+    body: AnalyzeStreamRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from governance.audit import complete_analysis_audit, get_request_id, start_analysis_audit
     from services.analysis_service import stream_analysis_events
 
+    request_id = get_request_id(http_request)
+    stock_symbol = body.stock_symbol or "TSLA"
+
     session = None
-    if request.session_id:
-        session = get_session(request.session_id, current_user["id"])
+    if body.session_id:
+        session = get_session(body.session_id, current_user["id"])
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
     else:
-        session = create_session(current_user["id"], title=request.message[:60] or "New Session")
+        session = create_session(current_user["id"], title=body.message[:60] or "New Session")
     session_id = session["id"]
     thread_id = f"user_{current_user['id']}_{session_id}"
 
-    add_message(session_id, "user", request.message, node_name="user_input")
+    add_message(session_id, "user", body.message, node_name="user_input")
     analysis_record = create_analysis_record(
         current_user["id"],
-        request.stock_symbol or "TSLA",
+        stock_symbol,
         analysis_type="analyze",
     )
     analysis_id = analysis_record["id"]
+    start_analysis_audit(
+        request_id,
+        analysis_id=analysis_id,
+        session_id=session_id,
+        user_id=current_user["id"],
+        stock_symbol=stock_symbol,
+    )
 
     def event_generator():
         final_payload = {"final_report": "分析完成", "recommendation": None}
         seq_num = 0
         stream = stream_analysis_events(
-            user_message=request.message,
-            stock_symbol=request.stock_symbol or "TSLA",
+            user_message=body.message,
+            stock_symbol=stock_symbol,
             user_id=str(current_user["id"]),
             thread_id=thread_id,
             session_id=session_id,
-            language=request.language,
+            language=body.language,
         )
         while True:
             try:
@@ -359,6 +399,13 @@ async def analyze_stream(request: AnalyzeStreamRequest, current_user: dict[str, 
                     report="",
                     status="failed",
                 )
+                complete_analysis_audit(
+                    request_id,
+                    final_report="",
+                    guard_check={"is_valid": False, "issues": [str(exc)[:200]]},
+                    citations={},
+                    status="failed",
+                )
                 yield f"event: error\ndata: {{\"detail\": \"{str(exc)}\"}}\n\n"
                 break
 
@@ -386,11 +433,19 @@ async def analyze_stream(request: AnalyzeStreamRequest, current_user: dict[str, 
                 doc_markers=citations.get("doc_markers"),
                 evidence_snapshot=citations.get("evidence_snapshot"),
             )
+        complete_analysis_audit(
+            request_id,
+            final_report=final_payload.get("final_report"),
+            guard_check=guard if isinstance(guard, dict) else None,
+            citations=citations if isinstance(citations, dict) else {},
+            status="completed",
+        )
 
     headers = {
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
+        "X-Request-ID": request_id,
     }
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
