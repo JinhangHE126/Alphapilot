@@ -312,3 +312,147 @@ def get_user_stats(user_id: int) -> dict[str, Any]:
         "average_score": round(avg_score["avg"], 1) if avg_score and avg_score["avg"] else 0.0,
         "last_active": recent["ts"] if recent and recent["ts"] else None,
     }
+
+
+# ── AI audit records (Day-1 SFC governance) ──────────────────────────────────
+
+_AUDIT_JSON_FIELDS = {
+    "data_sources",
+    "retrieved_document_ids",
+    "cited_chunk_ids",
+    "evidence_packet_snapshot",
+    "citation_validation",
+    "guard_result",
+    "risk_flags",
+}
+
+_AUDIT_UPDATE_ALLOWED = {
+    "analysis_id",
+    "session_id",
+    "user_id",
+    "timestamp_completed",
+    "use_case",
+    "stock_symbol",
+    "data_sources",
+    "retrieved_document_ids",
+    "cited_chunk_ids",
+    "evidence_packet_snapshot",
+    "model_provider",
+    "model_name",
+    "model_version",
+    "prompt_version",
+    "generated_output",
+    "citation_validation",
+    "guard_result",
+    "risk_flags",
+    "human_reviewer",
+    "review_comments",
+    "approval_status",
+    "approval_timestamp",
+    "publication_status",
+    "kill_switch_status",
+}
+
+
+def _dump_audit_json(value: Any) -> str | None:
+    if value is None:
+        return None
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _row_to_audit(row: Any) -> dict[str, Any] | None:
+    if not row:
+        return None
+    result = dict(row)
+    for field in _AUDIT_JSON_FIELDS:
+        raw = result.get(field)
+        if raw:
+            try:
+                result[field] = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
+    return result
+
+
+def create_audit_record(
+    request_id: str,
+    *,
+    analysis_id: int | None = None,
+    session_id: str | None = None,
+    user_id: int | None = None,
+    stock_symbol: str = "",
+    use_case: str = "ai_assisted_investment_research",
+) -> dict[str, Any]:
+    """Insert a new audit row when an analysis request starts."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO ai_audit_records (
+                request_id, analysis_id, session_id, user_id, stock_symbol, use_case
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (request_id, analysis_id, session_id, user_id, stock_symbol, use_case),
+        )
+        row = conn.execute(
+            "SELECT * FROM ai_audit_records WHERE request_id = ?",
+            (request_id,),
+        ).fetchone()
+    return _row_to_audit(row) or {}
+
+
+def get_audit_record_by_request_id(request_id: str) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM ai_audit_records WHERE request_id = ?",
+            (request_id,),
+        ).fetchone()
+    return _row_to_audit(row)
+
+
+def get_audit_record_by_analysis_id(analysis_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM ai_audit_records
+            WHERE analysis_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (analysis_id,),
+        ).fetchone()
+    return _row_to_audit(row)
+
+
+def update_audit_record(request_id: str, **fields: Any) -> dict[str, Any] | None:
+    """Patch allowed audit columns; JSON and Enum values are normalized."""
+    if not fields:
+        return get_audit_record_by_request_id(request_id)
+
+    sets: list[str] = []
+    values: list[Any] = []
+    for key, value in fields.items():
+        if key not in _AUDIT_UPDATE_ALLOWED:
+            continue
+        if key in _AUDIT_JSON_FIELDS:
+            value = _dump_audit_json(value)
+        elif hasattr(value, "value"):
+            value = value.value
+        sets.append(f"{key} = ?")
+        values.append(value)
+
+    if not sets:
+        return get_audit_record_by_request_id(request_id)
+
+    sets.append("updated_at = datetime('now')")
+    values.append(request_id)
+
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE ai_audit_records SET {', '.join(sets)} WHERE request_id = ?",
+            values,
+        )
+        row = conn.execute(
+            "SELECT * FROM ai_audit_records WHERE request_id = ?",
+            (request_id,),
+        ).fetchone()
+    return _row_to_audit(row)

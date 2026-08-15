@@ -136,6 +136,54 @@ def init_db() -> None:
             ON analysis_citations(analysis_id)
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_audit_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id TEXT NOT NULL UNIQUE,
+                analysis_id INTEGER,
+                session_id TEXT,
+                user_id INTEGER,
+                timestamp_started TEXT NOT NULL DEFAULT (datetime('now')),
+                timestamp_completed TEXT,
+                use_case TEXT NOT NULL DEFAULT 'ai_assisted_investment_research',
+                stock_symbol TEXT NOT NULL DEFAULT '',
+                data_sources TEXT,
+                retrieved_document_ids TEXT,
+                cited_chunk_ids TEXT,
+                evidence_packet_snapshot TEXT,
+                model_provider TEXT,
+                model_name TEXT,
+                model_version TEXT,
+                prompt_version TEXT,
+                generated_output TEXT,
+                citation_validation TEXT,
+                guard_result TEXT,
+                risk_flags TEXT,
+                human_reviewer TEXT,
+                review_comments TEXT,
+                approval_status TEXT NOT NULL DEFAULT 'draft',
+                approval_timestamp TEXT,
+                publication_status TEXT NOT NULL DEFAULT 'not_published',
+                kill_switch_status TEXT NOT NULL DEFAULT 'enabled',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (analysis_id) REFERENCES analysis_history(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_audit_analysis
+            ON ai_audit_records(analysis_id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_audit_request
+            ON ai_audit_records(request_id)
+            """
+        )
         _migrate_users(conn)
 
 
