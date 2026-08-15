@@ -154,6 +154,11 @@ class AnalyzeStreamRequest(BaseModel):
     session_id: Optional[str] = None
     language: Optional[str] = None
 
+
+class ReviewActionRequest(BaseModel):
+    comments: Optional[str] = Field(default=None, max_length=2000)
+
+
 class CompareRequest(BaseModel):
     stock_symbols: List[str] = ["TSLA", "NVDA"]
 
@@ -676,6 +681,132 @@ async def get_history_detail(analysis_id: int, current_user: dict[str, Any] = De
     events = get_analysis_events(analysis_id)
     citations = get_analysis_citations(analysis_id)
     return success({"id": analysis_id, **record, "events": events, "citations": citations})
+
+
+def _require_owned_analysis(analysis_id: int, user_id: int) -> None:
+    if not get_analysis_detail(analysis_id, user_id):
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+
+def _reviewer_identity(current_user: dict[str, Any]) -> str:
+    username = str(current_user.get("username") or "").strip()
+    return username or f"user:{current_user['id']}"
+
+
+def _approval_http_error(exc: Exception) -> HTTPException:
+    from governance.approvals import ApprovalTransitionError
+
+    if isinstance(exc, ApprovalTransitionError):
+        status_code = 404 if exc.code == "AUDIT_NOT_FOUND" else 409
+        return HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": exc.message},
+        )
+    return HTTPException(status_code=500, detail="Approval action failed")
+
+
+@api.get("/analyses/{analysis_id}/audit")
+async def get_analysis_audit(
+    analysis_id: int,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from db.repository import get_audit_record_by_analysis_id
+
+    _require_owned_analysis(analysis_id, current_user["id"])
+    audit = get_audit_record_by_analysis_id(analysis_id)
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+    return success(audit)
+
+
+@api.post("/analyses/{analysis_id}/submit-review")
+async def submit_analysis_review(
+    analysis_id: int,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from governance.approvals import submit_for_review
+
+    _require_owned_analysis(analysis_id, current_user["id"])
+    try:
+        audit = submit_for_review(analysis_id)
+    except Exception as exc:
+        raise _approval_http_error(exc) from exc
+    return success(audit)
+
+
+@api.post("/analyses/{analysis_id}/approve")
+async def approve_analysis(
+    analysis_id: int,
+    body: ReviewActionRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from governance.approvals import approve
+
+    _require_owned_analysis(analysis_id, current_user["id"])
+    try:
+        audit = approve(
+            analysis_id,
+            reviewer=_reviewer_identity(current_user),
+            comments=body.comments,
+        )
+    except Exception as exc:
+        raise _approval_http_error(exc) from exc
+    return success(audit)
+
+
+@api.post("/analyses/{analysis_id}/reject")
+async def reject_analysis(
+    analysis_id: int,
+    body: ReviewActionRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from governance.approvals import reject
+
+    _require_owned_analysis(analysis_id, current_user["id"])
+    try:
+        audit = reject(
+            analysis_id,
+            reviewer=_reviewer_identity(current_user),
+            comments=body.comments,
+        )
+    except Exception as exc:
+        raise _approval_http_error(exc) from exc
+    return success(audit)
+
+
+@api.post("/analyses/{analysis_id}/request-revision")
+async def request_analysis_revision(
+    analysis_id: int,
+    body: ReviewActionRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from governance.approvals import request_revision
+
+    _require_owned_analysis(analysis_id, current_user["id"])
+    try:
+        audit = request_revision(
+            analysis_id,
+            reviewer=_reviewer_identity(current_user),
+            comments=body.comments,
+        )
+    except Exception as exc:
+        raise _approval_http_error(exc) from exc
+    return success(audit)
+
+
+@api.post("/analyses/{analysis_id}/publish")
+async def publish_analysis(
+    analysis_id: int,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from governance.approvals import publish
+
+    _require_owned_analysis(analysis_id, current_user["id"])
+    try:
+        audit = publish(analysis_id)
+    except Exception as exc:
+        raise _approval_http_error(exc) from exc
+    return success(audit)
 
 
 @api.delete("/history/{analysis_id}")
