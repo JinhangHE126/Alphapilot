@@ -151,6 +151,8 @@ export type AuditRecord = {
   kill_switch_status?: string | null;
   guard_result?: { is_valid?: boolean } | null;
   citation_validation?: { ok?: boolean; claim_ok?: boolean } | null;
+  disclaimer?: string | null;
+  disclaimer_version?: string | null;
 };
 
 export async function getAnalysisAudit(analysisId: number) {

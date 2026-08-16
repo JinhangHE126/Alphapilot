@@ -351,7 +351,9 @@ async def analyze(
             stock_symbol=stock_symbol,
             status="failed",
         )
-        return success({
+        from governance.disclaimers import attach_disclaimer_fields
+
+        return success(attach_disclaimer_fields({
             "request_id": request_id,
             "analysis_id": analysis_id,
             "session_id": session_id,
@@ -359,7 +361,7 @@ async def analyze(
             "report": fallback_report,
             "recommendation": None,
             "degraded": True,
-        }, message="fallback")
+        }), message="fallback")
     add_message(session_id, "assistant", result["final_report"], node_name="recommendation_agent")
     guard = result.get("guard_check")
     final_score = float(guard.get("confidence_score", 0)) if isinstance(guard, dict) else 0.0
@@ -388,14 +390,16 @@ async def analyze(
         status="completed",
     )
 
-    return success({
+    from governance.disclaimers import attach_disclaimer_fields
+
+    return success(attach_disclaimer_fields({
         "request_id": request_id,
         "analysis_id": analysis_id,
         "session_id": session_id,
         "stock_symbol": stock_symbol,
         "report": result["final_report"],
         "recommendation": result["recommendation"],
-    })
+    }))
 
 @api.post("/analyze/stream")
 async def analyze_stream(
@@ -510,7 +514,14 @@ async def analyze_stream(
                     data_obj = {}
 
                 if event_type == "analysis_complete":
+                    from governance.disclaimers import attach_disclaimer_fields
+
+                    data_obj = attach_disclaimer_fields(data_obj, body.language)
                     final_payload = data_obj
+                    event = (
+                        "event: analysis_complete\n"
+                        f"data: {json.dumps(data_obj, ensure_ascii=False)}\n\n"
+                    )
                 elif event_type in ("agent_start", "agent_done"):
                     add_analysis_event(analysis_id, seq_num, data_obj.get("agent", ""), event_type)
                 elif event_type == "agent_output":
@@ -525,7 +536,9 @@ async def analyze_stream(
                 yield event
             except StopIteration as stop:
                 if isinstance(stop.value, dict):
-                    final_payload = stop.value
+                    from governance.disclaimers import attach_disclaimer_fields
+
+                    final_payload = attach_disclaimer_fields(stop.value, body.language)
                 break
             except Exception as exc:
                 complete_analysis_record(
@@ -861,12 +874,20 @@ _AUDIT_EXPORT_FIELDS = (
 )
 
 
-def _audit_export_payload(audit: dict[str, Any]) -> dict[str, Any]:
+def _audit_export_payload(
+    audit: dict[str, Any],
+    *,
+    language: str | None = "en",
+) -> dict[str, Any]:
     """Return the approved, portable subset of an audit record for export."""
-    return {
+    from governance.disclaimers import get_disclaimer_payload
+
+    payload = {
         "export_format": "alphapilot-ai-audit-v1",
         "audit_record": {field: audit.get(field) for field in _AUDIT_EXPORT_FIELDS},
     }
+    payload.update(get_disclaimer_payload(language))
+    return payload
 
 
 @api.get("/analyses/{analysis_id}/audit")
@@ -875,12 +896,13 @@ async def get_analysis_audit(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     from db.repository import get_audit_record_by_analysis_id
+    from governance.disclaimers import attach_disclaimer_fields
 
     _require_owned_analysis(analysis_id, current_user["id"])
     audit = get_audit_record_by_analysis_id(analysis_id)
     if not audit:
         raise HTTPException(status_code=404, detail="Audit record not found")
-    return success(audit)
+    return success(attach_disclaimer_fields(audit))
 
 
 @api.get("/analyses/{analysis_id}/audit/export")

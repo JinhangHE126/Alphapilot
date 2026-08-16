@@ -112,6 +112,7 @@ export type TranslationDict = {
     emptyDesc: string;
     inProgress: string;
     recommendation: string;
+    disclaimerTitle: string;
     guardTitle: string;
     guardPass: string;
     guardFail: string;

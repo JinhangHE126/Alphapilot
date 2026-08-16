@@ -102,6 +102,7 @@ export const yue: TranslationDict = {
     emptyDesc: "啟動分析之後，綜合研究報告會喺呢度顯示",
     inProgress: "分析進行緊...",
     recommendation: "投資建議",
+    disclaimerTitle: "免責聲明",
     guardTitle: "Guard 智能體驗證",
     guardPass: "通過",
     guardFail: "未通過",
@@ -201,7 +202,7 @@ export const yue: TranslationDict = {
     downloadAudit: "下載審計 JSON",
     passed: "通過",
     notPassed: "未通過",
-    disclaimer: "本報告係 AI 輔助研究材料，唔構成投資建議；發布前仍然要完成人工審核同批准。",
+    disclaimer: "本報告係 AlphaPilot 自動生成嘅 AI 輔助研究材料，唔構成投資建議，亦唔係 SFC 合規認證；發布前仍然要完成人工審核同批准。",
   },
   citations: {
     title: "文檔引用審計（Audit Trail）",

@@ -102,6 +102,7 @@ export const zhHans: TranslationDict = {
     emptyDesc: "启动分析后，综合研究报告将在此处呈现",
     inProgress: "分析进行中...",
     recommendation: "投资建议",
+    disclaimerTitle: "免责声明",
     guardTitle: "Guard 智能体验证",
     guardPass: "通过",
     guardFail: "未通过",
@@ -201,7 +202,7 @@ export const zhHans: TranslationDict = {
     downloadAudit: "下载审计 JSON",
     passed: "通过",
     notPassed: "未通过",
-    disclaimer: "本报告为 AI 辅助研究材料，不构成投资建议；发布前仍须完成人工审核和批准。",
+    disclaimer: "本报告为 AlphaPilot 自动生成的 AI 辅助研究材料，不构成投资建议，也不是 SFC 合规认证；发布前仍须完成人工审核和批准。",
   },
   citations: {
     title: "文档引用审计（Audit Trail）",

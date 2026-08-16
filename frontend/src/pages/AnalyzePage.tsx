@@ -259,6 +259,7 @@ export default function AnalyzePage() {
   const [targetPrice, setTargetPrice] = useState<TargetPriceData | null>(null);
   const [riskLevel, setRiskLevel] = useState<RiskLevelData | null>(null);
   const [citations, setCitations] = useState<AnalysisCitations | null>(null);
+  const [disclaimer, setDisclaimer] = useState("");
   const prevDefaultPrompt = useRef(t("analyze.defaultPrompt"));
 
   useEffect(() => {
@@ -347,6 +348,7 @@ export default function AnalyzePage() {
     setTargetPrice(null);
     setRiskLevel(null);
     setCitations(null);
+    setDisclaimer("");
     try {
       const sessionId = await ensureSession();
       await streamAnalyze(
@@ -463,6 +465,9 @@ export default function AnalyzePage() {
               }
               if (evt.data.citations) {
                 setCitations(evt.data.citations);
+              }
+              if (typeof evt.data.disclaimer === "string" && evt.data.disclaimer.trim()) {
+                setDisclaimer(evt.data.disclaimer);
               }
               return prev;
             });
@@ -856,8 +861,8 @@ export default function AnalyzePage() {
           {/* ── 免责声明 ── */}
           {report && !running && (
             <div className="disclaimer-box">
-              <p className="disclaimer-title">免责声明</p>
-              <p>本报告由 AlphaPilot 多智能体系统基于公开市场数据与文档自动生成，<strong>不构成任何形式的投资建议</strong>。所有分析内容（包括但不限于目标价、风险评估、仓位建议）均为 AI 模型基于历史数据的推演，不保证准确性与完整性。投资者应独立判断，并在必要时咨询持牌专业顾问。AI 生成内容可能存在事实性错误或遗漏，请务必人工复核后再做决策。</p>
+              <p className="disclaimer-title">{t("analyze.disclaimerTitle")}</p>
+              <p>{disclaimer || t("detail.disclaimer")}</p>
             </div>
           )}
         </div>

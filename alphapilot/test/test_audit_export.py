@@ -70,6 +70,10 @@ def test_audit_export_downloads_allowlisted_json_for_owner():
     )
     payload = response.json()
     assert payload["export_format"] == "alphapilot-ai-audit-v1"
+    assert payload["disclaimer_version"]
+    assert payload["disclaimer"]
+    assert "investment advice" in payload["disclaimer"].lower() or "投资建议" in payload["disclaimer"]
+    assert "SFC" in payload["disclaimer"]
     audit = payload["audit_record"]
     assert audit["analysis_id"] == analysis_id
     assert audit["stock_symbol"] == "AAPL"

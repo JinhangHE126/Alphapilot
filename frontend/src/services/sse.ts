@@ -190,7 +190,7 @@ export type StreamEvent =
   | { event: "agent_done"; data: { agent: string; duration_ms: number } }
   | { event: "agent_error"; data: { agent: string; label: string; icon: string; message: string; duration_ms: number } }
   | { event: "agent_skipped"; data: { agent: string; label: string; icon: string } }
-  | { event: "analysis_complete"; data: { final_report: string; recommendation?: string; guard_check?: GuardCheck; target_price?: TargetPriceData | null; risk_level?: RiskLevelData | null; citations?: AnalysisCitations | null } }
+  | { event: "analysis_complete"; data: { final_report: string; recommendation?: string; guard_check?: GuardCheck; target_price?: TargetPriceData | null; risk_level?: RiskLevelData | null; citations?: AnalysisCitations | null; disclaimer?: string; disclaimer_version?: string } }
   | { event: "target_price"; data: TargetPriceData }
   | { event: "risk_level"; data: RiskLevelData }
   | { event: "error"; data: { detail: string } };

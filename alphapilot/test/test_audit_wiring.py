@@ -82,6 +82,9 @@ def test_analyze_wires_request_id_into_audit_record():
     assert audit["model_version"]
     assert audit["prompt_version"]
     assert "unknown" not in (audit["model_provider"], audit["model_name"])
+    assert data.get("disclaimer")
+    assert data.get("disclaimer_version")
+    assert "SFC" in data["disclaimer"]
 
 
 def test_analyze_fallback_still_records_model_prompt_metadata(monkeypatch):

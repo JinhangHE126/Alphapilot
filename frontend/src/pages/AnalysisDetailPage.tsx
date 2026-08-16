@@ -243,7 +243,9 @@ export default function AnalysisDetailPage() {
             </div>
           </>
         )}
-        <p className="governance-disclaimer">{t("detail.disclaimer")}</p>
+        <p className="governance-disclaimer">
+          {audit?.disclaimer || t("detail.disclaimer")}
+        </p>
       </section>
 
       <section className="card">
