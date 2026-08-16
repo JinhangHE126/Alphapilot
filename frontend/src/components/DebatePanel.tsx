@@ -29,13 +29,14 @@ function getContent(agents: AgentInfo[], id: string): string {
 }
 
 /** 从文本中提取 JSON 对象（优先最外层完整 JSON） */
-function extractBalancedJson(text: string): string | null {
+function extractBalancedJson(text: string, _preference: "first" | "last" = "first"): string | null {
   const starts: number[] = [];
   for (let i = 0; i < text.length; i++) {
     if (text[i] === "{") starts.push(i);
   }
+  const ordered = _preference === "last" ? [...starts].reverse() : starts;
   // 从最外层（第一个 {）开始匹配，避免嵌套对象干扰
-  for (const start of starts) {
+  for (const start of ordered) {
     let depth = 0;
     for (let j = start; j < text.length; j++) {
       if (text[j] === "{") depth++;

@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Target, ShieldCheck, TrendingUp, TrendingDown, AlertTriangle, Info, CheckCircle2, XCircle, Search, Database, FileWarning } from "lucide-react";
+import { useMemo, type ReactNode } from "react";
+import { Target, ShieldCheck, TrendingUp, AlertTriangle, Info, CheckCircle2, XCircle, Search, Database, FileWarning } from "lucide-react";
 import type { EvidencePacketData, GuardCheck, TargetPriceData, RiskLevelData } from "../services/sse";
 
 type ValuationSummaryCardProps = {
@@ -34,7 +34,7 @@ function deriveRiskLevel(riskLevel: RiskLevelData | null | undefined, evidence: 
   return "unknown";
 }
 
-const RISK_CONFIG: Record<RiskLevel, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+const RISK_CONFIG: Record<RiskLevel, { label: string; color: string; bg: string; icon: ReactNode }> = {
   low:    { label: "低风险",   color: "#22c55e", bg: "rgba(34,197,94,0.1)",   icon: <ShieldCheck size={15} /> },
   medium: { label: "中风险",   color: "#f59e0b", bg: "rgba(245,158,11,0.1)",  icon: <AlertTriangle size={15} /> },
   high:   { label: "高风险",   color: "#ef4444", bg: "rgba(239,68,68,0.1)",   icon: <AlertTriangle size={15} /> },
@@ -262,12 +262,12 @@ export default function ValuationSummaryCard({ evidence, guard, recommendation, 
 type GuardCheckCategory = {
   key: string;
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   items: string[];
   passed: boolean;
 };
 
-function GuardCheckItems({ guard, evidenceScore }: { guard: GuardCheck; evidenceScore: number }) {
+function GuardCheckItems({ guard, evidenceScore: _evidenceScore }: { guard: GuardCheck; evidenceScore: number }) {
   const checks = guard.checks;
   const hasStructured = checks && (
     checks.data_coverage !== undefined ||
@@ -321,27 +321,25 @@ function GuardCheckItems({ guard, evidenceScore }: { guard: GuardCheck; evidence
   const issues = guard.issues ?? [];
   const corrections = guard.corrections ?? [];
   const allIssues = [...new Set([...issues, ...corrections])];
-  const categories: GuardCheckCategory[] = useMemo(() => {
-    const cats: Record<string, GuardCheckCategory> = {
-      data_coverage: { key: "data_coverage", label: "数据覆盖", icon: <Database size={13} />, items: [], passed: true },
-      symbol_match: { key: "symbol_match", label: "标的匹配", icon: <Search size={13} />, items: [], passed: true },
-      unsupported: { key: "unsupported", label: "无依据声明", icon: <FileWarning size={13} />, items: [], passed: true },
-      other: { key: "other", label: "其他检查", icon: <Info size={13} />, items: [], passed: true },
-    };
-    for (const iss of allIssues) {
-      const lower = iss.toLowerCase();
-      if (lower.includes("symbol mismatch") || lower.includes("symbol_mismatch")) {
-        cats.symbol_match.items.push(iss); cats.symbol_match.passed = false;
-      } else if (lower.includes("insufficient_evidence") || lower.includes("insufficient evidence") || lower.includes("data_summary") || lower.includes("coverage")) {
-        cats.data_coverage.items.push(iss); cats.data_coverage.passed = false;
-      } else if (lower.includes("unverified_claim") || lower.includes("ungrounded") || lower.includes("unsupported")) {
-        cats.unsupported.items.push(iss); cats.unsupported.passed = false;
-      } else {
-        cats.other.items.push(iss); cats.other.passed = false;
-      }
+  const cats: Record<string, GuardCheckCategory> = {
+    data_coverage: { key: "data_coverage", label: "数据覆盖", icon: <Database size={13} />, items: [], passed: true },
+    symbol_match: { key: "symbol_match", label: "标的匹配", icon: <Search size={13} />, items: [], passed: true },
+    unsupported: { key: "unsupported", label: "无依据声明", icon: <FileWarning size={13} />, items: [], passed: true },
+    other: { key: "other", label: "其他检查", icon: <Info size={13} />, items: [], passed: true },
+  };
+  for (const iss of allIssues) {
+    const lower = iss.toLowerCase();
+    if (lower.includes("symbol mismatch") || lower.includes("symbol_mismatch")) {
+      cats.symbol_match.items.push(iss); cats.symbol_match.passed = false;
+    } else if (lower.includes("insufficient_evidence") || lower.includes("insufficient evidence") || lower.includes("data_summary") || lower.includes("coverage")) {
+      cats.data_coverage.items.push(iss); cats.data_coverage.passed = false;
+    } else if (lower.includes("unverified_claim") || lower.includes("ungrounded") || lower.includes("unsupported")) {
+      cats.unsupported.items.push(iss); cats.unsupported.passed = false;
+    } else {
+      cats.other.items.push(iss); cats.other.passed = false;
     }
-    return Object.values(cats).filter((c) => c.items.length > 0);
-  }, [allIssues]);
+  }
+  const categories: GuardCheckCategory[] = Object.values(cats).filter((c) => c.items.length > 0);
 
   const allPassed = categories.length === 0 || categories.every((c) => c.passed);
 

@@ -161,7 +161,7 @@ export type DebateClaim = {
 };
 
 export type DebateStructuredData = {
-  stance_strength: number;
+  stance_strength?: number;
   summary: string;
   claims: DebateClaim[];
 };

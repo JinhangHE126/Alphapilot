@@ -124,6 +124,7 @@ export const yue: TranslationDict = {
       news_sentiment_expert: { label: "新聞同情緒智能體", role: "新聞、事件同市場情緒" },
       strategy_expert: { label: "策略智能體", role: "投資策略同邏輯構建" },
       risk_expert: { label: "風險智能體", role: "風險評估同壓力測試" },
+      debate_stage: { label: "博弈智能體", role: "基於事實批判性討論" },
       guard_agent: { label: "Guard 智能體", role: "事實核驗同防幻覺校驗" },
       recommendation_agent: { label: "推薦智能體", role: "個人化投資建議" },
       portfolio_agent: { label: "組合智能體", role: "投資組合配置同倉位" },
@@ -132,7 +133,6 @@ export const yue: TranslationDict = {
     nodes: {
       evidence_packet_builder: { label: "證據構建", role: "數據採集同事實封裝" },
       orchestrator: { label: "編排調度", role: "工作流路由同調度" },
-      debate_stage: { label: "博弈智能體", role: "基於事實批判性討論" },
     },
   },
   history: {

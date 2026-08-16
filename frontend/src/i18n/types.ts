@@ -134,6 +134,7 @@ export type TranslationDict = {
       news_sentiment_expert: { label: string; role: string };
       strategy_expert: { label: string; role: string };
       risk_expert: { label: string; role: string };
+      debate_stage: { label: string; role: string };
       guard_agent: { label: string; role: string };
       recommendation_agent: { label: string; role: string };
       portfolio_agent: { label: string; role: string };

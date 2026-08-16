@@ -124,6 +124,7 @@ export const zhHans: TranslationDict = {
       news_sentiment_expert: { label: "新闻与情绪智能体", role: "新闻、事件与市场情绪" },
       strategy_expert: { label: "策略智能体", role: "投资策略与逻辑构建" },
       risk_expert: { label: "风险智能体", role: "风险评估与压力测试" },
+      debate_stage: { label: "博弈智能体", role: "基于事实批判性讨论" },
       guard_agent: { label: "Guard 智能体", role: "事实核验与防幻觉校验" },
       recommendation_agent: { label: "推荐智能体", role: "个性化投资建议" },
       portfolio_agent: { label: "组合智能体", role: "投资组合配置与仓位" },
@@ -132,7 +133,6 @@ export const zhHans: TranslationDict = {
     nodes: {
       evidence_packet_builder: { label: "证据构建", role: "数据采集与事实封装" },
       orchestrator: { label: "编排调度", role: "工作流路由与调度" },
-      debate_stage: { label: "博弈智能体", role: "基于事实批判性讨论" },
     },
   },
   history: {
