@@ -46,6 +46,9 @@ def test_analyze_wires_request_id_into_audit_record():
             "is_valid": True,
             "confidence_score": 88,
             "issues": [],
+            "grounding_warnings": [
+                "GUARD_EMBEDDING_DEGRADED: semantic check skipped"
+            ],
             "evidence_packet": {"symbol": "AAPL", "facts": []},
         },
         "citations": {
@@ -76,6 +79,7 @@ def test_analyze_wires_request_id_into_audit_record():
     assert audit["generated_output"] == fake_result["final_report"]
     assert audit["cited_chunk_ids"] == ["chunk-aapl-1"]
     assert audit["guard_result"]["is_valid"] is True
+    assert "GUARD_EMBEDDING_DEGRADED" in audit["risk_flags"]
     assert audit["timestamp_completed"]
     assert audit["model_provider"]
     assert audit["model_name"]

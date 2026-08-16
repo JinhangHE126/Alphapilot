@@ -7,7 +7,9 @@ from schemas.evidence_packet import (
     OutputLevel,
     DocumentChunk,
 )
+import os
 import re
+import threading
 
 
 def _strip_machine_json_blocks(text: str) -> str:
@@ -98,15 +100,68 @@ _DOC_CITATION_PATTERNS_EN = [
 ]
 
 _DOC_GROUNDING_MODEL = None
+_DOC_GROUNDING_MODEL_UNAVAILABLE = False
+_DOC_GROUNDING_MODEL_ERROR: str | None = None
+_DOC_GROUNDING_MODEL_LOCK = threading.Lock()
+_DOC_GROUNDING_DEGRADED_CODE = "GUARD_EMBEDDING_DEGRADED"
 
 
 def _get_doc_grounding_model():
-    """懒加载 embedding 模型，避免 Guard 每次检查都重新实例化。"""
+    """
+    Load the grounding model from local Hugging Face cache only.
+
+    A missing/corrupt cache degrades Level-2 semantic grounding for the
+    process instead of triggering network retries that block the Guard/SSE.
+    """
     global _DOC_GROUNDING_MODEL
-    if _DOC_GROUNDING_MODEL is None:
-        from sentence_transformers import SentenceTransformer
-        _DOC_GROUNDING_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
-    return _DOC_GROUNDING_MODEL
+    global _DOC_GROUNDING_MODEL_ERROR
+    global _DOC_GROUNDING_MODEL_UNAVAILABLE
+
+    if _DOC_GROUNDING_MODEL is not None:
+        return _DOC_GROUNDING_MODEL
+    if _DOC_GROUNDING_MODEL_UNAVAILABLE:
+        return None
+
+    with _DOC_GROUNDING_MODEL_LOCK:
+        if _DOC_GROUNDING_MODEL is not None:
+            return _DOC_GROUNDING_MODEL
+        if _DOC_GROUNDING_MODEL_UNAVAILABLE:
+            return None
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            configured = (
+                os.getenv("GUARD_EMBEDDING_MODEL")
+                or os.getenv("RAG_EMBEDDING_MODEL")
+                or "all-MiniLM-L6-v2"
+            ).strip()
+            model_name = (
+                configured
+                if "/" in configured
+                else f"sentence-transformers/{configured}"
+            )
+            _DOC_GROUNDING_MODEL = SentenceTransformer(
+                model_name,
+                local_files_only=True,
+            )
+            return _DOC_GROUNDING_MODEL
+        except Exception as exc:
+            _DOC_GROUNDING_MODEL_UNAVAILABLE = True
+            _DOC_GROUNDING_MODEL_ERROR = f"{type(exc).__name__}: {exc}"[:240]
+            print(
+                "⚠️ Guard semantic grounding degraded: local embedding model "
+                f"unavailable ({_DOC_GROUNDING_MODEL_ERROR})",
+                flush=True,
+            )
+            return None
+
+
+def _grounding_degraded_warning(reason: str | None = None) -> str:
+    detail = (reason or _DOC_GROUNDING_MODEL_ERROR or "local model unavailable")[:240]
+    return (
+        f"{_DOC_GROUNDING_DEGRADED_CODE}: Level-2 semantic document "
+        f"grounding skipped; exact citation and hard-rule checks remain active. {detail}"
+    )
 
 
 _DOC_CITE_RE = re.compile(r"\[doc:(\d+)\]", re.IGNORECASE)
@@ -230,6 +285,11 @@ def _find_ungrounded_doc_claims(
         if chunk_contents:
             try:
                 model = _get_doc_grounding_model()
+                if model is None:
+                    warnings.append(_grounding_degraded_warning())
+                    model = None
+                if model is None:
+                    raise LookupError("semantic grounding model unavailable")
                 chunk_embeddings = model.encode(chunk_contents, convert_to_numpy=True)
                 span_texts = [s[0] for s in citation_spans]
                 span_embeddings = model.encode(span_texts, convert_to_numpy=True)
@@ -256,9 +316,15 @@ def _find_ungrounded_doc_claims(
                             f"threshold={SIMILARITY_THRESHOLD}). "
                             f"Snippet: \"{snippet[:80]}...\""
                         )
-            except ImportError:
-                # 降级：semantic matching 不可用，跳过 Level 2
+            except LookupError:
+                # Model-load degradation warning was already added above.
                 pass
+            except Exception as exc:
+                warnings.append(
+                    _grounding_degraded_warning(
+                        f"semantic encoding failed ({type(exc).__name__}: {exc})"
+                    )
+                )
 
     # ═══ Level 3: pattern-based coarse check (warnings) ═══
     has_doc_pattern = False

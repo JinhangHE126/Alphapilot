@@ -74,6 +74,14 @@ def complete_analysis_audit(
         for issue in guard_check.get("issues") or []:
             if isinstance(issue, str) and issue:
                 risk_flags.append(issue[:120])
+    if guard_check:
+        for warning in guard_check.get("grounding_warnings") or []:
+            if (
+                isinstance(warning, str)
+                and warning.startswith("GUARD_EMBEDDING_DEGRADED")
+                and "GUARD_EMBEDDING_DEGRADED" not in risk_flags
+            ):
+                risk_flags.append("GUARD_EMBEDDING_DEGRADED")
     for item in claim.get("blocking_issues") or []:
         code = item.get("code") if isinstance(item, dict) else None
         if code and code not in risk_flags:

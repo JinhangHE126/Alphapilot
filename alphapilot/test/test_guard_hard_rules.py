@@ -100,6 +100,101 @@ def test_guard_rejects_ungrounded_keyword_claim():
     assert any("Ungrounded claim" in issue for issue in result["issues"])
 
 
+def test_guard_embedding_model_loads_local_cache_only(monkeypatch):
+    from agents import guard_agent
+    import sentence_transformers
+
+    captured: dict[str, object] = {}
+    expected_model = object()
+
+    def fake_sentence_transformer(model_name, **kwargs):
+        captured["model_name"] = model_name
+        captured.update(kwargs)
+        return expected_model
+
+    monkeypatch.setattr(sentence_transformers, "SentenceTransformer", fake_sentence_transformer)
+    monkeypatch.setattr(guard_agent, "_DOC_GROUNDING_MODEL", None)
+    monkeypatch.setattr(guard_agent, "_DOC_GROUNDING_MODEL_UNAVAILABLE", False)
+    monkeypatch.setattr(guard_agent, "_DOC_GROUNDING_MODEL_ERROR", None)
+
+    loaded = guard_agent._get_doc_grounding_model()
+
+    assert loaded is expected_model
+    assert captured["model_name"] == "sentence-transformers/all-MiniLM-L6-v2"
+    assert captured["local_files_only"] is True
+
+
+def test_guard_embedding_failure_is_cached_without_network_retry(monkeypatch):
+    from agents import guard_agent
+    import sentence_transformers
+
+    attempts = 0
+
+    def fail_local_load(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise OSError("model cache incomplete")
+
+    monkeypatch.setattr(sentence_transformers, "SentenceTransformer", fail_local_load)
+    monkeypatch.setattr(guard_agent, "_DOC_GROUNDING_MODEL", None)
+    monkeypatch.setattr(guard_agent, "_DOC_GROUNDING_MODEL_UNAVAILABLE", False)
+    monkeypatch.setattr(guard_agent, "_DOC_GROUNDING_MODEL_ERROR", None)
+
+    assert guard_agent._get_doc_grounding_model() is None
+    assert guard_agent._get_doc_grounding_model() is None
+    assert attempts == 1
+    assert "model cache incomplete" in (guard_agent._DOC_GROUNDING_MODEL_ERROR or "")
+
+
+def test_doc_grounding_degrades_to_warning_when_local_model_unavailable(monkeypatch):
+    from agents import guard_agent
+    from agents.guard_agent import _find_ungrounded_doc_claims
+    from schemas.evidence_packet import Coverage, DocumentChunk, EvidencePacket
+
+    monkeypatch.setattr(guard_agent, "_get_doc_grounding_model", lambda: None)
+    monkeypatch.setattr(
+        guard_agent,
+        "_DOC_GROUNDING_MODEL_ERROR",
+        "OSError: local cache missing",
+    )
+    ep = EvidencePacket(
+        symbol="TSLA",
+        request_type="comprehensive_analysis",
+        is_cold_start=False,
+        coverage=Coverage(
+            rag_context="available",
+            market_data="available",
+            fundamental_data="available",
+            news_data="available",
+            filings="available",
+            document_evidence="available",
+        ),
+        facts=[],
+        document_evidence=[
+            DocumentChunk(
+                chunk_id="tsla_c0",
+                content="Revenue increased in the annual report.",
+                source="annual_report",
+                doc_id="tsla_annual",
+                doc_type="annual_report",
+                section="Financials",
+                page="1",
+                publish_date="2025-01-01",
+                report_period="FY2024",
+                symbol="TSLA",
+            )
+        ],
+    )
+
+    issues, warnings = _find_ungrounded_doc_claims(
+        "According to the annual report, revenue increased significantly.",
+        ep,
+    )
+
+    assert not any("similarity=" in issue for issue in issues)
+    assert any(w.startswith("GUARD_EMBEDDING_DEGRADED") for w in warnings)
+
+
 def test_doc_grounding_skips_l2_for_valid_doc_marker_paraphrase(monkeypatch):
     """Paraphrase with [doc:1] should not trigger Level 2 even when similarity is low."""
     import numpy as np
