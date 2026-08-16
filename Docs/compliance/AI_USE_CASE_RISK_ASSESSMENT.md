@@ -1,5 +1,7 @@
 # AI Use Case Risk Assessment (Demo)
 
+> AlphaPilot demonstrates engineering controls aligned with selected SFC regulatory expectations. This document is part of a technical demonstration and does not constitute legal advice, SFC certification, regulatory approval, or a determination of compliance.
+
 ## Use Case
 
 - Name: AI-assisted equity research and recommendation drafting.

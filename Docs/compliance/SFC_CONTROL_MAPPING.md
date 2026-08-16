@@ -3,7 +3,7 @@
 ## Scope Statement
 
 - This document maps AlphaPilot demo controls to selected SFC-aligned expectations from 2024-2026 guidance.
-- This project is a technical demonstration and is **not** an SFC compliance certification.
+- AlphaPilot demonstrates engineering controls aligned with selected SFC regulatory expectations. This document is part of a technical demonstration and does not constitute legal advice, SFC certification, regulatory approval, or a determination of compliance.
 
 ## Control Mapping
 

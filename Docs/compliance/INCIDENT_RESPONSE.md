@@ -1,5 +1,7 @@
 # AI Incident Response (Demo)
 
+> AlphaPilot demonstrates engineering controls aligned with selected SFC regulatory expectations. This document is part of a technical demonstration and does not constitute legal advice, SFC certification, regulatory approval, or a determination of compliance.
+
 ## Scope
 
 - Covers AI-governance incidents in AlphaPilot demo workflows (analysis, approval, publication).

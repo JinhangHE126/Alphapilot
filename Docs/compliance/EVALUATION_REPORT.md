@@ -1,5 +1,7 @@
 # Evaluation Report (Demo)
 
+> AlphaPilot demonstrates engineering controls aligned with selected SFC regulatory expectations. This document is part of a technical demonstration and does not constitute legal advice, SFC certification, regulatory approval, or a determination of compliance.
+
 ## Evaluation Scope
 
 - Validate day-1 governance controls for auditability, approval gating, prompt safety, kill switch, and export.
@@ -45,5 +47,5 @@ python -m pytest \
 
 ## Remaining Limitations
 
-- Frontend build/test toolchain has pre-existing unrelated issues outside governance acceptance scope.
+- Production-scale load, resilience, and cross-browser testing remain outside the day-1 demo scope.
 - Formal compliance/legal sign-off is not part of this demo and remains pending.

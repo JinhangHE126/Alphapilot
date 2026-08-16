@@ -1,5 +1,7 @@
 # Third-Party Register (Demo)
 
+> AlphaPilot demonstrates engineering controls aligned with selected SFC regulatory expectations. This document is part of a technical demonstration and does not constitute legal advice, SFC certification, regulatory approval, or a determination of compliance.
+
 ## Purpose
 
 - Record external providers used by AlphaPilot demo workflows.

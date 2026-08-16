@@ -1,5 +1,7 @@
 # Model Card (Demo)
 
+> AlphaPilot demonstrates engineering controls aligned with selected SFC regulatory expectations. This document is part of a technical demonstration and does not constitute legal advice, SFC certification, regulatory approval, or a determination of compliance.
+
 ## Model Usage Context
 
 - Primary purpose: Generate draft equity research content and structured analysis outputs.
