@@ -74,6 +74,10 @@ def test_audit_export_downloads_allowlisted_json_for_owner():
     assert audit["analysis_id"] == analysis_id
     assert audit["stock_symbol"] == "AAPL"
     assert audit["generated_output"] == "AAPL is stable [doc:1]."
+    assert audit["model_provider"]
+    assert audit["model_name"]
+    assert audit["model_version"]
+    assert audit["prompt_version"]
     assert "user_id" not in audit
     assert "session_id" not in audit
 

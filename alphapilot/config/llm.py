@@ -152,6 +152,38 @@ AGENT_LLM_ROUTES = {
     },
 }
 
+def get_analysis_audit_metadata() -> dict[str, str]:
+    """
+    Snapshot of model/prompt routing used by the multi-agent analysis workflow.
+
+    AlphaPilot routes multiple agents to potentially different models, so
+    provider/model fields record the configured set rather than inventing a
+    single model for the whole run.
+    """
+    providers: list[str] = []
+    models: list[str] = []
+    for route in AGENT_LLM_ROUTES.values():
+        profile_name = route.get("profile")
+        profile = LLM_PROFILES.get(profile_name) if profile_name else None
+        if not isinstance(profile, dict):
+            continue
+        provider = str(profile.get("provider") or "").strip()
+        model = str(profile.get("model") or "").strip()
+        if provider and provider not in providers:
+            providers.append(provider)
+        if model and model not in models:
+            models.append(model)
+
+    prompt_version = (os.getenv("PROMPT_VERSION") or "alphapilot-prompts-v1").strip()
+    model_version = (os.getenv("MODEL_VERSION") or "provider-managed").strip()
+    return {
+        "model_provider": ",".join(providers) or "unknown",
+        "model_name": ",".join(models) or "unknown",
+        "model_version": model_version or "provider-managed",
+        "prompt_version": prompt_version or "alphapilot-prompts-v1",
+    }
+
+
 def get_llm(agent: str = "market"):
     """获取 LLM（已修复 Gemini base_url 报错 + 增加调试信息）"""
     route = AGENT_LLM_ROUTES[agent]

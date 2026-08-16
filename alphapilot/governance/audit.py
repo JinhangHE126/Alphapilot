@@ -41,10 +41,10 @@ def complete_analysis_audit(
     """
     Patch audit fields after analysis finishes (success or failure).
 
-    Does not invent model/prompt versions yet — those land in a later P0 step.
+    Persists configured model/prompt routing metadata for governance export.
     """
+    from config.llm import get_analysis_audit_metadata
     from governance.claim_validation import validate_claims
-    from governance.kill_switch import current_kill_switch_status
     from governance.kill_switch import current_kill_switch_status
 
     citations = citations if isinstance(citations, dict) else {}
@@ -79,6 +79,7 @@ def complete_analysis_audit(
         if code and code not in risk_flags:
             risk_flags.append(code)
 
+    model_meta = get_analysis_audit_metadata()
     return update_audit_record(
         request_id,
         timestamp_completed=_utc_now(),
@@ -89,6 +90,10 @@ def complete_analysis_audit(
         evidence_packet_snapshot=evidence,
         risk_flags=risk_flags,
         kill_switch_status=current_kill_switch_status(),
+        model_provider=model_meta["model_provider"],
+        model_name=model_meta["model_name"],
+        model_version=model_meta["model_version"],
+        prompt_version=model_meta["prompt_version"],
     )
 
 
@@ -109,6 +114,7 @@ def record_security_rejection(
     risk_flags: list[str],
 ) -> dict[str, Any] | None:
     """Persist blocked-input outcome to audit trail."""
+    from config.llm import get_analysis_audit_metadata
     from governance.kill_switch import current_kill_switch_status
 
     clean_flags: list[str] = []
@@ -116,6 +122,7 @@ def record_security_rejection(
         f = str(flag).strip()
         if f and f not in clean_flags:
             clean_flags.append(f)
+    model_meta = get_analysis_audit_metadata()
     return update_audit_record(
         request_id,
         timestamp_completed=_utc_now(),
@@ -126,6 +133,10 @@ def record_security_rejection(
         },
         risk_flags=clean_flags,
         kill_switch_status=current_kill_switch_status(),
+        model_provider=model_meta["model_provider"],
+        model_name=model_meta["model_name"],
+        model_version=model_meta["model_version"],
+        prompt_version=model_meta["prompt_version"],
     )
 
 
@@ -136,6 +147,7 @@ def record_kill_switch_rejection(
     risk_flags: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """Persist output/publication pause decisions to audit trail."""
+    from config.llm import get_analysis_audit_metadata
     from governance.kill_switch import current_kill_switch_status
 
     flags = list(risk_flags or [])
@@ -146,6 +158,7 @@ def record_kill_switch_rejection(
         f = str(flag).strip()
         if f and f not in deduped:
             deduped.append(f)
+    model_meta = get_analysis_audit_metadata()
     return update_audit_record(
         request_id,
         timestamp_completed=_utc_now(),
@@ -156,4 +169,8 @@ def record_kill_switch_rejection(
         },
         risk_flags=deduped,
         kill_switch_status=current_kill_switch_status(),
+        model_provider=model_meta["model_provider"],
+        model_name=model_meta["model_name"],
+        model_version=model_meta["model_version"],
+        prompt_version=model_meta["prompt_version"],
     )

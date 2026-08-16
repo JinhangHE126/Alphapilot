@@ -77,3 +77,35 @@ def test_analyze_wires_request_id_into_audit_record():
     assert audit["cited_chunk_ids"] == ["chunk-aapl-1"]
     assert audit["guard_result"]["is_valid"] is True
     assert audit["timestamp_completed"]
+    assert audit["model_provider"]
+    assert audit["model_name"]
+    assert audit["model_version"]
+    assert audit["prompt_version"]
+    assert "unknown" not in (audit["model_provider"], audit["model_name"])
+
+
+def test_analyze_fallback_still_records_model_prompt_metadata(monkeypatch):
+    headers = _auth_headers()
+    request_id = f"demo-fallback-{uuid.uuid4().hex[:10]}"
+    headers["X-Request-ID"] = request_id
+    monkeypatch.setenv("PROMPT_VERSION", "alphapilot-prompts-test-v1")
+    monkeypatch.setenv("MODEL_VERSION", "provider-managed-test")
+
+    with patch(
+        "services.analysis_service.run_analysis_once",
+        side_effect=RuntimeError("provider timeout"),
+    ):
+        res = client.post(
+            "/analyze",
+            headers=headers,
+            json={"message": "analyze AAPL", "stock_symbol": "AAPL"},
+        )
+
+    assert res.status_code == 200, res.text
+    audit = get_audit_record_by_request_id(request_id)
+    assert audit is not None
+    assert audit["prompt_version"] == "alphapilot-prompts-test-v1"
+    assert audit["model_version"] == "provider-managed-test"
+    assert audit["model_provider"]
+    assert audit["model_name"]
+    assert "ANALYSIS_FAILED" in (audit.get("risk_flags") or [])
